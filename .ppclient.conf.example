@@ -1,0 +1,26 @@
+# PutPlace Client Configuration File
+# Copy this file to ~/.ppclient.conf or .ppclient.conf and customize as needed
+
+[DEFAULT]
+# API endpoint URL for the PutPlace server
+# Default: http://localhost:8000/put_file
+url = http://localhost:8000/put_file
+
+# Patterns to exclude from scanning (can be specified multiple times)
+# Supports wildcards like *.log or directory names like .git
+exclude = .git
+exclude = __pycache__
+exclude = *.pyc
+exclude = node_modules
+
+# Override hostname (optional, auto-detected if not specified)
+# hostname = myserver
+
+# Override IP address (optional, auto-detected if not specified)
+# ip = 192.168.1.100
+
+# Dry run mode - scan files but don't send to server (true/false)
+# dry-run = false
+
+# Verbose output (true/false)
+# verbose = false
