@@ -8,9 +8,13 @@ This document covers all configuration options for PutPlace server and client.
 
 PutPlace server supports multiple configuration methods (in priority order):
 
-1. **Environment variables** - Highest priority
-2. **.env file** - In the working directory
+1. **Environment variables** - Highest priority, override everything
+2. **ppserver.toml** - Recommended configuration file
 3. **Default values** - Lowest priority
+
+**Note:** `.env` files are no longer supported as of version 0.2.0. Use `ppserver.toml` instead.
+
+**Recommendation:** Use `ppserver.toml` for structured configuration. Environment variables are useful for overrides in production.
 
 ### Environment Variables
 
@@ -21,7 +25,7 @@ All configuration can be set via environment variables. The format is uppercase 
 ```bash
 # API Configuration
 API_TITLE="PutPlace API"
-API_VERSION="0.1.0"
+API_VERSION="0.2.0"
 API_DESCRIPTION="Distributed file metadata storage and content deduplication"
 
 # Server Configuration
@@ -91,6 +95,99 @@ CORS_ALLOW_METHODS="GET,POST,PUT,DELETE"
 CORS_ALLOW_HEADERS="*"
 ```
 
+### ppserver.toml Configuration (Recommended)
+
+The recommended way to configure PutPlace is using a TOML configuration file.
+
+#### Quick Start
+
+```bash
+# Copy the example configuration
+cp ppserver.toml.example ppserver.toml
+
+# Edit with your settings
+nano ppserver.toml
+```
+
+#### Configuration File Locations
+
+PutPlace searches for `ppserver.toml` in these locations (in order):
+
+1. `./ppserver.toml` - Current directory (project root)
+2. `~/.config/putplace/ppserver.toml` - User configuration
+3. `/etc/putplace/ppserver.toml` - System-wide configuration
+
+The first file found is used.
+
+#### Complete ppserver.toml Example
+
+```toml
+# PutPlace Server Configuration
+
+[database]
+mongodb_url = "mongodb://localhost:27017"
+mongodb_database = "putplace"
+mongodb_collection = "file_metadata"
+
+[api]
+title = "PutPlace API"
+description = "File metadata storage API"
+
+[storage]
+# Storage backend: "local" or "s3"
+backend = "local"
+
+# Local storage settings (used when backend = "local")
+path = "/var/putplace/files"
+
+# S3 storage settings (used when backend = "s3")
+# Uncomment and configure if using S3:
+# s3_bucket_name = "your-bucket-name"
+# s3_region_name = "us-east-1"
+# s3_prefix = "files/"
+
+[aws]
+# AWS credentials (optional - will use AWS credential chain if not specified)
+# Recommended: Use IAM roles or AWS CLI config instead of hardcoding credentials
+# profile = "your-aws-profile"
+# access_key_id = "your-access-key"
+# secret_access_key = "your-secret-key"
+```
+
+**Security Note:**
+- `ppserver.toml` is gitignored by default - never commit it!
+- `ppserver.toml.example` is the template (safe to commit)
+- Set restrictive permissions: `chmod 600 ppserver.toml`
+
+#### Development vs Production
+
+**Development (ppserver.toml):**
+```toml
+[database]
+mongodb_url = "mongodb://localhost:27017"
+mongodb_database = "putplace_dev"
+
+[storage]
+backend = "local"
+path = "./storage/files"
+```
+
+**Production (ppserver.toml):**
+```toml
+[database]
+mongodb_url = "mongodb://prod-server:27017"
+mongodb_database = "putplace"
+
+[storage]
+backend = "s3"
+s3_bucket_name = "company-putplace-prod"
+s3_region_name = "us-east-1"
+
+[aws]
+# Use IAM role (recommended) or AWS profile
+profile = "production"
+```
+
 #### Logging Configuration
 
 ```bash
@@ -101,9 +198,11 @@ LOG_LEVEL="INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
 LOG_FORMAT="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 ```
 
-### .env File Example
+### .env File (No Longer Supported)
 
-Create a `.env` file in your PutPlace working directory:
+**Note:** As of version 0.2.0, `.env` files are no longer supported. This section is kept for reference only. Please migrate to `ppserver.toml` (see examples above).
+
+**Legacy `.env` file format (for reference only):**
 
 ```bash
 # PutPlace Server Configuration
@@ -314,7 +413,7 @@ python ppclient.py [options] PATH
   --dry-run           Scan files but don't send to server
   --verbose, -v       Verbose output
   --config PATH       Path to config file
-                      Default: .ppclient.conf or ~/.ppclient.conf
+                      Default: ppclient.conf or ~/ppclient.conf
   --help, -h          Show help message
 ```
 
@@ -345,10 +444,10 @@ source ~/.zshrc
 
 **File locations (checked in order):**
 1. Path specified with `--config`
-2. `.ppclient.conf` (current directory)
-3. `~/.ppclient.conf` (home directory)
+2. `ppclient.conf` (current directory)
+3. `~/ppclient.conf` (home directory)
 
-**Example: ~/.ppclient.conf**
+**Example: ~/ppclient.conf**
 
 ```ini
 [DEFAULT]
@@ -400,7 +499,7 @@ exclude = venv
 
 **Set secure permissions:**
 ```bash
-chmod 600 ~/.ppclient.conf
+chmod 600 ~/ppclient.conf
 ```
 
 ### Exclude Patterns
@@ -466,7 +565,7 @@ python ppclient.py /var/www \
 
 ```bash
 # Create config file once
-cat > ~/.ppclient.conf << 'EOF'
+cat > ~/ppclient.conf << 'EOF'
 [DEFAULT]
 url = https://putplace.example.com/put_file
 api-key = production-api-key
@@ -474,7 +573,7 @@ exclude = .git
 exclude = *.log
 EOF
 
-chmod 600 ~/.ppclient.conf
+chmod 600 ~/ppclient.conf
 
 # Run with all settings from config
 python ppclient.py /var/www
@@ -484,19 +583,19 @@ python ppclient.py /var/www
 
 ```bash
 # Development config
-cat > ~/.ppclient.conf.dev << 'EOF'
+cat > ~/ppclient.conf.dev << 'EOF'
 url = http://dev-putplace:8000/put_file
 api-key = dev-api-key
 EOF
 
 # Production config
-cat > ~/.ppclient.conf.prod << 'EOF'
+cat > ~/ppclient.conf.prod << 'EOF'
 url = https://putplace.example.com/put_file
 api-key = prod-api-key
 EOF
 
 # Use with --config flag
-python ppclient.py /var/www --config ~/.ppclient.conf.prod
+python ppclient.py /var/www --config ~/ppclient.conf.prod
 ```
 
 ## Production Configuration
@@ -543,7 +642,7 @@ User=putplace
 Group=putplace
 WorkingDirectory=/opt/putplace
 Environment="PATH=/opt/putplace/.venv/bin"
-EnvironmentFile=/opt/putplace/.env
+# Configuration loaded from ppserver.toml in WorkingDirectory or /etc/putplace/ppserver.toml
 ExecStart=/opt/putplace/.venv/bin/gunicorn putplace.main:app \
   --workers 17 \
   --worker-class uvicorn.workers.UvicornWorker \
@@ -615,37 +714,49 @@ server {
 
 #### Development
 
-```bash
-# .env.development
-MONGODB_URL=mongodb://localhost:27017
-MONGODB_DATABASE=putplace_dev
-STORAGE_BACKEND=local
-STORAGE_PATH=/tmp/putplace-dev
-LOG_LEVEL=DEBUG
+```toml
+# ppserver.toml or ppserver.dev.toml
+[database]
+mongodb_url = "mongodb://localhost:27017"
+mongodb_database = "putplace_dev"
+
+[storage]
+backend = "local"
+path = "/tmp/putplace-dev"
 ```
 
 #### Staging
 
-```bash
-# .env.staging
-MONGODB_URL=mongodb://staging-mongo:27017
-MONGODB_DATABASE=putplace_staging
-STORAGE_BACKEND=s3
-S3_BUCKET_NAME=putplace-staging
-S3_REGION_NAME=us-east-1
-LOG_LEVEL=INFO
+```toml
+# ppserver.staging.toml
+[database]
+mongodb_url = "mongodb://staging-mongo:27017"
+mongodb_database = "putplace_staging"
+
+[storage]
+backend = "s3"
+s3_bucket_name = "putplace-staging"
+s3_region_name = "us-east-1"
+
+[aws]
+profile = "staging"
 ```
 
 #### Production
 
-```bash
-# .env.production
-MONGODB_URL=mongodb+srv://username:password@cluster.mongodb.net/
-MONGODB_DATABASE=putplace
-STORAGE_BACKEND=s3
-S3_BUCKET_NAME=putplace-production
-S3_REGION_NAME=us-east-1
-LOG_LEVEL=WARNING
+```toml
+# ppserver.toml or /etc/putplace/ppserver.toml
+[database]
+mongodb_url = "mongodb+srv://username:password@cluster.mongodb.net/"
+mongodb_database = "putplace"
+
+[storage]
+backend = "s3"
+s3_bucket_name = "putplace-production"
+s3_region_name = "us-east-1"
+
+[aws]
+profile = "production"
 ```
 
 ## Configuration Validation
@@ -670,13 +781,14 @@ ERROR: S3_BUCKET_NAME is required when STORAGE_BACKEND=s3
 ## Configuration Best Practices
 
 1. **Use environment-specific configurations**
-   - Separate configs for dev/staging/prod
+   - Separate ppserver.toml files for dev/staging/prod
    - Never commit production credentials
 
 2. **Protect sensitive values**
-   - Use .env files with restrictive permissions (600)
-   - Never commit .env files to version control
+   - Use ppserver.toml with restrictive permissions (600)
+   - Never commit ppserver.toml to version control
    - Use secret managers in production
+   - Override sensitive values with environment variables in CI/CD
 
 3. **Use IAM roles in AWS**
    - Avoid hardcoding AWS credentials

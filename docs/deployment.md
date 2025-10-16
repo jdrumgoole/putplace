@@ -136,7 +136,7 @@ S3_REGION_NAME=us-east-1
 
 # API Configuration
 API_TITLE=PutPlace API
-API_VERSION=0.1.0
+API_VERSION=0.3.0
 
 # Logging
 LOG_LEVEL=WARNING

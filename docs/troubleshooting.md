@@ -486,13 +486,13 @@ Warning: No API key provided (authentication may fail)
 
 3. **Provide via config file:**
    ```bash
-   # Create ~/.ppclient.conf
-   cat > ~/.ppclient.conf << EOF
+   # Create ~/ppclient.conf
+   cat > ~/ppclient.conf << EOF
    [DEFAULT]
    api-key = YOUR_KEY
    EOF
 
-   chmod 600 ~/.ppclient.conf
+   chmod 600 ~/ppclient.conf
    ```
 
 ---

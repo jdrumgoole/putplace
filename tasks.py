@@ -38,12 +38,34 @@ def setup_env(c):
 @task
 def test(c, verbose=False, coverage=True):
     """Run the test suite with pytest."""
-    cmd = "pytest"
+    cmd = "uv run pytest"
     if verbose:
         cmd += " -v"
     if not coverage:
         cmd += " --no-cov"
     c.run(cmd)
+
+
+@task
+def test_all(c, verbose=True, coverage=True):
+    """Run all tests with proper PYTHONPATH setup.
+
+    Args:
+        verbose: Show verbose test output (default: True)
+        coverage: Generate coverage report (default: True)
+    """
+    import os
+    pythonpath = f"{os.getcwd()}/src:{os.environ.get('PYTHONPATH', '')}"
+
+    cmd = f"PYTHONPATH={pythonpath} uv run python -m pytest tests/ -v --tb=short"
+    if not coverage:
+        cmd += " --no-cov"
+
+    c.run(cmd)
+
+    if coverage:
+        print("\n✓ All tests passed!")
+        print("Coverage report: htmlcov/index.html")
 
 
 @task
@@ -54,13 +76,13 @@ def test_one(c, path):
         inv test-one tests/test_example.py
         inv test-one tests/test_example.py::test_function
     """
-    c.run(f"pytest {path} -v")
+    c.run(f"uv run pytest {path} -v")
 
 
 @task
 def lint(c, fix=False):
     """Run ruff linter on the codebase."""
-    cmd = "ruff check src tests"
+    cmd = "uv run ruff check src tests"
     if fix:
         cmd += " --fix"
     c.run(cmd)
@@ -69,7 +91,7 @@ def lint(c, fix=False):
 @task
 def format(c, check=False):
     """Format code with ruff."""
-    cmd = "ruff format src tests"
+    cmd = "uv run ruff format src tests"
     if check:
         cmd += " --check"
     c.run(cmd)
@@ -78,7 +100,7 @@ def format(c, check=False):
 @task
 def typecheck(c):
     """Run mypy type checker."""
-    c.run("mypy src")
+    c.run("uv run mypy src")
 
 
 @task
@@ -132,7 +154,7 @@ def serve(c, host="127.0.0.1", port=8000, reload=True):
         reload: Enable auto-reload on code changes (default: True)
     """
     reload_flag = "--reload" if reload else ""
-    c.run(f"uvicorn putplace.main:app --host {host} --port {port} {reload_flag}")
+    c.run(f"uv run uvicorn putplace.main:app --host {host} --port {port} {reload_flag}")
 
 
 @task
@@ -144,7 +166,7 @@ def serve_prod(c, host="0.0.0.0", port=8000, workers=4):
         port: Port to bind to (default: 8000)
         workers: Number of worker processes (default: 4)
     """
-    c.run(f"uvicorn putplace.main:app --host {host} --port {port} --workers {workers}")
+    c.run(f"uv run uvicorn putplace.main:app --host {host} --port {port} --workers {workers}")
 
 
 # MongoDB management tasks

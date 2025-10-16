@@ -1,7 +1,7 @@
 [project]
 name = "putplace"
 # IMPORTANT: Keep this version in sync with src/putplace/version.py!
-version = "0.2.0"
+version = "0.3.0"
 description = "A Python project built with uv"
 readme = "README.md"
 requires-python = ">=3.10"

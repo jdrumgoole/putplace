@@ -110,11 +110,20 @@ open http://localhost:8000/docs
 # Install S3 dependencies
 pip install putplace[s3]
 
-# Configure S3 in .env
-cat >> .env << EOF
-STORAGE_BACKEND=s3
-S3_BUCKET_NAME=my-putplace-bucket
-S3_REGION_NAME=us-east-1
+# Configure S3 in ppserver.toml
+cat > ppserver.toml << EOF
+[database]
+mongodb_url = "mongodb://localhost:27017"
+mongodb_database = "putplace"
+
+[storage]
+backend = "s3"
+s3_bucket_name = "my-putplace-bucket"
+s3_region_name = "us-east-1"
+
+[aws]
+# Use AWS profile or IAM role (recommended)
+profile = "default"
 EOF
 
 # Restart server
@@ -132,8 +141,8 @@ python ppclient.py /var/log --exclude "*.log" --exclude ".git"
 python ppclient.py /var/log --url http://remote-server:8000/put_file
 
 # Use config file
-cp .ppclient.conf.example ~/.ppclient.conf
-nano ~/.ppclient.conf  # Add your API key
+cp ppclient.conf.example ~/ppclient.conf
+nano ~/ppclient.conf  # Add your API key
 python ppclient.py /var/log
 ```
 
@@ -227,7 +236,7 @@ python -m putplace.scripts.create_api_key --name "laptop"
 # Save the key: a1b2c3d4e5f6...
 
 # 3. Create config file
-cat > ~/.ppclient.conf << EOF
+cat > ~/ppclient.conf << EOF
 [DEFAULT]
 url = http://localhost:8000/put_file
 api-key = a1b2c3d4e5f6...
@@ -235,7 +244,7 @@ exclude = .git
 exclude = node_modules
 exclude = __pycache__
 EOF
-chmod 600 ~/.ppclient.conf
+chmod 600 ~/ppclient.conf
 
 # 4. Scan your home directory
 python ppclient.py ~/Documents

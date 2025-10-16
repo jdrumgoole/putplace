@@ -132,7 +132,7 @@ STORAGE_PATH=/var/putplace/files
 
 # API Configuration
 API_TITLE=PutPlace API
-API_VERSION=0.1.0
+API_VERSION=0.3.0
 ```
 
 ### 2. Create Storage Directory
@@ -186,13 +186,13 @@ ppclient --help
 
 ```bash
 # Create client config
-cp .ppclient.conf.example ~/.ppclient.conf
+cp ppclient.conf.example ~/ppclient.conf
 
 # Edit and add your API key
-nano ~/.ppclient.conf
+nano ~/ppclient.conf
 
 # Set secure permissions
-chmod 600 ~/.ppclient.conf
+chmod 600 ~/ppclient.conf
 ```
 
 ## Verification

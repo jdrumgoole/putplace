@@ -362,7 +362,7 @@ def process_path(
 def main() -> int:
     """Main entry point."""
     parser = configargparse.ArgumentParser(
-        default_config_files=["~/.ppclient.conf", ".ppclient.conf"],
+        default_config_files=["~/ppclient.conf", "ppclient.conf"],
         ignore_unknown_config_file_keys=True,
         description="Process files or directories and send file metadata to PutPlace server",
         formatter_class=configargparse.RawDescriptionHelpFormatter,
@@ -405,8 +405,8 @@ Authentication:
   export PUTPLACE_API_KEY=YOUR_API_KEY
   %(prog)s --path /var/log
 
-  # Option 3: Config file (~/.ppclient.conf)
-  echo "api-key = YOUR_API_KEY" >> ~/.ppclient.conf
+  # Option 3: Config file (~/ppclient.conf)
+  echo "api-key = YOUR_API_KEY" >> ~/ppclient.conf
   %(prog)s --path /var/log
         """,
     )
@@ -415,7 +415,7 @@ Authentication:
         "-c",
         "--config",
         is_config_file=True,
-        help="Config file path (default: ~/.ppclient.conf or .ppclient.conf)",
+        help="Config file path (default: ~/ppclient.conf or ppclient.conf)",
     )
 
     parser.add_argument(
@@ -495,7 +495,7 @@ Authentication:
     if hasattr(args, 'config') and args.config:
         config_files_to_check.append(args.config)
     # Add default config files
-    config_files_to_check.extend(["~/.ppclient.conf", ".ppclient.conf"])
+    config_files_to_check.extend(["~/ppclient.conf", "ppclient.conf"])
 
     # Get exclude patterns from config files
     config_exclude_patterns = get_exclude_patterns_from_config(config_files_to_check)

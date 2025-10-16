@@ -8,8 +8,7 @@ Settings are loaded in this order (highest priority first):
 
 1. **Environment Variables** - Override everything
 2. **ppserver.toml** - Main server configuration file
-3. **.env file** - Legacy support (deprecated, use ppserver.toml)
-4. **Default Values** - Built-in defaults
+3. **Default Values** - Built-in defaults
 
 ## Using ppserver.toml (Recommended)
 
@@ -186,6 +185,8 @@ ppserver start  # Uses system config
 
 ## Migrating from .env
 
+**Note**: As of version 0.2.0, `.env` files are no longer supported. Use `ppserver.toml` instead.
+
 If you're currently using a `.env` file:
 
 1. Create `ppserver.toml` from the example:
@@ -217,7 +218,7 @@ If you're currently using a `.env` file:
    uv run python -c "from putplace.config import settings; print(settings.storage_backend)"
    ```
 
-4. Remove `.env` file (optional - it still works as fallback)
+4. Remove `.env` file
 
 ## Troubleshooting
 

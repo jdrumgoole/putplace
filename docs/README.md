@@ -200,7 +200,7 @@ FastAPI provides automatic interactive documentation:
 
 Documentation is maintained in Markdown format in the main repository. For versioned documentation:
 
-1. Tag releases: `git tag v0.1.0`
+1. Tag releases: `git tag v0.2.0`
 2. Read the Docs automatically builds docs for each tag
 3. Users can select version from documentation
 

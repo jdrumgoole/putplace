@@ -58,16 +58,16 @@ source ~/.bashrc
 
 ```bash
 # Create config file
-cp .ppclient.conf.example ~/.ppclient.conf
+cp ppclient.conf.example ~/ppclient.conf
 
 # Edit and add your API key
-nano ~/.ppclient.conf
+nano ~/ppclient.conf
 # Change: api-key = your-api-key-here
 
 # Set secure permissions (IMPORTANT!)
-chmod 600 ~/.ppclient.conf
+chmod 600 ~/ppclient.conf
 
-# Run client (automatically reads from ~/.ppclient.conf)
+# Run client (automatically reads from ~/ppclient.conf)
 python ppclient.py /path/to/scan
 ```
 
@@ -80,7 +80,7 @@ If you specify the API key in multiple places, the priority is:
 
 1. **Command line** (`--api-key`) - Highest priority
 2. **Environment variable** (`PUTPLACE_API_KEY`)
-3. **Config file** (`~/.ppclient.conf` or `.ppclient.conf`) - Lowest priority
+3. **Config file** (`~/ppclient.conf` or `ppclient.conf`) - Lowest priority
 
 ## Complete Examples
 
@@ -118,7 +118,7 @@ python ppclient.py /path/to/scan --dry-run
 
 ### Example 5: Using Config File
 
-**~/.ppclient.conf:**
+**~/ppclient.conf:**
 ```ini
 [DEFAULT]
 url = https://putplace.example.com/put_file
@@ -141,10 +141,10 @@ python ppclient.py /var/www
 1. **Protect your API key**
    ```bash
    # Config file permissions
-   chmod 600 ~/.ppclient.conf
+   chmod 600 ~/ppclient.conf
 
    # Never commit API keys
-   # .ppclient.conf is already in .gitignore
+   # ppclient.conf is already in .gitignore
    ```
 
 2. **Use separate keys per client**
@@ -158,7 +158,7 @@ python ppclient.py /var/www
    python -m putplace.scripts.create_api_key --name "client-$(hostname)-$(date +%Y%m%d)"
 
    # Update client config
-   nano ~/.ppclient.conf
+   nano ~/ppclient.conf
 
    # Revoke old key on server
    curl -X PUT "https://putplace.example.com/api_keys/OLD_KEY_ID/revoke" \
@@ -168,7 +168,7 @@ python ppclient.py /var/www
 ### ❌ DON'T:
 
 1. **Don't commit API keys to version control**
-   - .ppclient.conf is in .gitignore
+   - ppclient.conf is in .gitignore
    - Never put keys in code
 
 2. **Don't share API keys**
@@ -189,7 +189,7 @@ Warning: No API key provided (authentication may fail)
 **Solution:** Provide API key via:
 - `--api-key` flag
 - `PUTPLACE_API_KEY` environment variable
-- `api-key` in ~/.ppclient.conf
+- `api-key` in ~/ppclient.conf
 
 ### "Failed to send: 401 Unauthorized"
 
@@ -214,15 +214,15 @@ python -m putplace.scripts.create_api_key --name "new-client-key"
 ### "Config file not found"
 
 The client looks for config files in this order:
-1. `.ppclient.conf` (current directory)
-2. `~/.ppclient.conf` (home directory)
+1. `ppclient.conf` (current directory)
+2. `~/ppclient.conf` (home directory)
 3. Path specified with `--config`
 
 Create one:
 ```bash
-cp .ppclient.conf.example ~/.ppclient.conf
-chmod 600 ~/.ppclient.conf
-nano ~/.ppclient.conf
+cp ppclient.conf.example ~/ppclient.conf
+chmod 600 ~/ppclient.conf
+nano ~/ppclient.conf
 ```
 
 ## Common Workflows
@@ -244,7 +244,7 @@ python ppclient.py /home/user/projects
 
 ```bash
 # 1. Create config file
-cat > ~/.ppclient.conf << 'EOF'
+cat > ~/ppclient.conf << 'EOF'
 [DEFAULT]
 url = https://putplace.example.com/put_file
 api-key = production-api-key-here
@@ -254,7 +254,7 @@ exclude = tmp
 EOF
 
 # 2. Set secure permissions
-chmod 600 ~/.ppclient.conf
+chmod 600 ~/ppclient.conf
 
 # 3. Test
 python ppclient.py /var/www --dry-run
@@ -270,19 +270,19 @@ echo "0 2 * * * /usr/bin/python3 /path/to/ppclient.py /var/www" | crontab -
 
 ```bash
 # Development
-cat > ~/.ppclient.conf.dev << 'EOF'
+cat > ~/ppclient.conf.dev << 'EOF'
 url = http://dev-putplace:8000/put_file
 api-key = dev-key-here
 EOF
 
 # Production
-cat > ~/.ppclient.conf.prod << 'EOF'
+cat > ~/ppclient.conf.prod << 'EOF'
 url = https://putplace.example.com/put_file
 api-key = prod-key-here
 EOF
 
 # Use with --config flag
-python ppclient.py /var/www --config ~/.ppclient.conf.prod
+python ppclient.py /var/www --config ~/ppclient.conf.prod
 ```
 
 ## Getting Help

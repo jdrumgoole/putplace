@@ -50,13 +50,20 @@ Store files on local disk. Best for:
 
 ### Configuration
 
+**Using ppserver.toml (recommended):**
+```toml
+[storage]
+backend = "local"
+path = "/var/putplace/files"
+```
+
 **Environment variables:**
 ```bash
 STORAGE_BACKEND=local
 STORAGE_PATH=/var/putplace/files
 ```
 
-**In .env file:**
+**In .env file (legacy):**
 ```bash
 # Storage Backend
 STORAGE_BACKEND=local
@@ -206,6 +213,19 @@ Store files in Amazon S3. Best for:
 
 ### Configuration
 
+**Using ppserver.toml (recommended):**
+```toml
+[storage]
+backend = "s3"
+s3_bucket_name = "my-putplace-bucket"
+s3_region_name = "us-east-1"
+s3_prefix = "files/"
+
+[aws]
+# Use IAM role (recommended) or AWS profile
+profile = "putplace"
+```
+
 **Environment variables:**
 ```bash
 STORAGE_BACKEND=s3
@@ -221,7 +241,7 @@ AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
 AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 ```
 
-**In .env file:**
+**In .env file (legacy):**
 ```bash
 # Storage Backend
 STORAGE_BACKEND=s3

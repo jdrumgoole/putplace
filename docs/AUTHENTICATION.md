@@ -84,7 +84,7 @@ export PUTPLACE_API_KEY="YOUR_API_KEY_HERE"
 python ppclient.py /var/log
 
 # Option 3: Config file
-echo "api_key = YOUR_API_KEY_HERE" >> ~/.ppclient.conf
+echo "api_key = YOUR_API_KEY_HERE" >> ~/ppclient.conf
 python ppclient.py /var/log
 ```
 

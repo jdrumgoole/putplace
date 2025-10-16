@@ -1,6 +1,6 @@
 # PutPlace Client Configuration File
-# Copy this file to ~/.ppclient.conf or .ppclient.conf and customize as needed
-# IMPORTANT: Set proper permissions: chmod 600 ~/.ppclient.conf (to protect API key)
+# Copy this file to ~/ppclient.conf or ppclient.conf and customize as needed
+# IMPORTANT: Set proper permissions: chmod 600 ~/ppclient.conf (to protect API key)
 
 [DEFAULT]
 # =============================================================================
@@ -55,10 +55,10 @@ exclude = .DS_Store
 # =============================================================================
 #
 # 1. Set restrictive file permissions to protect your API key:
-#    chmod 600 ~/.ppclient.conf
+#    chmod 600 ~/ppclient.conf
 #
 # 2. Never commit this file to version control
-#    Add .ppclient.conf to .gitignore if in project directory
+#    Add ppclient.conf to .gitignore if in project directory
 #
 # 3. Use different API keys for different environments (dev/staging/prod)
 #

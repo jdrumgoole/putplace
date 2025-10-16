@@ -56,8 +56,8 @@ source .venv/bin/activate
 # Install dependencies
 invoke install
 
-# Create .env file
-invoke setup-env
+# Create server configuration file
+cp ppserver.toml.example ppserver.toml
 
 # Start MongoDB in Docker
 invoke mongo-start
@@ -218,8 +218,8 @@ ppclient --path /var/log --verbose
 
 The client supports configuration files to avoid repeating command-line options. The client automatically looks for config files in these locations:
 
-1. `~/.ppclient.conf` (user home directory)
-2. `.ppclient.conf` (current directory)
+1. `~/ppclient.conf` (user home directory)
+2. `ppclient.conf` (current directory)
 
 You can also specify a custom config file:
 
@@ -230,7 +230,7 @@ ppclient /var/log --config myconfig.conf
 **Config file format (INI style):**
 
 ```ini
-# .ppclient.conf
+# ppclient.conf
 [DEFAULT]
 # API endpoint URL
 url = http://localhost:8000/put_file
@@ -255,10 +255,10 @@ ip = 192.168.1.100
 
 ```bash
 # Copy the example config file
-cp .ppclient.conf.example ~/.ppclient.conf
+cp ppclient.conf.example ~/ppclient.conf
 
 # Edit the config file with your settings
-nano ~/.ppclient.conf
+nano ~/ppclient.conf
 
 # Now you can run the client without specifying most options
 ppclient --path /var/log
@@ -302,7 +302,7 @@ This project uses [invoke](https://www.pyinvoke.org/) for task automation. Avail
 ### Quick Start Tasks
 
 ```bash
-# Complete project setup (venv, deps, .env)
+# Complete project setup (venv, deps)
 invoke setup
 
 # Start MongoDB and run dev server
@@ -460,7 +460,7 @@ putplace/
 │   └── ...              # More documentation
 ├── tasks.py             # Invoke tasks
 ├── pyproject.toml       # Project configuration
-├── .env.example         # Environment variables template
+├── ppserver.toml.example  # Server configuration template
 └── README.md
 ```
 
@@ -579,8 +579,9 @@ Settings are loaded in this order (highest to lowest):
 
 1. **Environment variables** - Override everything
 2. **ppserver.toml** - Main configuration file
-3. **.env file** - Legacy support (still works)
-4. **Default values** - Built-in defaults
+3. **Default values** - Built-in defaults
+
+**Note:** `.env` files are no longer supported as of version 0.2.0. Use `ppserver.toml` instead.
 
 ### Storage Backends
 

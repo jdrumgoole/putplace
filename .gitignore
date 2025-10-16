@@ -76,7 +76,7 @@ dmypy.json
 ppserver.toml
 
 # Client configuration
-.ppclient.conf
+ppclient.conf
 
 # Documentation
 docs/_build/

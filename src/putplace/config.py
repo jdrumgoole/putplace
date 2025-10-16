@@ -3,8 +3,7 @@
 Configuration priority (highest to lowest):
 1. Environment variables
 2. ppserver.toml file
-3. .env file
-4. Default values
+3. Default values
 """
 
 import sys
@@ -127,8 +126,7 @@ class Settings(BaseSettings):
     Configuration is loaded in this priority order (highest to lowest):
     1. Environment variables (e.g., MONGODB_URL, STORAGE_BACKEND)
     2. ppserver.toml file (./ppserver.toml, ~/.config/putplace/ppserver.toml, /etc/putplace/ppserver.toml)
-    3. .env file (for backward compatibility)
-    4. Default values defined below
+    3. Default values defined below
     """
 
     mongodb_url: str = "mongodb://localhost:27017"
@@ -159,8 +157,6 @@ class Settings(BaseSettings):
     aws_secret_access_key: Optional[str] = None  # NOT RECOMMENDED: use IAM roles or profiles instead
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",  # Ignore extra environment variables (e.g., PUTPLACE_API_KEY for client)
     )

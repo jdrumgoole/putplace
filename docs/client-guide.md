@@ -141,7 +141,7 @@ python ppclient.py /tmp -v
 
 **`--config PATH`**
 - Path to configuration file
-- Default: `.ppclient.conf` or `~/.ppclient.conf`
+- Default: `ppclient.conf` or `~/ppclient.conf`
 
 ```bash
 python ppclient.py /tmp --config ~/my-config.conf
@@ -177,7 +177,7 @@ Example:
 
 Create a configuration file to avoid repeating options:
 
-**~/.ppclient.conf:**
+**~/ppclient.conf:**
 ```ini
 [DEFAULT]
 url = http://localhost:8000/put_file
@@ -189,7 +189,7 @@ exclude = *.log
 
 **Set secure permissions:**
 ```bash
-chmod 600 ~/.ppclient.conf
+chmod 600 ~/ppclient.conf
 ```
 
 **Use:**
@@ -238,12 +238,12 @@ source ~/.zshrc
 
 ```bash
 # Create config
-cat > ~/.ppclient.conf << 'EOF'
+cat > ~/ppclient.conf << 'EOF'
 [DEFAULT]
 api-key = your-api-key
 EOF
 
-chmod 600 ~/.ppclient.conf
+chmod 600 ~/ppclient.conf
 
 # Use
 python ppclient.py /tmp
@@ -483,7 +483,7 @@ python ppclient.py ~/projects/myapp \
 
 ```bash
 # 1. Create config file
-cat > ~/.ppclient.conf << 'EOF'
+cat > ~/ppclient.conf << 'EOF'
 [DEFAULT]
 url = https://putplace.example.com/put_file
 api-key = production-api-key
@@ -492,7 +492,7 @@ exclude = *.log
 exclude = tmp
 EOF
 
-chmod 600 ~/.ppclient.conf
+chmod 600 ~/ppclient.conf
 
 # 2. Test with dry run
 python ppclient.py /var/www --dry-run
@@ -508,27 +508,27 @@ echo "0 2 * * * /usr/bin/python3 /path/to/ppclient.py /var/www" | crontab -
 
 ```bash
 # Development config
-cat > ~/.ppclient.conf.dev << 'EOF'
+cat > ~/ppclient.conf.dev << 'EOF'
 url = http://dev-putplace:8000/put_file
 api-key = dev-key
 EOF
 
 # Staging config
-cat > ~/.ppclient.conf.staging << 'EOF'
+cat > ~/ppclient.conf.staging << 'EOF'
 url = https://staging-putplace.example.com/put_file
 api-key = staging-key
 EOF
 
 # Production config
-cat > ~/.ppclient.conf.prod << 'EOF'
+cat > ~/ppclient.conf.prod << 'EOF'
 url = https://putplace.example.com/put_file
 api-key = prod-key
 EOF
 
 # Use with --config flag
-python ppclient.py /var/www --config ~/.ppclient.conf.dev
-python ppclient.py /var/www --config ~/.ppclient.conf.staging
-python ppclient.py /var/www --config ~/.ppclient.conf.prod
+python ppclient.py /var/www --config ~/ppclient.conf.dev
+python ppclient.py /var/www --config ~/ppclient.conf.staging
+python ppclient.py /var/www --config ~/ppclient.conf.prod
 ```
 
 ## Automated Scanning

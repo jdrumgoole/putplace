@@ -19,10 +19,10 @@ def install_package():
     # Get the project root directory (parent of tests/)
     project_root = Path(__file__).parent.parent
 
-    # Install package in editable mode
+    # Install package in editable mode using uv
     print("\n[SETUP] Installing package in editable mode...")
     result = subprocess.run(
-        [sys.executable, "-m", "pip", "install", "-e", str(project_root)],
+        ["uv", "pip", "install", "-e", str(project_root)],
         capture_output=True,
         text=True,
         timeout=60,
@@ -35,10 +35,10 @@ def install_package():
 
     yield
 
-    # Uninstall package after all tests
+    # Uninstall package after all tests using uv
     print("\n[TEARDOWN] Uninstalling package...")
     subprocess.run(
-        [sys.executable, "-m", "pip", "uninstall", "-y", "putplace"],
+        ["uv", "pip", "uninstall", "-y", "putplace"],
         capture_output=True,
         text=True,
         timeout=30,

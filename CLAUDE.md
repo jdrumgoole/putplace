@@ -284,3 +284,5 @@ Environment variables (see .env.example):
 
 Configuration is managed via Pydantic Settings in `src/putplace/config.py`
 - Use uv run to run python and other program inside the uv enviroment
+- when you update the docs update both the README.md and the ./docs directory
+- when running tests use uv invoke test-all

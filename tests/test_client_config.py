@@ -337,7 +337,7 @@ def test_config_file_not_found_raises_error(temp_test_dir):
 def test_default_config_file_locations(temp_test_dir, monkeypatch):
     """Test that default config file locations are checked."""
     # Create a config in "current directory"
-    current_dir_config = Path(".ppclient.conf")
+    current_dir_config = Path("ppclient.conf")
     config_content = """[DEFAULT]
 api-key = default-location-key
 """
@@ -346,11 +346,11 @@ api-key = default-location-key
     # but we can verify the parser has the right default_config_files
     import configargparse
     parser = configargparse.ArgumentParser(
-        default_config_files=["~/.ppclient.conf", ".ppclient.conf"]
+        default_config_files=["~/ppclient.conf", "ppclient.conf"]
     )
 
     # Verify default config files are set correctly
-    assert parser._default_config_files == ["~/.ppclient.conf", ".ppclient.conf"]
+    assert parser._default_config_files == ["~/ppclient.conf", "ppclient.conf"]
 
 
 def test_dry_run_mode(temp_test_dir):

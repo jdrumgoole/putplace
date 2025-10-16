@@ -69,28 +69,29 @@ docker run -d --name putplace-mongodb -p 27017:27017 mongo:6
 
 ```bash
 # Copy example configuration
-cp .env.example .env
+cp ppserver.toml.example ppserver.toml
 
 # Edit configuration
-nano .env
+nano ppserver.toml
 ```
 
-**Development .env:**
+**Development ppserver.toml:**
+```toml
+[database]
+mongodb_url = "mongodb://localhost:27017"
+mongodb_database = "putplace_dev"
+
+[storage]
+backend = "local"
+path = "/tmp/putplace-dev"
+
+[api]
+title = "PutPlace API (Development)"
+```
+
+**Note:** You can also use environment variables for development:
 ```bash
-# MongoDB
-MONGODB_URL=mongodb://localhost:27017
-MONGODB_DATABASE=putplace_dev
-
-# Storage (use local for development)
-STORAGE_BACKEND=local
-STORAGE_PATH=/tmp/putplace-dev
-
-# API
-API_TITLE=PutPlace API (Development)
-API_VERSION=0.1.0
-
-# Logging
-LOG_LEVEL=DEBUG
+export LOG_LEVEL=DEBUG
 ```
 
 ### Run Server
@@ -152,7 +153,7 @@ putplace/
 ├── ppclient.py                  # Command-line client
 ├── pyproject.toml               # Project metadata & dependencies
 ├── setup.py                     # Setup script
-├── .env.example                 # Example configuration
+├── ppserver.toml.example        # Example server configuration
 ├── .gitignore
 ├── LICENSE
 └── README.md
@@ -539,7 +540,7 @@ Create `.vscode/launch.json`:
 
 ```json
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "configurations": [
     {
       "name": "Python: FastAPI",
@@ -684,7 +685,7 @@ PutPlace follows [Semantic Versioning](https://semver.org/):
    ```bash
    # Edit pyproject.toml
    nano pyproject.toml
-   # Change version = "0.1.0" to version = "0.2.0"
+   # Change version = "0.2.0" to version = "0.3.0"
    ```
 
 2. **Update CHANGELOG**:
@@ -705,21 +706,21 @@ PutPlace follows [Semantic Versioning](https://semver.org/):
 4. **Create tag**:
 
    ```bash
-   git tag -a v0.2.0 -m "Release version 0.2.0"
+   git tag -a v0.3.0 -m "Release version 0.3.0"
    ```
 
 5. **Push to GitHub**:
 
    ```bash
    git push origin main
-   git push origin v0.2.0
+   git push origin v0.3.0
    ```
 
 6. **Create GitHub release**:
 
    - Go to GitHub repository
    - Click "Releases" → "Create a new release"
-   - Select tag v0.2.0
+   - Select tag v0.3.0
    - Add release notes
    - Publish release
 
@@ -764,7 +765,7 @@ When reporting bugs, include:
 2. **Steps to reproduce**: Exact steps to reproduce the issue
 3. **Environment**: OS, Python version, PutPlace version
 4. **Logs**: Relevant error messages and logs
-5. **Configuration**: .env file (redact secrets!)
+5. **Configuration**: ppserver.toml file (redact secrets!) or relevant environment variables
 
 ### Suggesting Features
 
