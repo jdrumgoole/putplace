@@ -31,19 +31,26 @@ async def test_db(test_settings: Settings) -> AsyncGenerator[MongoDB, None]:
     db.client = AsyncIOMotorClient(test_settings.mongodb_url)
     test_db_instance = db.client[test_settings.mongodb_database]
     db.collection = test_db_instance[test_settings.mongodb_collection]
+    db.users_collection = test_db_instance["users_test"]
 
-    # Drop collection first to ensure clean state
+    # Drop collections first to ensure clean state
     await db.collection.drop()
+    await db.users_collection.drop()
 
-    # Create indexes
+    # Create indexes for file metadata
     await db.collection.create_index("sha256")
     await db.collection.create_index([("hostname", 1), ("filepath", 1)])
+
+    # Create indexes for users collection
+    await db.users_collection.create_index("username", unique=True)
+    await db.users_collection.create_index("email", unique=True)
 
     yield db
 
     # Cleanup
     try:
         await db.collection.drop()
+        await db.users_collection.drop()
     except Exception:
         pass  # Ignore cleanup errors
 
@@ -69,6 +76,43 @@ async def client(test_db: MongoDB) -> AsyncGenerator[AsyncClient, None]:
 
     # Restore original
     database.mongodb = original_mongodb
+
+
+@pytest.fixture
+async def test_api_key(test_db: MongoDB) -> str:
+    """Create a test API key for authentication."""
+    from putplace.auth import APIKeyAuth
+
+    auth = APIKeyAuth(test_db)
+    api_key, _ = await auth.create_api_key(
+        name="test_key",
+        user_id=None,  # Bootstrap API key without user
+        description="Test API key for pytest"
+    )
+    return api_key
+
+
+@pytest.fixture
+async def test_user_token(test_db: MongoDB) -> str:
+    """Create a test user and return their JWT token."""
+    from putplace.user_auth import get_password_hash, create_access_token
+    from datetime import timedelta
+
+    # Create test user
+    user_id = await test_db.create_user(
+        username="testuser",
+        email="testuser@example.com",
+        hashed_password=get_password_hash("testpassword123"),
+        full_name="Test User"
+    )
+
+    # Generate JWT token for the user
+    access_token = create_access_token(
+        data={"sub": "testuser"},
+        expires_delta=timedelta(minutes=30)
+    )
+
+    return access_token
 
 
 @pytest.fixture

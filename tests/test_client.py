@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-import ppclient
+from putplace import ppclient
 
 
 def test_get_hostname():
@@ -184,9 +184,9 @@ def test_matches_exclude_pattern_prefix_wildcard(temp_test_dir):
     assert not ppclient.matches_exclude_pattern(normal_file, temp_test_dir, ["test_*"])
 
 
-def test_scan_directory_counts_files(temp_test_dir):
-    """Test that scan_directory correctly counts files."""
-    total, successful, failed = ppclient.scan_directory(
+def test_process_path_counts_files(temp_test_dir):
+    """Test that process_path correctly counts files in a directory."""
+    total, successful, failed, uploaded = ppclient.process_path(
         temp_test_dir,
         exclude_patterns=[],
         hostname="testhost",
@@ -199,11 +199,12 @@ def test_scan_directory_counts_files(temp_test_dir):
     assert total == 5
     assert successful == 5
     assert failed == 0
+    assert uploaded == 0  # Dry run, so no uploads
 
 
-def test_scan_directory_with_excludes(temp_test_dir):
-    """Test that scan_directory respects exclude patterns."""
-    total, successful, failed = ppclient.scan_directory(
+def test_process_path_with_excludes(temp_test_dir):
+    """Test that process_path respects exclude patterns when scanning directories."""
+    total, successful, failed, uploaded = ppclient.process_path(
         temp_test_dir,
         exclude_patterns=[".git", "__pycache__"],
         hostname="testhost",
@@ -217,12 +218,13 @@ def test_scan_directory_with_excludes(temp_test_dir):
     assert total == 3
     assert successful == 3
     assert failed == 0
+    assert uploaded == 0  # Dry run, so no uploads
 
 
-def test_scan_directory_nonexistent_path():
-    """Test scanning non-existent directory."""
+def test_process_path_nonexistent_path():
+    """Test processing non-existent path."""
     nonexistent = Path("/nonexistent/directory")
-    total, successful, failed = ppclient.scan_directory(
+    total, successful, failed, uploaded = ppclient.process_path(
         nonexistent,
         exclude_patterns=[],
         hostname="testhost",
@@ -234,15 +236,17 @@ def test_scan_directory_nonexistent_path():
     assert total == 0
     assert successful == 0
     assert failed == 0
+    assert uploaded == 0
 
 
-def test_scan_directory_file_not_directory():
-    """Test scanning a file instead of directory."""
-    with tempfile.NamedTemporaryFile(delete=False) as f:
+def test_process_path_single_file():
+    """Test processing a single file."""
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        f.write("test content")
         temp_file = Path(f.name)
 
     try:
-        total, successful, failed = ppclient.scan_directory(
+        total, successful, failed, uploaded = ppclient.process_path(
             temp_file,
             exclude_patterns=[],
             hostname="testhost",
@@ -251,19 +255,21 @@ def test_scan_directory_file_not_directory():
             dry_run=True,
         )
 
-        assert total == 0
-        assert successful == 0
+        # Should process exactly one file
+        assert total == 1
+        assert successful == 1
         assert failed == 0
+        assert uploaded == 0  # Dry run, so no uploads
     finally:
         temp_file.unlink()
 
 
-def test_scan_directory_empty_directory():
-    """Test scanning empty directory."""
+def test_process_path_empty_directory():
+    """Test processing empty directory."""
     with tempfile.TemporaryDirectory() as tmpdir:
         empty_dir = Path(tmpdir)
 
-        total, successful, failed = ppclient.scan_directory(
+        total, successful, failed, uploaded = ppclient.process_path(
             empty_dir,
             exclude_patterns=[],
             hostname="testhost",
@@ -275,3 +281,51 @@ def test_scan_directory_empty_directory():
         assert total == 0
         assert successful == 0
         assert failed == 0
+        assert uploaded == 0
+
+
+def test_process_path_single_file_with_content(temp_test_dir):
+    """Test processing a single file from a directory with multiple files."""
+    # Get one specific file from temp_test_dir
+    single_file = temp_test_dir / "file1.txt"
+
+    total, successful, failed, uploaded = ppclient.process_path(
+        single_file,
+        exclude_patterns=[],
+        hostname="testhost",
+        ip_address="127.0.0.1",
+        api_url="http://test/put_file",
+        dry_run=True,
+    )
+
+    # Should process only that one file, ignoring all others
+    assert total == 1
+    assert successful == 1
+    assert failed == 0
+    assert uploaded == 0  # Dry run, so no uploads
+
+
+def test_process_path_single_file_ignores_exclude_patterns():
+    """Test that exclude patterns don't affect single file processing."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".log", delete=False) as f:
+        f.write("log content")
+        temp_file = Path(f.name)
+
+    try:
+        # Even though we exclude *.log, single file should still be processed
+        total, successful, failed, uploaded = ppclient.process_path(
+            temp_file,
+            exclude_patterns=["*.log"],  # This should not affect single file mode
+            hostname="testhost",
+            ip_address="127.0.0.1",
+            api_url="http://test/put_file",
+            dry_run=True,
+        )
+
+        # Should process the file even though pattern would exclude it in directory mode
+        assert total == 1
+        assert successful == 1
+        assert failed == 0
+        assert uploaded == 0
+    finally:
+        temp_file.unlink()

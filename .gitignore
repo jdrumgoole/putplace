@@ -72,8 +72,15 @@ dmypy.json
 .env.local
 .env.*.local
 
+# Configuration files (templates are tracked)
+ppserver.toml
+
 # Client configuration
 .ppclient.conf
 
 # Documentation
 docs/_build/
+
+# Storage
+storage/
+.storage/

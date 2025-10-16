@@ -1,0 +1,40 @@
+# PutPlace Server Configuration
+# Copy this file to ppserver.toml and customize for your environment
+
+[database]
+mongodb_url = "mongodb://localhost:27017"
+mongodb_database = "putplace"
+mongodb_collection = "file_metadata"
+
+[api]
+title = "PutPlace API"
+description = "File metadata storage API"
+
+[storage]
+# Storage backend: "local" or "s3"
+backend = "local"
+
+# Local storage settings (used when backend = "local")
+path = "./storage/files"
+
+# S3 storage settings (used when backend = "s3")
+# Uncomment and configure if using S3:
+# s3_bucket_name = "your-bucket-name"
+# s3_region_name = "us-east-1"
+# s3_prefix = "files/"
+
+[aws]
+# AWS credentials (optional - will use AWS credential chain if not specified)
+# Recommended: Use IAM roles or AWS CLI config instead of hardcoding credentials
+# profile = "your-aws-profile"
+# access_key_id = "your-access-key"
+# secret_access_key = "your-secret-key"
+
+[security]
+# JWT secret key - CHANGE THIS IN PRODUCTION!
+# Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+# secret_key = "your-secret-key-here"
+
+# API key for client authentication
+# Generate with: python -m putplace.scripts.create_api_key
+# putplace_api_key = "your-api-key-here"

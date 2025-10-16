@@ -1,4 +1,4 @@
-"""Data models for file metadata."""
+"""Data models for file metadata and authentication."""
 
 from datetime import datetime
 from typing import Optional
@@ -41,6 +41,10 @@ class FileMetadata(BaseModel):
     file_atime: float = Field(..., description="Access time (Unix timestamp)")
     file_ctime: float = Field(..., description="Change/creation time (Unix timestamp)")
 
+    # File content tracking
+    has_file_content: bool = Field(default=False, description="Whether server has the actual file content")
+    file_uploaded_at: Optional[datetime] = Field(None, description="When file content was uploaded")
+
     # Metadata timestamp
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Database record timestamp")
 
@@ -51,3 +55,120 @@ class FileMetadataResponse(FileMetadata):
     model_config = ConfigDict(populate_by_name=True)
 
     id: Optional[str] = Field(None, alias="_id", description="MongoDB document ID")
+
+
+class FileMetadataUploadResponse(FileMetadataResponse):
+    """Response model that includes upload requirement information."""
+
+    upload_required: bool = Field(..., description="Whether client needs to upload file content")
+    upload_url: Optional[str] = Field(None, description="URL to upload file content (if required)")
+
+
+# Authentication models
+
+
+class APIKeyCreate(BaseModel):
+    """Request model for creating a new API key."""
+
+    name: str = Field(..., description="Name/identifier for this API key", min_length=1, max_length=100)
+    description: Optional[str] = Field(None, description="Optional description of the key's purpose")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "name": "production-server-01",
+                "description": "API key for production server #1"
+            }
+        }
+    )
+
+
+class APIKeyResponse(BaseModel):
+    """Response model for API key creation (includes the actual key)."""
+
+    api_key: str = Field(..., description="The API key - SAVE THIS! It won't be shown again.")
+    id: str = Field(..., alias="_id", description="API key ID")
+    name: str = Field(..., description="Name of the API key")
+    description: Optional[str] = Field(None, description="Description")
+    created_at: datetime = Field(..., description="When the key was created")
+    is_active: bool = Field(..., description="Whether the key is active")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class APIKeyInfo(BaseModel):
+    """Information about an API key (without the actual key)."""
+
+    id: str = Field(..., alias="_id", description="API key ID")
+    name: str = Field(..., description="Name of the API key")
+    description: Optional[str] = Field(None, description="Description")
+    created_at: datetime = Field(..., description="When the key was created")
+    last_used_at: Optional[datetime] = Field(None, description="When the key was last used")
+    is_active: bool = Field(..., description="Whether the key is active")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+# User authentication models
+
+
+class UserCreate(BaseModel):
+    """Request model for user registration."""
+
+    username: str = Field(..., description="Username", min_length=3, max_length=50)
+    email: str = Field(..., description="Email address")
+    password: str = Field(..., description="Password", min_length=8)
+    full_name: Optional[str] = Field(None, description="Full name")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "username": "johndoe",
+                "email": "john@example.com",
+                "password": "securepassword123",
+                "full_name": "John Doe"
+            }
+        }
+    )
+
+
+class UserLogin(BaseModel):
+    """Request model for user login."""
+
+    username: str = Field(..., description="Username")
+    password: str = Field(..., description="Password")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "username": "johndoe",
+                "password": "securepassword123"
+            }
+        }
+    )
+
+
+class User(BaseModel):
+    """User model (without password)."""
+
+    id: Optional[str] = Field(None, alias="_id", description="User ID")
+    username: str = Field(..., description="Username")
+    email: str = Field(..., description="Email address")
+    full_name: Optional[str] = Field(None, description="Full name")
+    is_active: bool = Field(default=True, description="Whether the user account is active")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="When the user was created")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class Token(BaseModel):
+    """JWT token response."""
+
+    access_token: str = Field(..., description="JWT access token")
+    token_type: str = Field(default="bearer", description="Token type")
+
+
+class TokenData(BaseModel):
+    """Data stored in JWT token."""
+
+    username: Optional[str] = None

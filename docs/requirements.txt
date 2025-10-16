@@ -1,0 +1,14 @@
+# Sphinx Documentation Requirements
+# Install with: pip install -r docs/requirements.txt
+
+# Core Sphinx
+sphinx>=7.2.0
+
+# Theme
+sphinx-rtd-theme>=2.0.0
+
+# Markdown support
+myst-parser>=2.0.0
+
+# For autodoc extensions
+sphinx-autodoc-typehints>=1.25.0

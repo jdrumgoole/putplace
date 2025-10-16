@@ -6,14 +6,18 @@ from httpx import AsyncClient
 
 @pytest.mark.asyncio
 async def test_root_endpoint(client: AsyncClient):
-    """Test root endpoint returns expected message."""
+    """Test root endpoint returns home page HTML."""
     response = await client.get("/")
     assert response.status_code == 200
 
-    data = response.json()
-    assert "message" in data
-    assert "status" in data
-    assert data["status"] == "running"
+    # Check that it returns HTML
+    assert "text/html" in response.headers["content-type"]
+
+    # Check for key elements in the home page
+    html = response.text
+    assert "PutPlace" in html
+    assert "File Metadata Storage" in html
+    assert "/docs" in html  # Link to API docs
 
 
 @pytest.mark.asyncio
@@ -30,9 +34,13 @@ async def test_health_endpoint(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_put_file_valid(client: AsyncClient, sample_file_metadata):
+async def test_put_file_valid(client: AsyncClient, sample_file_metadata, test_api_key: str):
     """Test storing valid file metadata."""
-    response = await client.post("/put_file", json=sample_file_metadata)
+    response = await client.post(
+        "/put_file",
+        json=sample_file_metadata,
+        headers={"X-API-Key": test_api_key}
+    )
     assert response.status_code == 201
 
     data = response.json()
@@ -45,35 +53,50 @@ async def test_put_file_valid(client: AsyncClient, sample_file_metadata):
 
 
 @pytest.mark.asyncio
-async def test_put_file_invalid_sha256(client: AsyncClient, sample_file_metadata):
+async def test_put_file_invalid_sha256(client: AsyncClient, sample_file_metadata, test_api_key: str):
     """Test that invalid SHA256 is rejected."""
     invalid_data = sample_file_metadata.copy()
     invalid_data["sha256"] = "tooshort"
 
-    response = await client.post("/put_file", json=invalid_data)
+    response = await client.post(
+        "/put_file",
+        json=invalid_data,
+        headers={"X-API-Key": test_api_key}
+    )
     assert response.status_code == 422  # Validation error
 
 
 @pytest.mark.asyncio
-async def test_put_file_missing_field(client: AsyncClient, sample_file_metadata):
+async def test_put_file_missing_field(client: AsyncClient, sample_file_metadata, test_api_key: str):
     """Test that missing required field is rejected."""
     invalid_data = sample_file_metadata.copy()
     del invalid_data["hostname"]
 
-    response = await client.post("/put_file", json=invalid_data)
+    response = await client.post(
+        "/put_file",
+        json=invalid_data,
+        headers={"X-API-Key": test_api_key}
+    )
     assert response.status_code == 422  # Validation error
 
 
 @pytest.mark.asyncio
-async def test_get_file_by_sha256(client: AsyncClient, sample_file_metadata):
+async def test_get_file_by_sha256(client: AsyncClient, sample_file_metadata, test_api_key: str):
     """Test retrieving file metadata by SHA256."""
     # First, store the file
-    post_response = await client.post("/put_file", json=sample_file_metadata)
+    post_response = await client.post(
+        "/put_file",
+        json=sample_file_metadata,
+        headers={"X-API-Key": test_api_key}
+    )
     assert post_response.status_code == 201
 
     # Then retrieve it
     sha256 = sample_file_metadata["sha256"]
-    get_response = await client.get(f"/get_file/{sha256}")
+    get_response = await client.get(
+        f"/get_file/{sha256}",
+        headers={"X-API-Key": test_api_key}
+    )
     assert get_response.status_code == 200
 
     data = get_response.json()
@@ -83,10 +106,13 @@ async def test_get_file_by_sha256(client: AsyncClient, sample_file_metadata):
 
 
 @pytest.mark.asyncio
-async def test_get_file_not_found(client: AsyncClient):
+async def test_get_file_not_found(client: AsyncClient, test_api_key: str):
     """Test retrieving non-existent file returns 404."""
     nonexistent_sha256 = "f" * 64
-    response = await client.get(f"/get_file/{nonexistent_sha256}")
+    response = await client.get(
+        f"/get_file/{nonexistent_sha256}",
+        headers={"X-API-Key": test_api_key}
+    )
     assert response.status_code == 404
 
     data = response.json()
@@ -94,10 +120,13 @@ async def test_get_file_not_found(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_get_file_invalid_sha256_length(client: AsyncClient):
+async def test_get_file_invalid_sha256_length(client: AsyncClient, test_api_key: str):
     """Test that invalid SHA256 length returns 400."""
     invalid_sha256 = "tooshort"
-    response = await client.get(f"/get_file/{invalid_sha256}")
+    response = await client.get(
+        f"/get_file/{invalid_sha256}",
+        headers={"X-API-Key": test_api_key}
+    )
     assert response.status_code == 400
 
     data = response.json()
@@ -106,10 +135,14 @@ async def test_get_file_invalid_sha256_length(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_put_multiple_files(client: AsyncClient, sample_file_metadata):
+async def test_put_multiple_files(client: AsyncClient, sample_file_metadata, test_api_key: str):
     """Test storing multiple different files."""
     # Store first file
-    response1 = await client.post("/put_file", json=sample_file_metadata)
+    response1 = await client.post(
+        "/put_file",
+        json=sample_file_metadata,
+        headers={"X-API-Key": test_api_key}
+    )
     assert response1.status_code == 201
 
     # Store second file with different data
@@ -117,28 +150,46 @@ async def test_put_multiple_files(client: AsyncClient, sample_file_metadata):
     second_file["filepath"] = "/var/log/other.log"
     second_file["sha256"] = "b" * 64
 
-    response2 = await client.post("/put_file", json=second_file)
+    response2 = await client.post(
+        "/put_file",
+        json=second_file,
+        headers={"X-API-Key": test_api_key}
+    )
     assert response2.status_code == 201
 
     # Verify both can be retrieved
-    get1 = await client.get(f"/get_file/{sample_file_metadata['sha256']}")
+    get1 = await client.get(
+        f"/get_file/{sample_file_metadata['sha256']}",
+        headers={"X-API-Key": test_api_key}
+    )
     assert get1.status_code == 200
     assert get1.json()["filepath"] == sample_file_metadata["filepath"]
 
-    get2 = await client.get(f"/get_file/{second_file['sha256']}")
+    get2 = await client.get(
+        f"/get_file/{second_file['sha256']}",
+        headers={"X-API-Key": test_api_key}
+    )
     assert get2.status_code == 200
     assert get2.json()["filepath"] == second_file["filepath"]
 
 
 @pytest.mark.asyncio
-async def test_put_duplicate_sha256(client: AsyncClient, sample_file_metadata):
+async def test_put_duplicate_sha256(client: AsyncClient, sample_file_metadata, test_api_key: str):
     """Test storing files with same SHA256."""
     # Store first file
-    response1 = await client.post("/put_file", json=sample_file_metadata)
+    response1 = await client.post(
+        "/put_file",
+        json=sample_file_metadata,
+        headers={"X-API-Key": test_api_key}
+    )
     assert response1.status_code == 201
 
     # Store same file again (duplicate SHA256)
-    response2 = await client.post("/put_file", json=sample_file_metadata)
+    response2 = await client.post(
+        "/put_file",
+        json=sample_file_metadata,
+        headers={"X-API-Key": test_api_key}
+    )
     # Should still succeed (MongoDB will create a new document)
     assert response2.status_code == 201
 
@@ -186,7 +237,7 @@ async def test_app_lifespan():
 
 
 @pytest.mark.asyncio
-async def test_put_file_database_error(client: AsyncClient, sample_file_metadata):
+async def test_put_file_database_error(client: AsyncClient, sample_file_metadata, test_api_key: str):
     """Test that database errors are handled properly."""
     from putplace import database
     from unittest.mock import AsyncMock
@@ -201,7 +252,11 @@ async def test_put_file_database_error(client: AsyncClient, sample_file_metadata
         )
 
         # Try to insert - should get 500 error
-        response = await client.post("/put_file", json=sample_file_metadata)
+        response = await client.post(
+            "/put_file",
+            json=sample_file_metadata,
+            headers={"X-API-Key": test_api_key}
+        )
         assert response.status_code == 500
         assert "Failed to store file metadata" in response.json()["detail"]
 

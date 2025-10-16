@@ -15,6 +15,12 @@ def setup_venv(c):
 def install(c):
     """Install the project dependencies using uv."""
     c.run("uv pip install -e '.[dev]'")
+    print("\n✓ Package and dependencies installed")
+    print("\nIMPORTANT: Activate the virtual environment to use console scripts:")
+    print("  source .venv/bin/activate")
+    print("\nThen you can use:")
+    print("  ppclient --help")
+    print("  ppserver --help")
 
 
 @task

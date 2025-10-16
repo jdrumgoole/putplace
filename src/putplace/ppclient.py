@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""PutPlace Client - Scan directories and send file metadata to the server."""
+"""PutPlace Client - Process files and directories, send file metadata to the server."""
 
 import configargparse
+import configparser
 import hashlib
 import os
 import socket
@@ -14,6 +15,46 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 console = Console()
+
+
+def get_exclude_patterns_from_config(config_files: list[str]) -> list[str]:
+    """Manually extract exclude patterns from config files.
+
+    This is needed because configargparse doesn't properly handle
+    multiple values with action="append" in config files.
+
+    Args:
+        config_files: List of config file paths to check
+
+    Returns:
+        List of exclude patterns found in config files
+    """
+    exclude_patterns = []
+
+    for config_file in config_files:
+        # Expand ~ in path
+        config_path = Path(config_file).expanduser()
+
+        if not config_path.exists():
+            continue
+
+        try:
+            # Read the file manually to get all exclude patterns
+            with open(config_path, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('exclude'):
+                        # Parse "exclude = value"
+                        parts = line.split('=', 1)
+                        if len(parts) == 2:
+                            pattern = parts[1].strip()
+                            if pattern:
+                                exclude_patterns.append(pattern)
+        except Exception:
+            # Ignore errors reading config files
+            pass
+
+    return exclude_patterns
 
 
 def get_hostname() -> str:
@@ -126,59 +167,121 @@ def matches_exclude_pattern(path: Path, base_path: Path, patterns: list[str]) ->
     return False
 
 
-def scan_directory(
+def upload_file_content(
+    filepath: Path,
+    sha256: str,
+    hostname: str,
+    upload_url: str,
+    base_url: str,
+    api_key: Optional[str] = None,
+) -> bool:
+    """Upload file content to server.
+
+    Args:
+        filepath: Path to the file to upload
+        sha256: SHA256 hash of the file
+        hostname: Hostname where file is located
+        upload_url: Upload URL path (e.g., /upload_file/{sha256})
+        base_url: Base API URL
+        api_key: Optional API key for authentication
+
+    Returns:
+        True if upload successful, False otherwise
+    """
+    try:
+        # Construct full URL
+        full_url = f"{base_url.rstrip('/')}{upload_url}"
+
+        # Add query parameters for hostname and filepath
+        params = {
+            "hostname": hostname,
+            "filepath": str(filepath.absolute()),
+        }
+
+        # Prepare headers
+        headers = {}
+        if api_key:
+            headers["X-API-Key"] = api_key
+
+        # Open file and upload
+        with open(filepath, "rb") as f:
+            files = {"file": (filepath.name, f, "application/octet-stream")}
+            response = httpx.post(full_url, files=files, params=params, headers=headers, timeout=30.0)
+            response.raise_for_status()
+
+        console.print(f"[green]✓ Uploaded: {filepath.name}[/green]")
+        return True
+
+    except httpx.HTTPError as e:
+        console.print(f"[red]Failed to upload {filepath.name}: {e}[/red]")
+        return False
+    except (IOError, OSError) as e:
+        console.print(f"[red]Cannot read file {filepath}: {e}[/red]")
+        return False
+
+
+def process_path(
     start_path: Path,
     exclude_patterns: list[str],
     hostname: str,
     ip_address: str,
     api_url: str,
     dry_run: bool = False,
-) -> tuple[int, int, int]:
-    """Scan directory and send file metadata to server.
+    api_key: Optional[str] = None,
+) -> tuple[int, int, int, int]:
+    """Process a file or directory and send file metadata to server.
 
     Args:
-        start_path: Starting directory path
-        exclude_patterns: List of patterns to exclude
+        start_path: File or directory path to process
+        exclude_patterns: List of patterns to exclude (only applies to directories)
         hostname: Hostname to send
         ip_address: IP address to send
-        api_url: API endpoint URL
+        api_url: API endpoint URL (e.g., http://localhost:8000/put_file)
         dry_run: If True, don't actually send data to server
+        api_key: Optional API key for authentication
 
     Returns:
-        Tuple of (total_files, successful, failed)
+        Tuple of (total_files, successful, failed, uploaded)
     """
     if not start_path.exists():
         console.print(f"[red]Error: Path does not exist: {start_path}[/red]")
-        return 0, 0, 0
-
-    if not start_path.is_dir():
-        console.print(f"[red]Error: Path is not a directory: {start_path}[/red]")
-        return 0, 0, 0
+        return 0, 0, 0, 0
 
     # Collect all files first to show progress
-    console.print(f"[cyan]Scanning directory: {start_path}[/cyan]")
     files_to_process = []
 
-    for filepath in start_path.rglob("*"):
-        if not filepath.is_file():
-            continue
+    if start_path.is_file():
+        # Single file mode
+        console.print(f"[cyan]Processing file: {start_path}[/cyan]")
+        files_to_process.append(start_path)
+    elif start_path.is_dir():
+        # Directory mode - scan recursively
+        console.print(f"[cyan]Scanning directory: {start_path}[/cyan]")
 
-        # Check exclude patterns
-        if matches_exclude_pattern(filepath, start_path, exclude_patterns):
-            console.print(f"[dim]Excluded: {filepath.relative_to(start_path)}[/dim]")
-            continue
+        for filepath in start_path.rglob("*"):
+            if not filepath.is_file():
+                continue
 
-        files_to_process.append(filepath)
+            # Check exclude patterns
+            if matches_exclude_pattern(filepath, start_path, exclude_patterns):
+                console.print(f"[dim]Excluded: {filepath.relative_to(start_path)}[/dim]")
+                continue
+
+            files_to_process.append(filepath)
+    else:
+        console.print(f"[red]Error: Path is neither a file nor a directory: {start_path}[/red]")
+        return 0, 0, 0, 0
 
     if not files_to_process:
         console.print("[yellow]No files to process[/yellow]")
-        return 0, 0, 0
+        return 0, 0, 0, 0
 
     console.print(f"[green]Found {len(files_to_process)} files to process[/green]")
 
     total_files = len(files_to_process)
     successful = 0
     failed = 0
+    uploaded = 0
 
     # Process files with progress bar
     with Progress(
@@ -224,9 +327,27 @@ def scan_directory(
                 successful += 1
             else:
                 try:
-                    response = httpx.post(api_url, json=metadata, timeout=10.0)
+                    # Prepare headers with API key if provided
+                    headers = {}
+                    if api_key:
+                        headers["X-API-Key"] = api_key
+
+                    response = httpx.post(api_url, json=metadata, headers=headers, timeout=10.0)
                     response.raise_for_status()
+                    data = response.json()
                     successful += 1
+
+                    # Check if file upload is required
+                    if data.get("upload_required", False):
+                        upload_url = data.get("upload_url")
+                        if upload_url:
+                            # Extract base URL from api_url (remove /put_file suffix)
+                            base_url = api_url.rsplit("/", 1)[0]
+                            if upload_file_content(filepath, sha256, hostname, upload_url, base_url, api_key):
+                                uploaded += 1
+                    else:
+                        console.print(f"[dim]Skipped upload (deduplicated): {filepath.name}[/dim]")
+
                 except httpx.HTTPError as e:
                     console.print(
                         f"[red]Failed to send {filepath.name}: {e}[/red]"
@@ -235,41 +356,58 @@ def scan_directory(
 
             progress.advance(task)
 
-    return total_files, successful, failed
+    return total_files, successful, failed, uploaded
 
 
 def main() -> int:
     """Main entry point."""
     parser = configargparse.ArgumentParser(
         default_config_files=["~/.ppclient.conf", ".ppclient.conf"],
-        description="Scan directories and send file metadata to PutPlace server",
+        ignore_unknown_config_file_keys=True,
+        description="Process files or directories and send file metadata to PutPlace server",
         formatter_class=configargparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
+  # Process a single file
+  %(prog)s --path /var/log/app.log
+
   # Scan current directory
-  %(prog)s .
+  %(prog)s --path .
 
   # Scan specific directory
-  %(prog)s /var/log
+  %(prog)s --path /var/log
 
-  # Exclude .git directories and *.log files
-  %(prog)s /var/log --exclude .git --exclude "*.log"
+  # Exclude .git directories and *.log files (when scanning directories)
+  %(prog)s --path /var/log --exclude .git --exclude "*.log"
 
   # Dry run (don't send to server)
-  %(prog)s /var/log --dry-run
+  %(prog)s --path /var/log --dry-run
 
   # Use custom server URL
-  %(prog)s /var/log --url http://localhost:8080/put_file
+  %(prog)s --path /var/log --url http://localhost:8080/put_file
 
   # Use config file
-  %(prog)s /var/log --config myconfig.conf
+  %(prog)s --path /var/log --config myconfig.conf
 
 Config file format (INI style):
   [DEFAULT]
   url = http://remote-server:8000/put_file
+  api-key = your-api-key-here
   exclude = .git
   exclude = *.log
   hostname = myserver
+
+Authentication:
+  # Option 1: Command line
+  %(prog)s --path /var/log --api-key YOUR_API_KEY
+
+  # Option 2: Environment variable
+  export PUTPLACE_API_KEY=YOUR_API_KEY
+  %(prog)s --path /var/log
+
+  # Option 3: Config file (~/.ppclient.conf)
+  echo "api-key = YOUR_API_KEY" >> ~/.ppclient.conf
+  %(prog)s --path /var/log
         """,
     )
 
@@ -281,16 +419,19 @@ Config file format (INI style):
     )
 
     parser.add_argument(
-        "path",
+        "--path",
+        "-p",
         type=Path,
-        help="Starting directory path to scan",
+        required=True,
+        help="File or directory path to process (directories are scanned recursively)",
     )
 
     parser.add_argument(
         "--exclude",
         "-e",
         action="append",
-        default=[],
+        dest="exclude_list",
+        default=None,
         help="Exclude pattern (can be specified multiple times). "
         "Supports wildcards like *.log or directory names like .git",
     )
@@ -326,11 +467,49 @@ Config file format (INI style):
         help="Verbose output",
     )
 
+    parser.add_argument(
+        "--api-key",
+        "-k",
+        env_var="PUTPLACE_API_KEY",
+        default=None,
+        help="API key for authentication (required for API v1.0+). "
+        "Can be specified via: 1) --api-key flag, 2) PUTPLACE_API_KEY environment variable, "
+        "or 3) 'api-key' in config file.",
+    )
+
     args = parser.parse_args()
+
+    # Get API key (configargparse handles CLI, env var, and config file automatically)
+    api_key = args.api_key
 
     # Get hostname and IP
     hostname = args.hostname or get_hostname()
     ip_address = args.ip or get_ip_address()
+
+    # Handle exclude patterns: merge config file and CLI patterns
+    # configargparse doesn't properly handle action="append" with config files,
+    # so we manually read exclude patterns from config files
+    config_files_to_check = []
+
+    # Add explicit config file if specified
+    if hasattr(args, 'config') and args.config:
+        config_files_to_check.append(args.config)
+    # Add default config files
+    config_files_to_check.extend(["~/.ppclient.conf", ".ppclient.conf"])
+
+    # Get exclude patterns from config files
+    config_exclude_patterns = get_exclude_patterns_from_config(config_files_to_check)
+
+    # Get exclude patterns from CLI (may include duplicates from config)
+    cli_exclude_patterns = args.exclude_list if args.exclude_list is not None else []
+
+    # Merge both lists, removing duplicates while preserving order
+    seen = set()
+    exclude_patterns = []
+    for pattern in config_exclude_patterns + cli_exclude_patterns:
+        if pattern not in seen:
+            seen.add(pattern)
+            exclude_patterns.append(pattern)
 
     # Display configuration
     console.print("\n[bold cyan]PutPlace Client[/bold cyan]")
@@ -339,8 +518,13 @@ Config file format (INI style):
     console.print(f"  IP Address: {ip_address}")
     console.print(f"  API URL: {args.url}")
 
-    if args.exclude:
-        console.print(f"  Exclude patterns: {', '.join(args.exclude)}")
+    if api_key:
+        console.print(f"  [green]API Key: {'*' * 8}{api_key[-8:]}[/green]")
+    else:
+        console.print("  [yellow]Warning: No API key provided (authentication may fail)[/yellow]")
+
+    if exclude_patterns:
+        console.print(f"  Exclude patterns: {', '.join(exclude_patterns)}")
 
     if args.dry_run:
         console.print("  [yellow]DRY RUN MODE[/yellow]")
@@ -348,19 +532,22 @@ Config file format (INI style):
     console.print()
 
     # Scan and process
-    total, successful, failed = scan_directory(
+    total, successful, failed, uploaded = process_path(
         args.path,
-        args.exclude,
+        exclude_patterns,
         hostname,
         ip_address,
         args.url,
         args.dry_run,
+        api_key,
     )
 
     # Display results
     console.print("\n[bold]Results:[/bold]")
     console.print(f"  Total files: {total}")
     console.print(f"  [green]Successful: {successful}[/green]")
+    if uploaded > 0:
+        console.print(f"  [cyan]Uploaded: {uploaded}[/cyan]")
     if failed > 0:
         console.print(f"  [red]Failed: {failed}[/red]")
 

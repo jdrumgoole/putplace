@@ -9,20 +9,19 @@ from motor.motor_asyncio import AsyncIOMotorClient
 
 from putplace.config import Settings
 from putplace.database import MongoDB
-
-import ppclient
+from putplace import ppclient
 
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_e2e_file_metadata_stored(client, test_db, temp_test_dir):
+async def test_e2e_file_metadata_stored(client, test_db, temp_test_dir, test_api_key):
     """Test that file metadata is properly stored and retrieved."""
     # Calculate hash and stats for a test file
     test_file = temp_test_dir / "file1.txt"
     sha256 = ppclient.calculate_sha256(test_file)
     file_stats = ppclient.get_file_stats(test_file)
 
-    # Send file metadata via API
+    # Send file metadata via API with API key
     metadata = {
         "filepath": str(test_file),
         "hostname": "e2e-test-host",
@@ -31,11 +30,18 @@ async def test_e2e_file_metadata_stored(client, test_db, temp_test_dir):
         **file_stats,
     }
 
-    response = await client.post("/put_file", json=metadata)
+    response = await client.post(
+        "/put_file",
+        json=metadata,
+        headers={"X-API-Key": test_api_key}
+    )
     assert response.status_code == 201
 
-    # Retrieve via API
-    get_response = await client.get(f"/get_file/{sha256}")
+    # Retrieve via API (also requires API key)
+    get_response = await client.get(
+        f"/get_file/{sha256}",
+        headers={"X-API-Key": test_api_key}
+    )
     assert get_response.status_code == 200
 
     data = get_response.json()
@@ -48,7 +54,7 @@ async def test_e2e_file_metadata_stored(client, test_db, temp_test_dir):
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_e2e_multiple_files_different_hosts(client, test_db, temp_test_dir):
+async def test_e2e_multiple_files_different_hosts(client, test_db, temp_test_dir, test_api_key):
     """Test storing metadata from multiple files and hosts."""
     files_to_process = [
         (temp_test_dir / "file1.txt", "host1", "10.0.0.1"),
@@ -66,7 +72,11 @@ async def test_e2e_multiple_files_different_hosts(client, test_db, temp_test_dir
             "sha256": sha256,
             **file_stats,
         }
-        response = await client.post("/put_file", json=metadata)
+        response = await client.post(
+            "/put_file",
+            json=metadata,
+            headers={"X-API-Key": test_api_key}
+        )
         assert response.status_code == 201
 
     # Verify we can query by hostname
@@ -97,7 +107,7 @@ async def test_e2e_client_sha256_calculation(temp_test_dir):
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_e2e_duplicate_files_different_hosts(client, test_db, temp_test_dir):
+async def test_e2e_duplicate_files_different_hosts(client, test_db, temp_test_dir, test_api_key):
     """Test that same file from different hosts creates multiple records."""
     test_file = temp_test_dir / "file1.txt"
     sha256 = ppclient.calculate_sha256(test_file)
@@ -112,7 +122,11 @@ async def test_e2e_duplicate_files_different_hosts(client, test_db, temp_test_di
             "sha256": sha256,
             **file_stats,
         }
-        response = await client.post("/put_file", json=metadata)
+        response = await client.post(
+            "/put_file",
+            json=metadata,
+            headers={"X-API-Key": test_api_key}
+        )
         assert response.status_code == 201
 
     # Both records should exist

@@ -283,3 +283,4 @@ Environment variables (see .env.example):
 - `API_DESCRIPTION` - API description
 
 Configuration is managed via Pydantic Settings in `src/putplace/config.py`
+- Use uv run to run python and other program inside the uv enviroment
