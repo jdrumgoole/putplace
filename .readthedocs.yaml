@@ -9,6 +9,7 @@ sphinx:
   fail_on_warning: false
 
 # Build documentation with Python 3.11
+# The "latest" version will automatically track the default branch (main)
 build:
   os: ubuntu-22.04
   tools:
