@@ -5,14 +5,17 @@ A FastAPI-based file metadata storage service using MongoDB. Store and retrieve 
 ## Features
 
 - **File Metadata Storage** - Track file locations across your infrastructure with SHA256 hashes
+- **File Clone Detection** - Automatically detect and track duplicate files across all users
+- **Epoch File Tracking** - Identify and highlight the original file (first uploaded with content)
+- **Cross-User File Discovery** - Find the canonical copy of a file even if uploaded by different users
 - **Multiple Storage Backends** - Local filesystem or AWS S3 storage for file content
 - **User Authentication** - JWT-based authentication with secure password hashing
 - **API Key Management** - Create, list, revoke, and delete API keys via web interface
+- **Interactive Web File Browser** - Tree-based file explorer with file details and clone tracking
 - **TOML Configuration** - Clean, structured configuration using `ppserver.toml`
 - **Automatic Validation** - Server validates storage directory on startup with clear error messages
-- **Client Tool** - `ppclient` for scanning directories and uploading metadata
+- **Client Tool** - `ppclient` for scanning directories with graceful interrupt handling
 - **Server Manager** - `ppserver` for easy server lifecycle management
-- **Web Interface** - Beautiful web UI for authentication and API key management
 - **Comprehensive Testing** - 115+ tests with full coverage of all features
 
 ## Prerequisites
@@ -289,11 +292,78 @@ Results:
   Failed: 2
 ```
 
+### Graceful Interrupt Handling
+
+The ppclient now handles Ctrl-C interrupts gracefully:
+
+```bash
+# Start scanning a large directory
+ppclient --path /large/directory
+
+# Press Ctrl-C once to stop gracefully
+# - Finishes processing the current file
+# - Shows partial completion status
+# - Displays count of remaining files
+
+# Press Ctrl-C twice to force quit immediately
+```
+
+**Example output after interrupt:**
+
+```
+⚠ Interrupt received, finishing current file and exiting...
+(Press Ctrl-C again to force quit)
+
+Processing interrupted by user
+
+Results:
+  Status: Interrupted (partial completion)
+  Total files: 100
+  Successful: 42
+  Failed: 0
+  Remaining: 58
+```
+
 ### Help
 
 ```bash
 ppclient --help
 ```
+
+## Web File Browser
+
+After logging in at http://localhost:8000/my_files, you'll see an interactive file browser with:
+
+### Features
+
+- **Tree-based layout** - Files organized by hostname and directory path
+- **File details modal** - Click the info button (ℹ️) to view complete file metadata
+- **Clone detection** - Click the clone button to see all duplicate files
+- **Epoch file highlighting** - Original files marked with green badge and background
+- **Zero-length file indicators** - Empty files shown with special icon (📭)
+- **Cross-user visibility** - See the canonical copy even if uploaded by another user
+
+### File Status Indicators
+
+- **Full** - File content has been uploaded to the server
+- **Meta** - Only metadata has been uploaded (file content can be found elsewhere)
+
+### Clone Detection
+
+Each file shows a clone button that indicates duplicate files:
+- **Number** (e.g., "3") - Shows count of duplicate files and opens clone modal
+- **👥 Icon** - Clickable to view file information across all users
+- **0** - Zero-length files (not clickable, all empty files share same hash)
+
+### Epoch File
+
+When viewing clones, the **epoch file** (first uploaded with content) is highlighted:
+- Green background color
+- Green "EPOCH" badge
+- Bold text styling
+- Positioned first in the list
+
+This helps you identify the canonical copy of each file across your infrastructure.
 
 ## Development
 
@@ -470,6 +540,8 @@ putplace/
 - `POST /put_file` - Store file metadata (requires API key)
 - `GET /get_file/{sha256}` - Retrieve file by SHA256 hash (requires API key)
 - `POST /upload_file/{sha256}` - Upload file content (requires API key)
+- `GET /api/clones/{sha256}` - Get all files with identical SHA256 across all users (requires JWT)
+- `GET /api/my_files` - Get current user's files (requires JWT)
 
 ### Authentication & API Keys
 - `POST /api/register` - Register a new user account
@@ -483,7 +555,8 @@ putplace/
 - `GET /` - Home page with quick start guide
 - `GET /login` - Login page
 - `GET /register` - User registration page
-- `GET /api_keys_page` - API key management interface
+- `GET /my_files` - Interactive file browser (requires login)
+- `GET /api_keys_page` - API key management interface (requires login)
 - `GET /health` - Health check endpoint
 
 ### Documentation
