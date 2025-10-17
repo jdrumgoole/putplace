@@ -163,13 +163,13 @@ Keep inventory of files across multiple servers:
 ## System Requirements
 
 ### Server Requirements
-- Python 3.10 or higher
+- Python 3.10 - 3.14
 - MongoDB 4.4 or higher
 - 1GB+ RAM (depending on usage)
 - Network connectivity
 
 ### Client Requirements
-- Python 3.10 or higher
+- Python 3.10 - 3.14
 - Network access to PutPlace server
 
 ### Optional

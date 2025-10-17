@@ -5,6 +5,22 @@ version = "0.4.0"
 description = "A Python project built with uv"
 readme = "README.md"
 requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Framework :: FastAPI",
+    "Topic :: System :: Archiving",
+    "Topic :: System :: Filesystems",
+    "Topic :: System :: Systems Administration",
+]
 dependencies = [
     "fastapi>=0.110.0",
     "uvicorn[standard]>=0.27.0",

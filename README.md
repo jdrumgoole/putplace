@@ -1,7 +1,7 @@
 # PutPlace
 
 [![Documentation Status](https://readthedocs.org/projects/putplace/badge/?version=latest)](https://putplace.readthedocs.io/en/latest/?badge=latest)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10-3.14](https://img.shields.io/badge/python-3.10--3.14-blue.svg)](https://www.python.org/downloads/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-green.svg)](https://fastapi.tiangolo.com/)
 [![MongoDB](https://img.shields.io/badge/MongoDB-4.4+-green.svg)](https://www.mongodb.com/)
 
@@ -32,7 +32,7 @@ A distributed file metadata storage and content deduplication system with SHA256
 
 ### Prerequisites
 
-- Python 3.10 or higher
+- Python 3.10 - 3.14
 - [uv](https://github.com/astral-sh/uv) - Fast Python package installer
 - Docker (for MongoDB container)
 

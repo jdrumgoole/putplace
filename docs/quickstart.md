@@ -4,7 +4,7 @@ Get PutPlace up and running in 5 minutes!
 
 ## Prerequisites
 
-- Python 3.10+
+- Python 3.10 - 3.14
 - MongoDB running on localhost:27017
 - Terminal/command line access
 

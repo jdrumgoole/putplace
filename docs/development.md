@@ -6,7 +6,7 @@ Guide for contributing to PutPlace development.
 
 ### Prerequisites
 
-- Python 3.10 or higher
+- Python 3.10 - 3.14
 - MongoDB 4.4 or higher
 - Git
 - uv (recommended) or pip
