@@ -192,13 +192,14 @@ class MongoDB:
             logger.error(f"Database operation failed during has_file_content check: {e}")
             raise
 
-    async def mark_file_uploaded(self, sha256: str, hostname: str, filepath: str) -> bool:
+    async def mark_file_uploaded(self, sha256: str, hostname: str, filepath: str, storage_path: str) -> bool:
         """Mark that file content has been uploaded for a specific metadata record.
 
         Args:
             sha256: SHA256 hash of the file
             hostname: Hostname where file is located
             filepath: Full path to the file
+            storage_path: Full storage path where file is stored (local path or S3 URI)
 
         Returns:
             True if updated successfully, False if not found
@@ -219,6 +220,7 @@ class MongoDB:
                     "$set": {
                         "has_file_content": True,
                         "file_uploaded_at": datetime.utcnow(),
+                        "storage_path": storage_path,
                     }
                 },
             )

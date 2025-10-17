@@ -740,8 +740,11 @@ async def upload_file(
                 detail="Failed to store file content",
             )
 
-        # Mark the file as uploaded in database
-        updated = await db.mark_file_uploaded(sha256, hostname, filepath)
+        # Get the storage path where file was stored
+        storage_path = storage.get_storage_path(sha256)
+
+        # Mark the file as uploaded in database with storage path
+        updated = await db.mark_file_uploaded(sha256, hostname, filepath, storage_path)
 
         if not updated:
             raise HTTPException(

@@ -60,6 +60,18 @@ class StorageBackend(ABC):
         """
         pass
 
+    @abstractmethod
+    def get_storage_path(self, sha256: str) -> str:
+        """Get the storage path/URI for a given SHA256.
+
+        Args:
+            sha256: SHA256 hash of the file
+
+        Returns:
+            Full storage path or URI (e.g., "/var/putplace/files/e3/e3b..." or "s3://bucket/files/e3/e3b...")
+        """
+        pass
+
 
 class LocalStorage(StorageBackend):
     """Local filesystem storage backend.
@@ -187,6 +199,18 @@ class LocalStorage(StorageBackend):
         except (IOError, OSError) as e:
             logger.error(f"Failed to delete file {sha256}: {e}")
             return False
+
+    def get_storage_path(self, sha256: str) -> str:
+        """Get the storage path for a given SHA256.
+
+        Args:
+            sha256: SHA256 hash of the file
+
+        Returns:
+            Absolute file path as string
+        """
+        file_path = self._get_file_path(sha256)
+        return str(file_path.absolute())
 
 
 class S3Storage(StorageBackend):
@@ -377,6 +401,18 @@ class S3Storage(StorageBackend):
         except Exception as e:
             logger.error(f"Failed to delete file {sha256} from S3: {e}")
             return False
+
+    def get_storage_path(self, sha256: str) -> str:
+        """Get the storage path (S3 URI) for a given SHA256.
+
+        Args:
+            sha256: SHA256 hash of the file
+
+        Returns:
+            S3 URI in the format "s3://bucket/key"
+        """
+        s3_key = self._get_s3_key(sha256)
+        return f"s3://{self.bucket_name}/{s3_key}"
 
 
 def get_storage_backend(backend_type: str, **kwargs) -> StorageBackend:
