@@ -272,9 +272,9 @@ def test_ppserver_restart(install_package):
         )
         time.sleep(2)
 
-        # Restart server
+        # Restart server on the same port
         result = subprocess.run(
-            ["ppserver", "restart"],
+            ["ppserver", "restart", "--port", "8766"],
             capture_output=True,
             text=True,
             timeout=30,

@@ -295,11 +295,19 @@ exclude = *.log
             assert "*.tmp" in exclude_patterns
 
 
-def test_no_api_key_provided(temp_test_dir, capsys):
+def test_no_api_key_provided(temp_test_dir, capsys, monkeypatch):
     """Test that warning is shown when no API key is provided."""
+    # Change to temp directory to avoid loading ppclient.conf from repo root
+    monkeypatch.chdir(temp_test_dir)
+
+    # Create an empty config file
+    empty_config = temp_test_dir / "empty.conf"
+    empty_config.write_text("")
+
     test_args = [
         "ppclient.py",
         "--path", str(temp_test_dir),
+        "--config", str(empty_config),
         "--dry-run",
     ]
 
