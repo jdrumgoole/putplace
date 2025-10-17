@@ -283,7 +283,138 @@ curl -H "X-API-Key: your-api-key" \
   http://localhost:8000/get_file/abc123...
 ```
 
-**Note:** This returns the FIRST matching file. If multiple files with the same SHA256 exist (duplicates on different hosts/paths), only one is returned. Use MongoDB queries directly for advanced searching.
+**Note:** This returns the FIRST matching file. If multiple files with the same SHA256 exist (duplicates on different hosts/paths), only one is returned. Use `/api/clones/{sha256}` to get all files with the same hash.
+
+---
+
+#### GET /api/clones/{sha256}
+
+Get all files with identical SHA256 hash across all users (clone detection).
+
+**Authentication:** Required (JWT token)
+
+**Path Parameters:**
+- `sha256` (string, required): SHA256 hash of the file (64 characters)
+
+**Response:**
+```json
+[
+  {
+    "_id": "65a1b2c3d4e5f6g7h8i9j0k1",
+    "filepath": "/var/www/html/index.html",
+    "hostname": "web-server-01",
+    "ip_address": "192.168.1.100",
+    "sha256": "a1b2c3d4e5f6...",
+    "file_size": 1234,
+    "file_mode": 33188,
+    "file_uid": 1000,
+    "file_gid": 1000,
+    "file_mtime": 1705318200.0,
+    "file_atime": 1705320000.0,
+    "file_ctime": 1705316400.0,
+    "has_file_content": true,
+    "file_uploaded_at": "2025-01-15T10:31:00Z",
+    "created_at": "2025-01-15T10:30:00Z",
+    "uploaded_by_user_id": "user123"
+  },
+  {
+    "_id": "65a1b2c3d4e5f6g7h8i9j0k2",
+    "filepath": "/backup/html/index.html",
+    "hostname": "backup-server",
+    "ip_address": "192.168.1.101",
+    "sha256": "a1b2c3d4e5f6...",
+    "file_size": 1234,
+    "file_mode": 33188,
+    "file_uid": 1001,
+    "file_gid": 1001,
+    "file_mtime": 1705318300.0,
+    "file_atime": 1705320100.0,
+    "file_ctime": 1705316500.0,
+    "has_file_content": false,
+    "file_uploaded_at": null,
+    "created_at": "2025-01-15T10:35:00Z",
+    "uploaded_by_user_id": "user456"
+  }
+]
+```
+
+**Status Codes:**
+- `200 OK` - Success (returns empty array if no files found)
+- `400 Bad Request` - Invalid SHA256 format
+- `401 Unauthorized` - Missing or invalid JWT token
+- `500 Internal Server Error` - Database error
+
+**Example:**
+```bash
+curl -H "Authorization: Bearer your-jwt-token" \
+  http://localhost:8000/api/clones/abc123...
+```
+
+**Sorting:**
+- Files are sorted with "epoch file" (first uploaded with content) first
+- Files with content are prioritized over metadata-only files
+- Among files with content, earliest upload time comes first
+
+**Use Cases:**
+- **Deduplication Discovery**: Find all locations where identical file exists
+- **Epoch File Identification**: Identify the canonical copy of a file
+- **Cross-User File Discovery**: Find file content uploaded by other users
+- **Storage Optimization**: Identify duplicate files for cleanup
+
+---
+
+#### GET /api/my_files
+
+Get all files uploaded by the current user.
+
+**Authentication:** Required (JWT token)
+
+**Query Parameters:**
+- `limit` (integer, optional): Maximum number of files to return (default: 100)
+- `skip` (integer, optional): Number of files to skip for pagination (default: 0)
+
+**Response:**
+```json
+[
+  {
+    "_id": "65a1b2c3d4e5f6g7h8i9j0k1",
+    "filepath": "/var/www/html/index.html",
+    "hostname": "web-server-01",
+    "ip_address": "192.168.1.100",
+    "sha256": "a1b2c3d4e5f6...",
+    "file_size": 1234,
+    "file_mode": 33188,
+    "file_uid": 1000,
+    "file_gid": 1000,
+    "file_mtime": 1705318200.0,
+    "file_atime": 1705320000.0,
+    "file_ctime": 1705316400.0,
+    "has_file_content": true,
+    "file_uploaded_at": "2025-01-15T10:31:00Z",
+    "created_at": "2025-01-15T10:30:00Z",
+    "uploaded_by_user_id": "user123"
+  }
+]
+```
+
+**Status Codes:**
+- `200 OK` - Success (returns empty array if no files found)
+- `401 Unauthorized` - Missing or invalid JWT token
+- `500 Internal Server Error` - Database error
+
+**Example:**
+```bash
+# Get first 100 files
+curl -H "Authorization: Bearer your-jwt-token" \
+  http://localhost:8000/api/my_files
+
+# Get next 100 files (pagination)
+curl -H "Authorization: Bearer your-jwt-token" \
+  "http://localhost:8000/api/my_files?limit=100&skip=100"
+```
+
+**Sorting:**
+- Files are sorted by creation time (most recent first)
 
 ### Authentication Endpoints
 

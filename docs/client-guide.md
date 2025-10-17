@@ -843,6 +843,126 @@ echo "All scans complete"
    python ppclient.py /large/directory --verbose
    ```
 
+## Graceful Interrupt Handling
+
+The PutPlace client handles `Ctrl-C` (SIGINT) gracefully, allowing you to stop long-running scans safely.
+
+### How It Works
+
+**First Ctrl-C:**
+- Finishes processing the current file
+- Exits cleanly after current operation
+- Shows partial completion status
+- Returns exit code 1 (indicating incomplete)
+
+**Second Ctrl-C:**
+- Forces immediate termination
+- Standard Python KeyboardInterrupt behavior
+
+### Example Usage
+
+```bash
+# Start scanning a large directory
+ppclient --path /large/directory
+
+# Press Ctrl-C once to stop gracefully
+# (Current file completes, then exits)
+
+# Output:
+# ⚠ Interrupt received, finishing current file and exiting...
+# (Press Ctrl-C again to force quit)
+#
+# Processing interrupted by user
+#
+# Results:
+#   Status: Interrupted (partial completion)
+#   Total files: 1000
+#   Successful: 247
+#   Failed: 0
+#   Remaining: 753
+```
+
+### Use Cases
+
+**1. Testing:**
+```bash
+# Start scan to verify configuration
+ppclient --path /large/directory
+
+# Once you see it's working, press Ctrl-C to stop
+```
+
+**2. Resource Management:**
+```bash
+# Stop scan if system load is too high
+ppclient --path /data
+# ... system load warning appears ...
+# Press Ctrl-C to stop gracefully
+```
+
+**3. Time-Limited Scans:**
+```bash
+# Run scan for a few minutes to sample data
+ppclient --path /var/www
+# Press Ctrl-C when you have enough samples
+```
+
+**4. Scripting with Timeout:**
+```bash
+#!/bin/bash
+# Start scan in background
+ppclient --path /data &
+PID=$!
+
+# Wait for 5 minutes
+sleep 300
+
+# Gracefully interrupt if still running
+if kill -0 $PID 2>/dev/null; then
+    kill -INT $PID  # Send SIGINT (same as Ctrl-C)
+    wait $PID
+fi
+```
+
+### Exit Codes
+
+When interrupted:
+- **Exit code 1**: Indicates partial completion
+- Same as when some files fail processing
+- Useful for automation/monitoring
+
+```bash
+ppclient --path /data
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "Complete success"
+elif [ $EXIT_CODE -eq 1 ]; then
+    echo "Partial completion or interrupted"
+    # Could be interrupted or some failures
+fi
+```
+
+### Best Practices
+
+1. **Always let the current file finish** - First Ctrl-C ensures data consistency
+
+2. **Check the summary** - Review how many files were processed before interrupt
+
+3. **Resume where you left off** - Use exclusions to skip already-processed files:
+   ```bash
+   # First scan (interrupted after 100 files)
+   ppclient --path /data
+
+   # Resume by scanning remaining directories
+   ppclient --path /data/subdirectory
+   ```
+
+4. **Monitor long scans** - Use `--verbose` to see progress and know when to interrupt:
+   ```bash
+   ppclient --path /large/directory --verbose
+   ```
+
 ## Next Steps
 
 - [Authentication Guide](AUTHENTICATION.md) - API key management

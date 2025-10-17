@@ -8,8 +8,10 @@ PutPlace allows you to:
 
 - 📁 **Track file metadata** across multiple servers
 - 🔄 **Deduplicate file content** using SHA256 hashing
+- 👥 **Detect file clones** across all users with epoch file tracking
+- 🌐 **Browse files interactively** via web interface
 - 💾 **Store file content** in local filesystem or AWS S3
-- 🔐 **Secure access** with API key authentication
+- 🔐 **Secure access** with API key and JWT authentication
 - 🚀 **Scale horizontally** with MongoDB and object storage
 
 ## Quick Links
@@ -53,6 +55,22 @@ Save bandwidth and storage with automatic deduplication:
 - Upload files only once
 - Metadata stored separately for each location
 
+### File Clone Detection (New in v0.4.0)
+Discover and track duplicate files across your entire infrastructure:
+- **Cross-user clone detection** - Find files with identical content across all users
+- **Epoch file tracking** - Identify the original/canonical copy of each file
+- **Interactive web browser** - Tree-based file explorer with clone visualization
+- **Visual highlighting** - Green badges and styling for epoch files
+- **Zero-length file handling** - Special indicators for empty files
+
+### Interactive Web Interface (New in v0.4.0)
+Manage your files through an intuitive web interface:
+- **User authentication** - Secure JWT-based login system
+- **File browser** - Tree layout organized by hostname and directory
+- **File details modal** - View comprehensive metadata for any file
+- **Clone modal** - See all instances of duplicate files
+- **Real-time clone counts** - Button badges showing number of duplicates
+
 ### Flexible Storage
 Choose the storage backend that fits your needs:
 - **Local Filesystem** - Simple, fast, no external dependencies
@@ -72,6 +90,15 @@ Clean, well-documented REST API:
 - JSON request/response format
 - Comprehensive error handling
 - Health check endpoints
+- New endpoints: `/api/clones/{sha256}`, `/api/my_files`
+
+### Client Features (Updated in v0.4.0)
+Powerful command-line client with enhanced usability:
+- **Graceful interrupt handling** - Ctrl-C finishes current file before exiting
+- **Partial completion status** - See progress when interrupted
+- **Configuration flexibility** - CLI, environment, or file-based config
+- **Rich console output** - Progress bars and colorized status
+- **Pattern-based exclusions** - Skip unwanted files efficiently
 
 ## Architecture
 
