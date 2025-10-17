@@ -5,6 +5,7 @@ import configargparse
 import configparser
 import hashlib
 import os
+import signal
 import socket
 import sys
 from pathlib import Path
@@ -15,6 +16,17 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 
 console = Console()
+
+# Global flag for interrupt handling
+interrupted = False
+
+
+def signal_handler(signum, frame):
+    """Handle Ctrl-C signal gracefully."""
+    global interrupted
+    interrupted = True
+    console.print("\n[yellow]⚠ Interrupt received, finishing current file and exiting...[/yellow]")
+    console.print("[dim](Press Ctrl-C again to force quit)[/dim]")
 
 
 def get_exclude_patterns_from_config(config_files: list[str]) -> list[str]:
@@ -243,6 +255,8 @@ def process_path(
     Returns:
         Tuple of (total_files, successful, failed, uploaded)
     """
+    global interrupted
+
     if not start_path.exists():
         console.print(f"[red]Error: Path does not exist: {start_path}[/red]")
         return 0, 0, 0, 0
@@ -294,6 +308,11 @@ def process_path(
         task = progress.add_task("[cyan]Processing files...", total=total_files)
 
         for filepath in files_to_process:
+            # Check for interrupt
+            if interrupted:
+                console.print("\n[yellow]Processing interrupted by user[/yellow]")
+                break
+
             progress.update(
                 task, description=f"[cyan]Processing: {filepath.name[:30]}..."
             )
@@ -361,6 +380,8 @@ def process_path(
 
 def main() -> int:
     """Main entry point."""
+    global interrupted
+
     parser = configargparse.ArgumentParser(
         default_config_files=["~/ppclient.conf", "ppclient.conf"],
         ignore_unknown_config_file_keys=True,
@@ -531,6 +552,9 @@ Authentication:
 
     console.print()
 
+    # Register signal handler for graceful shutdown
+    signal.signal(signal.SIGINT, signal_handler)
+
     # Scan and process
     total, successful, failed, uploaded = process_path(
         args.path,
@@ -544,14 +568,18 @@ Authentication:
 
     # Display results
     console.print("\n[bold]Results:[/bold]")
+    if interrupted:
+        console.print("  [yellow]Status: Interrupted (partial completion)[/yellow]")
     console.print(f"  Total files: {total}")
     console.print(f"  [green]Successful: {successful}[/green]")
     if uploaded > 0:
         console.print(f"  [cyan]Uploaded: {uploaded}[/cyan]")
     if failed > 0:
         console.print(f"  [red]Failed: {failed}[/red]")
+    if interrupted:
+        console.print(f"  [dim]Remaining: {total - successful - failed}[/dim]")
 
-    return 0 if failed == 0 else 1
+    return 0 if (failed == 0 and not interrupted) else 1
 
 
 if __name__ == "__main__":

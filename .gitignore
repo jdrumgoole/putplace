@@ -84,3 +84,7 @@ docs/_build/
 # Storage
 storage/
 .storage/
+
+# PutPlace server runtime files
+.ppserver.pid
+ppserver.log

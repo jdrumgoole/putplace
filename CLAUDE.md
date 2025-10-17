@@ -286,3 +286,6 @@ Configuration is managed via Pydantic Settings in `src/putplace/config.py`
 - Use uv run to run python and other program inside the uv enviroment
 - when you update the docs update both the README.md and the ./docs directory
 - when running tests use uv invoke test-all
+- when you bump versions and commit changes, add a git tag at the same time
+- when you use uv run you don't need to set the python path before hand
+- use the invoke targets to start and stop the sever rather than doing it manually

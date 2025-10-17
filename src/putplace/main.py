@@ -532,8 +532,9 @@ ppclient --help</pre>
                 const authButtons = document.getElementById('authButtons');
 
                 if (token && authButtons) {
-                    // User is logged in - show API Keys and Logout buttons
+                    // User is logged in - show My Files, API Keys and Logout buttons
                     authButtons.innerHTML = `
+                        <a href="/my_files" class="auth-btn">📁 My Files</a>
                         <a href="/api_keys_page" class="auth-btn">🔑 My API Keys</a>
                         <button onclick="logout()" class="auth-btn" style="cursor: pointer;">Logout</button>
                     `;
@@ -600,6 +601,10 @@ async def put_file(
 
         # Convert to dict for MongoDB insertion
         data = file_metadata.model_dump()
+
+        # Track which user uploaded this file (from API key)
+        data["uploaded_by_user_id"] = api_key.get("user_id")
+        data["uploaded_by_api_key_id"] = api_key.get("_id")
 
         # Insert into MongoDB
         doc_id = await db.insert_file_metadata(data)
@@ -747,9 +752,10 @@ async def upload_file(
         return {
             "message": "File uploaded successfully",
             "sha256": sha256,
-            "size": len(content),
+            "size": str(len(content)),
             "hostname": hostname,
             "filepath": filepath,
+            "status": "uploaded",
         }
 
     except HTTPException:
@@ -1658,9 +1664,9 @@ async def login_page() -> str:
                         messageDiv.className = 'message success';
                         messageDiv.style.display = 'block';
 
-                        // Redirect to API keys page after 1 second
+                        // Redirect to My Files page after 1 second
                         setTimeout(() => {
-                            window.location.href = '/api_keys_page';
+                            window.location.href = '/my_files';
                         }, 1000);
                     } else {
                         // Show error message
@@ -2014,3 +2020,910 @@ async def login_user(user_login: UserLogin, db: MongoDB = Depends(get_db)) -> To
     )
     
     return Token(access_token=access_token)
+
+
+@app.get("/api/my_files", response_model=list[FileMetadataResponse], tags=["files"])
+async def get_my_files(
+    db: MongoDB = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+    limit: int = 100,
+    skip: int = 0,
+) -> list[FileMetadataResponse]:
+    """Get all files uploaded by the current user.
+
+    Requires user authentication via JWT Bearer token.
+
+    Args:
+        db: Database instance (injected)
+        current_user: Current logged-in user (injected, for authentication)
+        limit: Maximum number of files to return (default 100)
+        skip: Number of files to skip for pagination (default 0)
+
+    Returns:
+        List of file metadata uploaded by the current user
+
+    Raises:
+        HTTPException: If database operation fails or authentication fails
+    """
+    try:
+        # Get files uploaded by this user
+        files = await db.get_files_by_user(
+            user_id=str(current_user["_id"]),
+            limit=limit,
+            skip=skip
+        )
+
+        return [FileMetadataResponse(**file) for file in files]
+
+    except Exception as e:
+        logger.error(f"Error getting user files: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get user files: {str(e)}",
+        ) from e
+
+
+@app.get("/api/clones/{sha256}", response_model=list[FileMetadataResponse], tags=["files"])
+async def get_clones(
+    sha256: str,
+    db: MongoDB = Depends(get_db),
+    current_user: dict = Depends(get_current_user),
+) -> list[FileMetadataResponse]:
+    """Get all files with the same SHA256 hash (clones) across all users.
+
+    This endpoint returns ALL files with the same SHA256, including the epoch file
+    (the first one uploaded with content) even if it was uploaded by a different user.
+
+    Requires user authentication via JWT Bearer token.
+
+    Args:
+        sha256: SHA256 hash to search for
+        db: Database instance (injected)
+        current_user: Current logged-in user (injected, for authentication)
+
+    Returns:
+        List of all file metadata with matching SHA256, sorted with epoch file first
+
+    Raises:
+        HTTPException: If validation fails or database operation fails
+    """
+    if len(sha256) != 64:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="SHA256 hash must be exactly 64 characters",
+        )
+
+    try:
+        # Get all files with this SHA256 across all users
+        files = await db.get_files_by_sha256(sha256)
+
+        return [FileMetadataResponse(**file) for file in files]
+
+    except Exception as e:
+        logger.error(f"Error getting clones for SHA256 {sha256}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get clones: {str(e)}",
+        ) from e
+
+
+@app.get("/my_files", response_class=HTMLResponse, tags=["users"])
+async def my_files_page() -> str:
+    """My Files page - shows files uploaded by the current user in a file system tree."""
+    html_content = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>My Files - PutPlace</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                padding: 20px;
+            }
+            .container {
+                max-width: 1400px;
+                margin: 0 auto;
+                background: white;
+                border-radius: 10px;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                overflow: hidden;
+            }
+            .header {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 30px 40px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .header h1 {
+                font-size: 2rem;
+            }
+            .header-buttons {
+                display: flex;
+                gap: 10px;
+            }
+            .logout-btn {
+                padding: 8px 16px;
+                background: rgba(255, 255, 255, 0.2);
+                color: white;
+                border: 2px solid white;
+                border-radius: 5px;
+                cursor: pointer;
+                font-weight: 500;
+                text-decoration: none;
+                transition: all 0.3s ease;
+            }
+            .logout-btn:hover {
+                background: white;
+                color: #667eea;
+            }
+            .content {
+                padding: 40px;
+            }
+            .message {
+                padding: 12px;
+                border-radius: 5px;
+                margin-bottom: 20px;
+                display: none;
+            }
+            .message.error {
+                background: #fee;
+                color: #c33;
+                border: 1px solid #fcc;
+            }
+            .message.success {
+                background: #efe;
+                color: #3c3;
+                border: 1px solid #cfc;
+            }
+            .section {
+                margin-bottom: 30px;
+            }
+            .section h2 {
+                color: #667eea;
+                margin-bottom: 15px;
+                font-size: 1.5rem;
+                border-bottom: 2px solid #667eea;
+                padding-bottom: 5px;
+            }
+            .no-files {
+                text-align: center;
+                padding: 40px;
+                color: #6c757d;
+            }
+            .back-link {
+                display: inline-block;
+                margin-top: 20px;
+                color: #667eea;
+                text-decoration: none;
+            }
+            .back-link:hover {
+                color: #764ba2;
+            }
+
+            /* File tree styles */
+            .file-tree {
+                font-family: 'Courier New', monospace;
+                font-size: 0.9rem;
+            }
+            .tree-host {
+                margin-bottom: 25px;
+                background: #f8f9fa;
+                border-radius: 8px;
+                padding: 15px;
+                border-left: 4px solid #667eea;
+            }
+            .tree-host-header {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 8px;
+                background: white;
+                border-radius: 5px;
+                margin-bottom: 10px;
+                cursor: pointer;
+                transition: background 0.2s;
+            }
+            .tree-host-header:hover {
+                background: #e9ecef;
+            }
+            .tree-host-icon {
+                font-size: 1.2rem;
+                transition: transform 0.2s;
+            }
+            .tree-host-icon.collapsed {
+                transform: rotate(-90deg);
+            }
+            .tree-host-name {
+                font-weight: 600;
+                color: #667eea;
+                font-size: 1rem;
+            }
+            .tree-host-count {
+                margin-left: auto;
+                background: #667eea;
+                color: white;
+                padding: 2px 8px;
+                border-radius: 12px;
+                font-size: 0.85rem;
+            }
+            .tree-host-content {
+                padding-left: 20px;
+            }
+            .tree-host-content.collapsed {
+                display: none;
+            }
+            .tree-folder {
+                margin: 8px 0;
+                padding-left: 15px;
+            }
+            .tree-folder-header {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                padding: 6px 8px;
+                background: white;
+                border-radius: 4px;
+                cursor: pointer;
+                transition: background 0.2s;
+            }
+            .tree-folder-header:hover {
+                background: #fff3cd;
+            }
+            .tree-folder-icon {
+                font-size: 1rem;
+                transition: transform 0.2s;
+            }
+            .tree-folder-icon.collapsed {
+                transform: rotate(-90deg);
+            }
+            .tree-folder-name {
+                font-weight: 500;
+                color: #495057;
+            }
+            .tree-folder-count {
+                margin-left: auto;
+                color: #6c757d;
+                font-size: 0.85rem;
+            }
+            .tree-folder-content {
+                padding-left: 20px;
+                margin-top: 5px;
+            }
+            .tree-folder-content.collapsed {
+                display: none;
+            }
+            .tree-file {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 8px;
+                margin: 4px 0;
+                background: white;
+                border-radius: 4px;
+                transition: all 0.2s;
+            }
+            .tree-file:hover {
+                background: #e7f3ff;
+                transform: translateX(5px);
+            }
+            .file-icon {
+                font-size: 1rem;
+            }
+            .file-name {
+                flex: 1;
+                color: #333;
+            }
+            .file-size {
+                color: #6c757d;
+                font-size: 0.85rem;
+                min-width: 80px;
+                text-align: right;
+            }
+            .file-status {
+                font-size: 0.75rem;
+                padding: 2px 8px;
+                border-radius: 10px;
+                font-weight: 500;
+            }
+            .file-status.uploaded {
+                background: #d4edda;
+                color: #155724;
+            }
+            .file-status.metadata {
+                background: #fff3cd;
+                color: #856404;
+            }
+            .action-btn {
+                border: none;
+                padding: 3px 8px;
+                border-radius: 3px;
+                cursor: pointer;
+                font-size: 0.75rem;
+                transition: all 0.2s;
+                font-weight: 500;
+            }
+            .info-btn {
+                background: #667eea;
+                color: white;
+            }
+            .info-btn:hover {
+                background: #764ba2;
+                transform: scale(1.05);
+            }
+            .clone-btn {
+                background: #28a745;
+                color: white;
+            }
+            .clone-btn:hover:not(.disabled) {
+                background: #218838;
+                transform: scale(1.05);
+            }
+            .clone-btn.disabled {
+                background: #ccc;
+                color: #666;
+                cursor: not-allowed;
+                opacity: 0.6;
+            }
+
+            /* Modal styles */
+            .modal {
+                display: none;
+                position: fixed;
+                z-index: 1000;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: 100%;
+                overflow: auto;
+                background-color: rgba(0, 0, 0, 0.5);
+                animation: fadeIn 0.3s;
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            .modal-content {
+                background-color: white;
+                margin: 5% auto;
+                padding: 0;
+                border-radius: 10px;
+                width: 90%;
+                max-width: 1200px;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                animation: slideIn 0.3s;
+                max-height: 85vh;
+                display: flex;
+                flex-direction: column;
+            }
+            @keyframes slideIn {
+                from {
+                    transform: translateY(-50px);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateY(0);
+                    opacity: 1;
+                }
+            }
+            .modal-header {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 20px 30px;
+                border-radius: 10px 10px 0 0;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .modal-header h3 {
+                font-size: 1.3rem;
+                font-weight: 600;
+            }
+            .modal-close {
+                color: white;
+                font-size: 28px;
+                font-weight: bold;
+                cursor: pointer;
+                background: none;
+                border: none;
+                padding: 0;
+                line-height: 1;
+                transition: transform 0.2s;
+            }
+            .modal-close:hover {
+                transform: scale(1.2);
+            }
+            .modal-body {
+                padding: 30px;
+                overflow-y: auto;
+                overflow-x: auto;
+                flex: 1;
+            }
+            .modal-body table {
+                table-layout: fixed;
+                width: 100%;
+            }
+            .modal-body table th:nth-child(1) {
+                width: 15%;
+            }
+            .modal-body table th:nth-child(2) {
+                width: 55%;
+            }
+            .modal-body table th:nth-child(3) {
+                width: 12%;
+            }
+            .modal-body table th:nth-child(4) {
+                width: 18%;
+            }
+            .modal-body table td {
+                word-wrap: break-word;
+                word-break: break-all;
+                overflow-wrap: break-word;
+            }
+            .detail-grid {
+                display: grid;
+                grid-template-columns: 1fr 2fr;
+                gap: 15px;
+                margin-bottom: 15px;
+            }
+            .detail-label {
+                font-weight: 600;
+                color: #667eea;
+            }
+            .detail-value {
+                word-break: break-all;
+                font-family: 'Courier New', monospace;
+                font-size: 0.9rem;
+                background: #f8f9fa;
+                padding: 5px 10px;
+                border-radius: 4px;
+            }
+            .detail-value.normal {
+                font-family: inherit;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>📁 My Files</h1>
+                <div class="header-buttons">
+                    <a href="/api_keys_page" class="logout-btn">🔑 API Keys</a>
+                    <a href="/" class="logout-btn">← Home</a>
+                    <button onclick="logout()" class="logout-btn">Logout</button>
+                </div>
+            </div>
+
+            <div class="content">
+                <div id="message" class="message"></div>
+
+                <div class="section">
+                    <h2>File System</h2>
+                    <div id="filesContainer">
+                        <p class="no-files">Loading...</p>
+                    </div>
+                </div>
+
+                <a href="/" class="back-link">← Back to Home</a>
+            </div>
+        </div>
+
+        <!-- Modal for file details -->
+        <div id="fileModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>📄 File Details</h3>
+                    <button class="modal-close" onclick="closeModal()">&times;</button>
+                </div>
+                <div class="modal-body" id="modalBody">
+                    <!-- File details will be inserted here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal for clones -->
+        <div id="clonesModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>👥 File Clones (Identical SHA256)</h3>
+                    <button class="modal-close" onclick="closeClonesModal()">&times;</button>
+                </div>
+                <div class="modal-body" id="clonesModalBody">
+                    <!-- Clone list will be inserted here -->
+                </div>
+            </div>
+        </div>
+
+        <script>
+            let currentToken = null;
+            let allFiles = [];
+
+            // Check if user is logged in
+            function checkAuth() {
+                currentToken = localStorage.getItem('access_token');
+                if (!currentToken) {
+                    window.location.href = '/login';
+                    return false;
+                }
+                return true;
+            }
+
+            // Logout function
+            function logout() {
+                localStorage.removeItem('access_token');
+                window.location.href = '/';
+            }
+
+            // Load user files
+            async function loadFiles() {
+                if (!checkAuth()) return;
+
+                try {
+                    const response = await fetch('/api/my_files', {
+                        headers: {
+                            'Authorization': `Bearer ${currentToken}`
+                        }
+                    });
+
+                    if (response.status === 401) {
+                        logout();
+                        return;
+                    }
+
+                    if (!response.ok) {
+                        throw new Error('Failed to load files');
+                    }
+
+                    allFiles = await response.json();
+                    buildFileTree(allFiles);
+                } catch (error) {
+                    showMessage('Error loading files: ' + error.message, 'error');
+                }
+            }
+
+            // Build file system tree structure
+            function buildFileTree(files) {
+                const container = document.getElementById('filesContainer');
+
+                if (files.length === 0) {
+                    container.innerHTML = '<p class="no-files">No files uploaded yet. Use the ppclient tool to upload file metadata!</p>';
+                    return;
+                }
+
+                // Create SHA256 map to count clones (files with same hash)
+                const sha256Map = {};
+                files.forEach(file => {
+                    sha256Map[file.sha256] = (sha256Map[file.sha256] || 0) + 1;
+                });
+
+                // Organize files by hostname and path
+                const tree = {};
+                files.forEach(file => {
+                    if (!tree[file.hostname]) {
+                        tree[file.hostname] = {};
+                    }
+
+                    // Parse filepath into directory structure
+                    const parts = file.filepath.split('/');
+                    const filename = parts.pop();
+                    const dirPath = parts.join('/') || '/';
+
+                    if (!tree[file.hostname][dirPath]) {
+                        tree[file.hostname][dirPath] = [];
+                    }
+                    tree[file.hostname][dirPath].push({ ...file, filename });
+                });
+
+                // Build HTML
+                let html = '<div class="file-tree">';
+
+                Object.keys(tree).sort().forEach(hostname => {
+                    const hostFiles = Object.values(tree[hostname]).flat();
+                    html += `
+                        <div class="tree-host">
+                            <div class="tree-host-header" onclick="toggleHost(this)">
+                                <span class="tree-host-icon">🔽</span>
+                                <span class="tree-host-name">🖥️ ${escapeHtml(hostname)}</span>
+                                <span class="tree-host-count">${hostFiles.length} files</span>
+                            </div>
+                            <div class="tree-host-content">
+                    `;
+
+                    Object.keys(tree[hostname]).sort().forEach(dirPath => {
+                        const files = tree[hostname][dirPath];
+                        html += `
+                            <div class="tree-folder">
+                                <div class="tree-folder-header" onclick="toggleFolder(this)">
+                                    <span class="tree-folder-icon">🔽</span>
+                                    <span class="tree-folder-name">📁 ${escapeHtml(dirPath)}</span>
+                                    <span class="tree-folder-count">${files.length}</span>
+                                </div>
+                                <div class="tree-folder-content">
+                        `;
+
+                        files.forEach(file => {
+                            const status = file.has_file_content ? 'uploaded' : 'metadata';
+                            const statusText = file.has_file_content ? 'Full' : 'Meta';
+                            const cloneCount = sha256Map[file.sha256] || 0;
+                            const isZeroLength = file.file_size === 0;
+
+                            // For zero-length files, show a special icon and non-clickable "0" for clones
+                            const fileIcon = isZeroLength ? '📭' : '📄';
+
+                            // Clone button logic:
+                            // - Zero-length files: always show "0" disabled
+                            // - Metadata-only files: always clickable (must have epoch file somewhere)
+                            // - Files with content: always clickable (may have clones from other users)
+                            const cloneButton = isZeroLength
+                                ? '<span class="action-btn clone-btn disabled" style="cursor: default;">0</span>'
+                                : `<button class="action-btn clone-btn" onclick="showClones('${file.sha256}')">${cloneCount > 1 ? cloneCount : '👥'}</button>`;
+
+                            html += `
+                                <div class="tree-file">
+                                    <span class="file-icon">${fileIcon}</span>
+                                    <span class="file-name">${escapeHtml(file.filename)}</span>
+                                    <span class="file-size">${formatFileSize(file.file_size)}</span>
+                                    <span class="file-status ${status}">${statusText}</span>
+                                    <button class="action-btn info-btn" onclick='showFileDetails(${JSON.stringify(file)})'>ℹ️</button>
+                                    ${cloneButton}
+                                </div>
+                            `;
+                        });
+
+                        html += `
+                                </div>
+                            </div>
+                        `;
+                    });
+
+                    html += `
+                            </div>
+                        </div>
+                    `;
+                });
+
+                html += '</div>';
+                container.innerHTML = html;
+            }
+
+            // Toggle host visibility
+            function toggleHost(element) {
+                const content = element.nextElementSibling;
+                const icon = element.querySelector('.tree-host-icon');
+                content.classList.toggle('collapsed');
+                icon.classList.toggle('collapsed');
+            }
+
+            // Toggle folder visibility
+            function toggleFolder(element) {
+                const content = element.nextElementSibling;
+                const icon = element.querySelector('.tree-folder-icon');
+                content.classList.toggle('collapsed');
+                icon.classList.toggle('collapsed');
+            }
+
+            // Show file details in modal
+            function showFileDetails(file) {
+                const modal = document.getElementById('fileModal');
+                const modalBody = document.getElementById('modalBody');
+
+                const uploadedDate = file.created_at ? new Date(file.created_at).toLocaleString() : 'N/A';
+                const fileUploadedDate = file.file_uploaded_at ? new Date(file.file_uploaded_at).toLocaleString() : 'N/A';
+
+                modalBody.innerHTML = `
+                    <div class="detail-grid">
+                        <div class="detail-label">Filepath:</div>
+                        <div class="detail-value">${escapeHtml(file.filepath)}</div>
+
+                        <div class="detail-label">Hostname:</div>
+                        <div class="detail-value normal">${escapeHtml(file.hostname)}</div>
+
+                        <div class="detail-label">IP Address:</div>
+                        <div class="detail-value normal">${escapeHtml(file.ip_address)}</div>
+
+                        <div class="detail-label">SHA256:</div>
+                        <div class="detail-value">${escapeHtml(file.sha256)}</div>
+
+                        <div class="detail-label">File Size:</div>
+                        <div class="detail-value normal">${formatFileSize(file.file_size)} (${file.file_size.toLocaleString()} bytes)</div>
+
+                        <div class="detail-label">Permissions:</div>
+                        <div class="detail-value normal">${formatPermissions(file.file_mode)}</div>
+
+                        <div class="detail-label">Owner:</div>
+                        <div class="detail-value normal">UID: ${file.file_uid} / GID: ${file.file_gid}</div>
+
+                        <div class="detail-label">Modified Time:</div>
+                        <div class="detail-value normal">${new Date(file.file_mtime * 1000).toLocaleString()}</div>
+
+                        <div class="detail-label">Access Time:</div>
+                        <div class="detail-value normal">${new Date(file.file_atime * 1000).toLocaleString()}</div>
+
+                        <div class="detail-label">Change Time:</div>
+                        <div class="detail-value normal">${new Date(file.file_ctime * 1000).toLocaleString()}</div>
+
+                        <div class="detail-label">Metadata Created:</div>
+                        <div class="detail-value normal">${uploadedDate}</div>
+
+                        <div class="detail-label">File Content:</div>
+                        <div class="detail-value normal">${file.has_file_content ? `✅ Uploaded at ${fileUploadedDate}` : '❌ Not uploaded'}</div>
+                    </div>
+                `;
+
+                modal.style.display = 'block';
+            }
+
+            // Close modal
+            function closeModal() {
+                document.getElementById('fileModal').style.display = 'none';
+            }
+
+            // Close clones modal
+            function closeClonesModal() {
+                document.getElementById('clonesModal').style.display = 'none';
+            }
+
+            // Show clones for a given SHA256
+            async function showClones(sha256) {
+                const modal = document.getElementById('clonesModal');
+                const modalBody = document.getElementById('clonesModalBody');
+
+                // Show loading message
+                modalBody.innerHTML = '<p style="text-align: center; color: #667eea;">Loading clones...</p>';
+                modal.style.display = 'block';
+
+                try {
+                    // Fetch all clones across all users from the server
+                    const response = await fetch(`/api/clones/${sha256}`, {
+                        headers: {
+                            'Authorization': `Bearer ${currentToken}`
+                        }
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`Failed to load clones: ${response.statusText}`);
+                    }
+
+                    const clones = await response.json();
+
+                    // Sort clones: epoch file (first uploaded) first, then others
+                    // (Backend already sorts, but we keep this for safety)
+                    clones.sort((a, b) => {
+                        // Files with content come before files without content
+                        if (a.has_file_content && !b.has_file_content) return -1;
+                        if (!a.has_file_content && b.has_file_content) return 1;
+
+                        // Among files with content, sort by upload time (earliest first - epoch file)
+                        if (a.has_file_content && b.has_file_content) {
+                            const timeA = a.file_uploaded_at ? new Date(a.file_uploaded_at).getTime() : 0;
+                            const timeB = b.file_uploaded_at ? new Date(b.file_uploaded_at).getTime() : 0;
+                            return timeA - timeB;
+                        }
+
+                        // Among files without content, sort by metadata creation time
+                        const createdA = a.created_at ? new Date(a.created_at).getTime() : 0;
+                        const createdB = b.created_at ? new Date(b.created_at).getTime() : 0;
+                        return createdA - createdB;
+                    });
+
+                    if (clones.length === 0) {
+                        modalBody.innerHTML = '<p>No clone files found.</p>';
+                    } else {
+                        let html = `
+                            <p style="margin-bottom: 15px; color: #667eea; font-weight: 500;">
+                                Found ${clones.length} file(s) with identical SHA256: <code style="background: #f8f9fa; padding: 2px 6px; border-radius: 3px;">${sha256.substring(0, 16)}...</code>
+                            </p>
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <thead>
+                                    <tr style="background: #f8f9fa; border-bottom: 2px solid #667eea;">
+                                        <th style="padding: 10px; text-align: left; font-weight: 600; color: #667eea;">Hostname</th>
+                                        <th style="padding: 10px; text-align: left; font-weight: 600; color: #667eea;">File Path</th>
+                                        <th style="padding: 10px; text-align: left; font-weight: 600; color: #667eea;">Size</th>
+                                        <th style="padding: 10px; text-align: center; font-weight: 600; color: #667eea;">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                        `;
+
+                        clones.forEach((file, index) => {
+                            const status = file.has_file_content ? 'uploaded' : 'metadata';
+                            const statusText = file.has_file_content ? '✅ Full' : '📝 Meta';
+                            // Highlight the epoch file (first row with content)
+                            const isEpoch = index === 0 && file.has_file_content;
+                            const rowBg = isEpoch ? '#d4edda' : (index % 2 === 0 ? '#ffffff' : '#f8f9fa');
+                            const rowBorder = isEpoch ? 'border-left: 4px solid #28a745; border-bottom: 2px solid #28a745;' : 'border-bottom: 1px solid #e0e0e0;';
+                            const epochBadge = isEpoch ? '<span style="background: #28a745; color: white; padding: 2px 6px; border-radius: 3px; font-size: 0.75rem; margin-left: 8px; font-weight: 600;">EPOCH</span>' : '';
+                            const fontWeight = isEpoch ? '600' : '500';
+                            html += `
+                                <tr style="background: ${rowBg}; ${rowBorder}">
+                                    <td style="padding: 10px; font-weight: ${fontWeight};">${escapeHtml(file.hostname)}${epochBadge}</td>
+                                    <td style="padding: 10px; font-family: 'Courier New', monospace; font-size: 0.85rem; font-weight: ${isEpoch ? '500' : 'normal'};">${escapeHtml(file.filepath)}</td>
+                                    <td style="padding: 10px; font-weight: ${isEpoch ? '500' : 'normal'};">${formatFileSize(file.file_size)}</td>
+                                    <td style="padding: 10px; text-align: center; font-weight: ${isEpoch ? '500' : 'normal'};">${statusText}</td>
+                                </tr>
+                            `;
+                        });
+
+                        html += `
+                                </tbody>
+                            </table>
+                        `;
+                        modalBody.innerHTML = html;
+                    }
+                } catch (error) {
+                    console.error('Error loading clones:', error);
+                    modalBody.innerHTML = `<p style="color: #dc3545;">Error loading clones: ${error.message}</p>`;
+                }
+            }
+
+            // Close modal when clicking outside
+            window.onclick = function(event) {
+                const fileModal = document.getElementById('fileModal');
+                const clonesModal = document.getElementById('clonesModal');
+                if (event.target == fileModal) {
+                    fileModal.style.display = 'none';
+                }
+                if (event.target == clonesModal) {
+                    clonesModal.style.display = 'none';
+                }
+            }
+
+            // Format file size
+            function formatFileSize(bytes) {
+                if (bytes === 0) return '0 B';
+                const k = 1024;
+                const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+            }
+
+            // Format file permissions
+            function formatPermissions(mode) {
+                const perms = [];
+                const types = ['---', '--x', '-w-', '-wx', 'r--', 'r-x', 'rw-', 'rwx'];
+                perms.push(types[(mode >> 6) & 7]);
+                perms.push(types[(mode >> 3) & 7]);
+                perms.push(types[mode & 7]);
+                return perms.join('') + ` (${mode.toString(8)})`;
+            }
+
+            // Escape HTML to prevent XSS
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            // Show message
+            function showMessage(text, type) {
+                const messageDiv = document.getElementById('message');
+                messageDiv.textContent = text;
+                messageDiv.className = 'message ' + type;
+                messageDiv.style.display = 'block';
+
+                setTimeout(() => {
+                    messageDiv.style.display = 'none';
+                }, 5000);
+            }
+
+            // Initialize
+            if (checkAuth()) {
+                loadFiles();
+            }
+        </script>
+    </body>
+    </html>
+    """
+    return html_content

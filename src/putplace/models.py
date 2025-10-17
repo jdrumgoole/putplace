@@ -45,6 +45,10 @@ class FileMetadata(BaseModel):
     has_file_content: bool = Field(default=False, description="Whether server has the actual file content")
     file_uploaded_at: Optional[datetime] = Field(None, description="When file content was uploaded")
 
+    # User tracking (who uploaded this file)
+    uploaded_by_user_id: Optional[str] = Field(None, description="User ID who uploaded this file")
+    uploaded_by_api_key_id: Optional[str] = Field(None, description="API key ID used to upload this file")
+
     # Metadata timestamp
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Database record timestamp")
 

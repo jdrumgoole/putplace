@@ -59,23 +59,36 @@ async def test_db(test_settings: Settings) -> AsyncGenerator[MongoDB, None]:
 
 
 @pytest.fixture
-async def client(test_db: MongoDB) -> AsyncGenerator[AsyncClient, None]:
+def test_storage() -> Generator[Path, None, None]:
+    """Create temporary storage backend for testing."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        yield Path(tmpdir)
+
+
+@pytest.fixture
+async def client(test_db: MongoDB, test_storage: Path) -> AsyncGenerator[AsyncClient, None]:
     """Create test HTTP client."""
     from httpx import ASGITransport
+    from putplace.storage import LocalStorage
 
     # Override the database dependency
-    from putplace import database
+    from putplace import database, main
 
     original_mongodb = database.mongodb
+    original_storage = main.storage_backend
+
     database.mongodb = test_db
+    # Initialize storage backend
+    main.storage_backend = LocalStorage(str(test_storage))
 
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://test"
     ) as ac:
         yield ac
 
-    # Restore original
+    # Restore originals
     database.mongodb = original_mongodb
+    main.storage_backend = original_storage
 
 
 @pytest.fixture

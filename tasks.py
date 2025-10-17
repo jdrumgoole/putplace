@@ -280,3 +280,190 @@ def quickstart(c):
     print("API will be available at: http://localhost:8000")
     print("Interactive docs at: http://localhost:8000/docs\n")
     serve(c)
+
+
+# PutPlace server management
+@task
+def ppserver_start(c, host="127.0.0.1", port=8000):
+    """Install package locally and start ppserver in background.
+
+    Args:
+        host: Host to bind to (default: 127.0.0.1)
+        port: Port to bind to (default: 8000)
+    """
+    import os
+    import signal
+
+    pid_file = ".ppserver.pid"
+
+    # Check if server is already running
+    if os.path.exists(pid_file):
+        with open(pid_file, 'r') as f:
+            old_pid = f.read().strip()
+
+        # Check if process is still running
+        try:
+            os.kill(int(old_pid), 0)
+            print(f"✗ ppserver is already running (PID: {old_pid})")
+            print("  Stop it first with: invoke ppserver-stop")
+            return
+        except (OSError, ValueError):
+            # Process not running, remove stale PID file
+            os.remove(pid_file)
+
+    print("Installing putplace package locally...")
+    c.run("uv pip install -e .", pty=False)
+    print("✓ Package installed\n")
+
+    print(f"Starting ppserver on {host}:{port}...")
+
+    # Start uvicorn in background and save PID
+    cmd = f"uv run uvicorn putplace.main:app --host {host} --port {port}"
+    result = c.run(f"{cmd} > ppserver.log 2>&1 & echo $!", hide=True, pty=False)
+    pid = result.stdout.strip()
+
+    # Save PID to file
+    with open(pid_file, 'w') as f:
+        f.write(pid)
+
+    print(f"✓ ppserver started (PID: {pid})")
+    print(f"  API: http://{host}:{port}")
+    print(f"  Docs: http://{host}:{port}/docs")
+    print(f"  Logs: ppserver.log")
+    print(f"\nStop with: invoke ppserver-stop")
+
+
+@task
+def ppserver_stop(c):
+    """Stop ppserver and uninstall local package."""
+    import os
+    import signal
+    import time
+
+    pid_file = ".ppserver.pid"
+
+    # Check if PID file exists
+    if not os.path.exists(pid_file):
+        print("✗ ppserver PID file not found")
+        print("  Server may not be running or was started manually")
+
+        # Try to find and kill any running uvicorn processes
+        result = c.run("pgrep -f 'uvicorn putplace.main:app'", warn=True, hide=True)
+        if result.ok and result.stdout.strip():
+            pids = result.stdout.strip().split('\n')
+            print(f"\nFound {len(pids)} uvicorn process(es) for putplace:")
+            for pid in pids:
+                print(f"  Killing PID {pid}...")
+                c.run(f"kill {pid}", warn=True)
+            time.sleep(1)
+            print("✓ Processes killed")
+        else:
+            print("  No running ppserver processes found")
+    else:
+        # Read PID and kill the process
+        with open(pid_file, 'r') as f:
+            pid = f.read().strip()
+
+        print(f"Stopping ppserver (PID: {pid})...")
+
+        try:
+            # Try graceful shutdown first (SIGTERM)
+            os.kill(int(pid), signal.SIGTERM)
+            time.sleep(2)
+
+            # Check if still running
+            try:
+                os.kill(int(pid), 0)
+                # Still running, force kill
+                print("  Process still running, forcing shutdown...")
+                os.kill(int(pid), signal.SIGKILL)
+                time.sleep(1)
+            except OSError:
+                pass  # Process already terminated
+
+            print("✓ ppserver stopped")
+        except (OSError, ValueError) as e:
+            print(f"✗ Could not kill process {pid}: {e}")
+            print("  Process may have already terminated")
+
+        # Remove PID file
+        try:
+            os.remove(pid_file)
+            print("✓ PID file removed")
+        except OSError:
+            pass
+
+    # Uninstall the package
+    print("\nUninstalling putplace package...")
+    result = c.run("echo y | uv pip uninstall putplace", warn=True)
+    if result.ok:
+        print("✓ Package uninstalled")
+    else:
+        print("✗ Failed to uninstall package (may not be installed)")
+
+    print("\n✓ Cleanup complete")
+
+
+@task
+def ppserver_status(c):
+    """Check ppserver status."""
+    import os
+
+    pid_file = ".ppserver.pid"
+
+    if not os.path.exists(pid_file):
+        print("✗ ppserver is not running (no PID file)")
+
+        # Check for any uvicorn processes anyway
+        result = c.run("pgrep -f 'uvicorn putplace.main:app'", warn=True, hide=True)
+        if result.ok and result.stdout.strip():
+            pids = result.stdout.strip().split('\n')
+            print(f"\nWarning: Found {len(pids)} uvicorn process(es) without PID file:")
+            for pid in pids:
+                print(f"  PID {pid}")
+            print("\nUse 'invoke ppserver-stop' to clean up")
+        return
+
+    with open(pid_file, 'r') as f:
+        pid = f.read().strip()
+
+    try:
+        os.kill(int(pid), 0)
+        print(f"✓ ppserver is running (PID: {pid})")
+
+        # Try to get process info
+        result = c.run(f"ps -p {pid} -o pid,ppid,etime,command", warn=True)
+
+        # Check if log file exists
+        if os.path.exists("ppserver.log"):
+            print("\nRecent logs (last 10 lines):")
+            c.run("tail -n 10 ppserver.log")
+    except (OSError, ValueError):
+        print(f"✗ ppserver PID file exists but process {pid} is not running")
+        print("  Stale PID file detected")
+        print("\nClean up with: invoke ppserver-stop")
+
+
+@task
+def ppserver_logs(c, lines=50, follow=False):
+    """Show ppserver logs.
+
+    Args:
+        lines: Number of lines to show (default: 50)
+        follow: Follow log output (default: False)
+    """
+    import os
+
+    log_file = "ppserver.log"
+
+    if not os.path.exists(log_file):
+        print("✗ Log file not found: ppserver.log")
+        print("  Server may not have been started or logs were deleted")
+        return
+
+    if follow:
+        print(f"Following ppserver logs (Ctrl+C to stop)...\n")
+        c.run(f"tail -f {log_file}")
+    else:
+        print(f"Last {lines} lines from ppserver.log:\n")
+        c.run(f"tail -n {lines} {log_file}")

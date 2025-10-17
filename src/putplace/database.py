@@ -49,6 +49,7 @@ class MongoDB:
             # Create indexes on sha256 for efficient lookups
             await self.collection.create_index("sha256")
             await self.collection.create_index([("hostname", 1), ("filepath", 1)])
+            await self.collection.create_index("uploaded_by_user_id")
             logger.info("File metadata indexes created successfully")
 
             # Create indexes for API keys collection
@@ -227,6 +228,85 @@ class MongoDB:
             raise ConnectionFailure("Lost connection to database") from e
         except OperationFailure as e:
             logger.error(f"Database operation failed during mark_file_uploaded: {e}")
+            raise
+
+    async def get_files_by_user(self, user_id: str, limit: int = 100, skip: int = 0) -> list[dict]:
+        """Get all files uploaded by a specific user.
+
+        Args:
+            user_id: User ID to filter by
+            limit: Maximum number of files to return
+            skip: Number of files to skip (for pagination)
+
+        Returns:
+            List of file metadata documents
+
+        Raises:
+            RuntimeError: If database not connected
+            ConnectionFailure: If database connection is lost
+        """
+        if self.collection is None:
+            raise RuntimeError("Database not connected")
+
+        try:
+            cursor = self.collection.find(
+                {"uploaded_by_user_id": user_id}
+            ).sort("created_at", -1).limit(limit).skip(skip)
+
+            files = []
+            async for doc in cursor:
+                doc["_id"] = str(doc["_id"])
+                files.append(doc)
+
+            return files
+        except (ConnectionFailure, ServerSelectionTimeoutError) as e:
+            logger.error(f"Database connection lost during get_files_by_user: {e}")
+            raise ConnectionFailure("Lost connection to database") from e
+        except OperationFailure as e:
+            logger.error(f"Database operation failed during get_files_by_user: {e}")
+            raise
+
+    async def get_files_by_sha256(self, sha256: str) -> list[dict]:
+        """Get all files with a specific SHA256 hash (across all users).
+
+        Args:
+            sha256: SHA256 hash to search for
+
+        Returns:
+            List of file metadata documents, sorted with epoch file first
+
+        Raises:
+            RuntimeError: If database not connected
+            ConnectionFailure: If database connection is lost
+        """
+        if self.collection is None:
+            raise RuntimeError("Database not connected")
+
+        try:
+            cursor = self.collection.find({"sha256": sha256})
+
+            files = []
+            async for doc in cursor:
+                doc["_id"] = str(doc["_id"])
+                files.append(doc)
+
+            # Sort: files with content first (by upload time), then metadata-only (by created time)
+            def sort_key(file):
+                if file.get("has_file_content"):
+                    # Files with content: sort by upload time (earliest first)
+                    return (0, file.get("file_uploaded_at", file.get("created_at")))
+                else:
+                    # Files without content: sort after files with content
+                    return (1, file.get("created_at"))
+
+            files.sort(key=sort_key)
+            return files
+
+        except (ConnectionFailure, ServerSelectionTimeoutError) as e:
+            logger.error(f"Database connection lost during get_files_by_sha256: {e}")
+            raise ConnectionFailure("Lost connection to database") from e
+        except OperationFailure as e:
+            logger.error(f"Database operation failed during get_files_by_sha256: {e}")
             raise
 
     # User authentication methods
