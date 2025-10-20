@@ -14,10 +14,6 @@ build:
   os: ubuntu-22.04
   tools:
     python: "3.11"
-  jobs:
-    post_checkout:
-      # Install uv for faster dependency installation
-      - pip install uv
 
 # Install Python dependencies
 python:
