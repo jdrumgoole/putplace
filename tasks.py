@@ -136,6 +136,65 @@ def build(c):
     """Build the package."""
     clean(c)
     c.run("uv build")
+    print("\n✓ Package built successfully")
+    print("  Distribution files in: dist/")
+
+
+@task(pre=[build])
+def publish_test(c):
+    """Build and publish package to TestPyPI.
+
+    Requires:
+        - PyPI account on test.pypi.org
+        - API token configured in ~/.pypirc or passed via --token
+
+    Usage:
+        invoke publish-test
+    """
+    print("\nPublishing to TestPyPI...")
+    print("Note: You'll need a TestPyPI API token")
+    print("Get one at: https://test.pypi.org/manage/account/token/\n")
+
+    c.run("uv run twine upload --repository testpypi dist/*")
+
+    print("\n✓ Package published to TestPyPI")
+    print("View at: https://test.pypi.org/project/putplace/")
+    print("\nTest installation with:")
+    print("  pip install --index-url https://test.pypi.org/simple/ putplace")
+
+
+@task(pre=[build])
+def publish(c):
+    """Build and publish package to PyPI.
+
+    Requires:
+        - PyPI account on pypi.org
+        - API token configured in ~/.pypirc or passed via --token
+
+    Usage:
+        invoke publish
+
+    IMPORTANT: This publishes to production PyPI!
+    """
+    print("\n⚠️  WARNING: This will publish to PRODUCTION PyPI!")
+    print("Current version:", end=" ")
+    c.run("grep '^version =' pyproject.toml | cut -d'\"' -f2")
+
+    response = input("\nAre you sure you want to publish to PyPI? [yes/no]: ")
+    if response.lower() != "yes":
+        print("✗ Publication cancelled")
+        return
+
+    print("\nPublishing to PyPI...")
+    print("Note: You'll need a PyPI API token")
+    print("Get one at: https://pypi.org/manage/account/token/\n")
+
+    c.run("uv run twine upload dist/*")
+
+    print("\n✓ Package published to PyPI")
+    print("View at: https://pypi.org/project/putplace/")
+    print("\nInstall with:")
+    print("  pip install putplace")
 
 
 @task
