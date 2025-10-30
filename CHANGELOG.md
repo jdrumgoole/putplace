@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2025-10-30
+
+### Fixed
+- **Documentation Code Examples**: Corrected all code examples in documentation to use actual API field names
+  - Fixed incorrect field names: `size` → `file_size`, `permissions` → `file_mode`, `owner` → `file_uid`, `group` → `file_gid`
+  - Fixed timestamp format: ISO 8601 strings → Unix timestamps (float)
+  - Fixed async/await syntax in test examples
+  - Affected files: `docs/development.md`, `docs/api-reference.md`, `docs/troubleshooting.md`
+- **Test Infrastructure**: Fixed parallel test execution race conditions
+  - Switched from global variable modification to FastAPI dependency overrides
+  - Added per-worker database isolation for thread-safe parallel testing
+  - Fixed `test_e2e_duplicate_files_different_hosts` intermittent failure
+- **Server Management**: Fixed ppserver restart reliability
+  - Added port availability checking with 10-second timeout
+  - Prevents "address already in use" errors during restart
+  - Fixed `test_ppserver_restart` test failure
+
+### Changed
+- **Authentication System**: Refactored to use dependency injection
+  - Added `get_auth_db()` helper function for database dependency
+  - Updated `get_current_api_key()` and `get_optional_api_key()` to use proper dependency injection
+  - Improves testability and thread-safety for parallel test execution
+
 ## [0.4.0] - 2025-01-17
 
 ### Added

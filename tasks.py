@@ -47,17 +47,34 @@ def test(c, verbose=False, coverage=True):
 
 
 @task
-def test_all(c, verbose=True, coverage=True):
+def test_all(c, verbose=True, coverage=True, parallel=True, workers=4):
     """Run all tests with proper PYTHONPATH setup.
 
     Args:
         verbose: Show verbose test output (default: True)
         coverage: Generate coverage report (default: True)
+        parallel: Run tests in parallel (default: True, ~40% faster)
+        workers: Number of parallel workers (default: 4, balanced speed/reliability)
+
+    Examples:
+        invoke test-all                     # Run in parallel with 4 workers (default)
+        invoke test-all --workers=8         # Use 8 workers (faster, may be less stable)
+        invoke test-all --parallel=False    # Run serially (slower but most stable)
+
+    Note: Each test worker gets its own isolated database to prevent race conditions.
+          Default of 4 workers provides good balance between speed and reliability.
     """
     import os
     pythonpath = f"{os.getcwd()}/src:{os.environ.get('PYTHONPATH', '')}"
 
     cmd = f"PYTHONPATH={pythonpath} uv run python -m pytest tests/ -v --tb=short"
+
+    # Add parallel execution if enabled
+    # Use --dist loadscope to run tests in the same module/class in the same worker
+    # This prevents database race conditions between related tests
+    if parallel:
+        cmd += f" -n {workers} --dist loadscope"
+
     if not coverage:
         cmd += " --no-cov"
 

@@ -8,12 +8,15 @@ PutPlace is a FastAPI-based file metadata storage service using MongoDB. It prov
 
 **Tech Stack:**
 - **FastAPI**: Async REST API framework
-- **MongoDB (Motor)**: Async document database driver
+- **MongoDB (PyMongo Async)**: Native async MongoDB driver (PyMongo 4.10+)
 - **uv**: Fast Python package installer and virtual environment manager
 - **invoke**: Task automation (replaces Makefiles)
 - **pytest**: Testing framework with coverage reporting
 - **ruff**: Fast linter and formatter
 - **mypy**: Static type checker
+
+**Note on MongoDB Driver:**
+This project uses PyMongo's native async support (introduced in PyMongo 4.9+), which provides better performance than the deprecated Motor library. PyMongo async implements asyncio support directly rather than using a thread pool, resulting in improved latency and throughput.
 
 ## Setup
 
@@ -52,6 +55,46 @@ invoke mongo-start
 invoke serve
 ```
 
+## Authentication & Initial Setup
+
+### Automatic Admin User Creation
+
+PutPlace automatically creates an admin user on first startup using a **hybrid approach**:
+
+**Method 1: Environment Variables (Production)**
+```bash
+# Add to .env file
+PUTPLACE_ADMIN_USERNAME=admin
+PUTPLACE_ADMIN_PASSWORD=your-secure-password
+PUTPLACE_ADMIN_EMAIL=admin@example.com
+```
+
+**Method 2: Random Password Generation (Development)**
+
+If no environment variables are set, PutPlace will:
+- Generate a secure random password on first startup
+- Display credentials once in server logs
+- Write credentials to `/tmp/putplace_initial_creds.txt`
+
+**Important:**
+- Admin user is only created if no users exist
+- Generated passwords are 21+ characters (cryptographically secure)
+- Password must be at least 8 characters when using environment variables
+- Delete the credentials file after saving the password
+
+### API Keys
+
+Create API keys for programmatic access:
+```bash
+# Bootstrap first API key
+python -m putplace.scripts.create_api_key --name "admin-key"
+
+# After admin user exists, can create via API
+curl -X POST http://localhost:8000/api_keys \
+  -H "X-API-Key: YOUR_KEY" \
+  -d '{"name": "my-key"}'
+```
+
 ## Common Commands
 
 All development tasks are managed through `invoke` (see tasks.py):
@@ -82,18 +125,29 @@ All development tasks are managed through `invoke` (see tasks.py):
 - `GET /redoc` - Alternative API documentation
 
 ### Testing
-- `invoke test` - Run all tests with coverage
+- `invoke test-all` - Run all tests with coverage (parallel, 4 workers, ~40% faster)
+- `invoke test-all --parallel=False` - Run tests serially (most stable)
+- `invoke test-all --workers=8` - Run with 8 parallel workers (faster)
+- `invoke test` - Run all tests with coverage (uses pytest defaults)
 - `invoke test --no-coverage` - Run tests without coverage
 - `invoke test-one <path>` - Run specific test file/function
   - Example: `invoke test-one tests/test_models.py::test_file_metadata_valid`
 - `pytest -m "not integration"` - Skip integration tests (no MongoDB needed)
 - `pytest -m integration` - Run only integration tests
 
+**Parallel Testing:**
+- Tests run in parallel by default (4 workers) using pytest-xdist
+- Each worker gets isolated database (e.g., `putplace_test_gw0`, `putplace_test_gw1`)
+- Prevents database race conditions during parallel execution
+- ~40% faster than serial execution (16s vs 26s)
+- Test databases automatically cleaned up after test session
+
 **Test Organization:**
 - `test_models.py` - Pydantic model validation tests
 - `test_api.py` - FastAPI endpoint tests (async)
 - `test_database.py` - MongoDB operation tests (async)
 - `test_client.py` - ppclient.py unit tests
+- `test_admin_creation.py` - Admin user creation tests
 - `test_e2e.py` - End-to-end integration tests (marked with @pytest.mark.integration)
 - `conftest.py` - Shared fixtures (test_db, client, sample_file_metadata, temp_test_dir)
 

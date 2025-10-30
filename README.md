@@ -7,6 +7,17 @@
 
 A distributed file metadata storage and content deduplication system with SHA256-based clone detection, epoch file tracking, and multiple storage backends.
 
+## Tech Stack
+
+- **FastAPI** - Modern async web framework
+- **MongoDB (PyMongo Async)** - Native async MongoDB driver (PyMongo 4.10+)
+- **Argon2** - Modern password hashing algorithm
+- **JWT** - JSON Web Tokens for authentication
+- **uv** - Fast Python package manager
+- **pytest** - Comprehensive test suite with 125+ tests
+
+**Note:** This project uses PyMongo's native async support (introduced in PyMongo 4.9+) which provides better performance than the deprecated Motor library through direct asyncio implementation.
+
 ## Features
 
 - 📁 **File Metadata Tracking** - Store file metadata with SHA256 hashes across your infrastructure
@@ -85,7 +96,7 @@ putplace/
 │   ├── auth.py          # API key authentication
 │   ├── ppclient.py      # Client tool
 │   └── ppserver.py      # Server manager
-├── tests/               # Test suite (116+ tests)
+├── tests/               # Test suite (125+ tests, parallel execution)
 ├── docs/                # Documentation (Sphinx)
 ├── tasks.py             # Invoke task automation
 └── pyproject.toml       # Project configuration
@@ -112,6 +123,8 @@ invoke serve-prod         # Production server (4 workers)
 invoke quickstart         # Start MongoDB + dev server
 
 # Testing
+invoke test-all           # Run all tests (parallel, 4 workers, ~40% faster)
+invoke test-all --parallel=False  # Run serially (most stable)
 invoke test               # Run tests with coverage
 invoke test-one tests/test_api.py  # Run specific test file
 pytest -m "not integration"  # Skip integration tests
@@ -132,15 +145,22 @@ invoke --list             # List all tasks
 
 ### Testing
 
-The project includes comprehensive tests covering:
+The project includes 125+ comprehensive tests covering:
 - Unit tests for models, API endpoints, database operations
 - Integration tests with real server and MongoDB
 - End-to-end tests including file upload and deduplication
 - Console script installation tests
+- Parallel test execution with isolated databases (4 workers, ~40% faster)
 
 ```bash
-# Run all tests with coverage report
-invoke test
+# Run all tests with coverage (parallel by default, ~40% faster)
+invoke test-all
+
+# Run tests serially (most stable)
+invoke test-all --parallel=False
+
+# Run with more workers
+invoke test-all --workers=8
 
 # Run specific test file
 invoke test-one tests/test_models.py
@@ -154,6 +174,8 @@ pytest -m "not integration"
 # View coverage report
 open htmlcov/index.html
 ```
+
+**Parallel Testing:** Tests run in parallel by default using pytest-xdist with isolated databases per worker, preventing race conditions while providing significant speed improvements.
 
 See [tests/README.md](tests/README.md) for detailed testing documentation.
 

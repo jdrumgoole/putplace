@@ -4,6 +4,7 @@
 import argparse
 import os
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -60,6 +61,44 @@ def is_running() -> tuple[bool, int | None]:
         # Clean up stale PID file
         pid_file.unlink(missing_ok=True)
         return False, None
+
+
+def is_port_available(host: str, port: int) -> bool:
+    """Check if a port is available for binding.
+
+    Args:
+        host: Host address to check
+        port: Port number to check
+
+    Returns:
+        True if port is available, False otherwise
+    """
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind((host, port))
+            return True
+    except OSError:
+        return False
+
+
+def wait_for_port_available(host: str, port: int, timeout: int = 10) -> bool:
+    """Wait for a port to become available.
+
+    Args:
+        host: Host address
+        port: Port number
+        timeout: Maximum seconds to wait
+
+    Returns:
+        True if port became available, False if timeout
+    """
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if is_port_available(host, port):
+            return True
+        time.sleep(0.5)
+    return False
 
 
 def start_server(host: str = "127.0.0.1", port: int = 8000, reload: bool = False) -> int:
@@ -205,8 +244,11 @@ def restart_server(host: str = "127.0.0.1", port: int = 8000, reload: bool = Fal
     if running:
         if stop_server() != 0:
             return 1
-        # Wait a moment for port to be released
-        time.sleep(1)
+        # Wait for port to be released (up to 10 seconds)
+        if not wait_for_port_available(host, port, timeout=10):
+            console.print(f"[red]✗ Port {port} is still in use after stopping server[/red]")
+            console.print("[red]  Please wait a moment and try again[/red]")
+            return 1
 
     # Start server
     return start_server(host, port, reload)

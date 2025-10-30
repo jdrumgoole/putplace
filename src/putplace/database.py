@@ -3,7 +3,8 @@
 import logging
 from typing import Optional
 
-from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection
+from pymongo import AsyncMongoClient
+from pymongo.asynchronous.collection import AsyncCollection
 from pymongo.errors import (
     ConnectionFailure,
     DuplicateKeyError,
@@ -19,9 +20,9 @@ logger = logging.getLogger(__name__)
 class MongoDB:
     """MongoDB connection manager."""
 
-    client: Optional[AsyncIOMotorClient] = None
-    collection: Optional[AsyncIOMotorCollection] = None
-    users_collection: Optional[AsyncIOMotorCollection] = None
+    client: Optional[AsyncMongoClient] = None
+    collection: Optional[AsyncCollection] = None
+    users_collection: Optional[AsyncCollection] = None
 
     async def connect(self) -> None:
         """Connect to MongoDB.
@@ -33,7 +34,7 @@ class MongoDB:
         """
         try:
             logger.info(f"Connecting to MongoDB at {settings.mongodb_url}")
-            self.client = AsyncIOMotorClient(
+            self.client = AsyncMongoClient(
                 settings.mongodb_url,
                 serverSelectionTimeoutMS=5000,  # 5 second timeout
             )
@@ -88,7 +89,7 @@ class MongoDB:
         """Close MongoDB connection."""
         if self.client:
             logger.info("Closing MongoDB connection")
-            self.client.close()
+            await self.client.close()
 
     async def is_healthy(self) -> bool:
         """Check if database connection is healthy.

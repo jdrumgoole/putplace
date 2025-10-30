@@ -9,7 +9,7 @@ from pathlib import Path
 
 import httpx
 import pytest
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 
 from putplace.config import Settings
 from putplace.database import MongoDB
@@ -282,7 +282,7 @@ async def test_e2e_real_server_and_client_with_upload():
         # Setup test database
         test_db_name = "putplace_test_e2e_real"
         test_collection = "file_metadata_test_e2e"
-        mongo_client = AsyncIOMotorClient("mongodb://localhost:27017")
+        mongo_client = AsyncMongoClient("mongodb://localhost:27017")
         test_db_instance = mongo_client[test_db_name]
         test_collection_obj = test_db_instance[test_collection]
 
@@ -500,4 +500,4 @@ async def test_e2e_real_server_and_client_with_upload():
             # Cleanup: Drop test database
             await test_collection_obj.drop()
             await test_db.users_collection.drop()
-            mongo_client.close()
+            await mongo_client.close()

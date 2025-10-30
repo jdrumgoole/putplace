@@ -237,17 +237,16 @@ async def test_app_lifespan():
 
 
 @pytest.mark.asyncio
-async def test_put_file_database_error(client: AsyncClient, sample_file_metadata, test_api_key: str):
+async def test_put_file_database_error(client: AsyncClient, sample_file_metadata, test_api_key: str, test_db):
     """Test that database errors are handled properly."""
-    from putplace import database
     from unittest.mock import AsyncMock
 
     # Save original method
-    original_insert = database.mongodb.insert_file_metadata
+    original_insert = test_db.insert_file_metadata
 
     try:
         # Mock insert to raise an exception
-        database.mongodb.insert_file_metadata = AsyncMock(
+        test_db.insert_file_metadata = AsyncMock(
             side_effect=Exception("Database connection failed")
         )
 
@@ -262,21 +261,20 @@ async def test_put_file_database_error(client: AsyncClient, sample_file_metadata
 
     finally:
         # Restore original method
-        database.mongodb.insert_file_metadata = original_insert
+        test_db.insert_file_metadata = original_insert
 
 
 @pytest.mark.asyncio
-async def test_health_endpoint_degraded(client: AsyncClient):
+async def test_health_endpoint_degraded(client: AsyncClient, test_db):
     """Test health endpoint when database is unavailable."""
-    from putplace import database
     from unittest.mock import AsyncMock
 
     # Save original method
-    original_is_healthy = database.mongodb.is_healthy
+    original_is_healthy = test_db.is_healthy
 
     try:
         # Mock is_healthy to return False
-        database.mongodb.is_healthy = AsyncMock(return_value=False)
+        test_db.is_healthy = AsyncMock(return_value=False)
 
         response = await client.get("/health")
         assert response.status_code == 200
@@ -287,4 +285,4 @@ async def test_health_endpoint_degraded(client: AsyncClient):
 
     finally:
         # Restore original method
-        database.mongodb.is_healthy = original_is_healthy
+        test_db.is_healthy = original_is_healthy

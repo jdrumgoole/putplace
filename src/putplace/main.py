@@ -33,6 +33,118 @@ logger = logging.getLogger(__name__)
 storage_backend: StorageBackend | None = None
 
 
+async def ensure_admin_exists(db: MongoDB) -> None:
+    """Ensure an admin user exists using multiple fallback methods.
+
+    This function implements a hybrid approach:
+    1. If users exist, do nothing
+    2. If PUTPLACE_ADMIN_USERNAME and PUTPLACE_ADMIN_PASSWORD are set, use them
+    3. Otherwise, generate a random password and display it once
+
+    Args:
+        db: MongoDB database instance
+    """
+    import os
+    from datetime import datetime
+
+    try:
+        # Check if any users exist
+        user_count = await db.users_collection.count_documents({})
+        if user_count > 0:
+            logger.debug("Users already exist, skipping admin creation")
+            return  # Users exist, nothing to do
+
+        # Method 1: Try environment variables (best for production/containers)
+        admin_user = os.getenv("PUTPLACE_ADMIN_USERNAME")
+        admin_pass = os.getenv("PUTPLACE_ADMIN_PASSWORD")
+        admin_email = os.getenv("PUTPLACE_ADMIN_EMAIL", "admin@localhost")
+
+        if admin_user and admin_pass:
+            # Validate password strength
+            if len(admin_pass) < 8:
+                logger.error(
+                    "PUTPLACE_ADMIN_PASSWORD must be at least 8 characters. "
+                    "Admin user not created."
+                )
+                return
+
+            # Create admin from environment variables
+            from .user_auth import get_password_hash
+
+            hashed_password = get_password_hash(admin_pass)
+            user_doc = {
+                "username": admin_user,
+                "email": admin_email,
+                "hashed_password": hashed_password,
+                "full_name": "Administrator",
+                "is_active": True,
+                "created_at": datetime.utcnow(),
+            }
+
+            await db.users_collection.insert_one(user_doc)
+            logger.info(f"✅ Created admin user from environment: {admin_user}")
+            return
+
+        # Method 2: Generate random password (fallback for development)
+        import secrets
+        random_password = secrets.token_urlsafe(16)  # 16 bytes = ~21 chars
+
+        from .user_auth import get_password_hash
+
+        hashed_password = get_password_hash(random_password)
+        user_doc = {
+            "username": "admin",
+            "email": "admin@localhost",
+            "hashed_password": hashed_password,
+            "full_name": "Administrator",
+            "is_active": True,
+            "created_at": datetime.utcnow(),
+        }
+
+        await db.users_collection.insert_one(user_doc)
+
+        # Display credentials prominently in logs
+        logger.warning("=" * 80)
+        logger.warning("🔐 INITIAL ADMIN CREDENTIALS GENERATED")
+        logger.warning("=" * 80)
+        logger.warning(f"   Username: admin")
+        logger.warning(f"   Password: {random_password}")
+        logger.warning("")
+        logger.warning("⚠️  SAVE THESE CREDENTIALS NOW - They won't be shown again!")
+        logger.warning("")
+        logger.warning("For production, set environment variables instead:")
+        logger.warning("   PUTPLACE_ADMIN_USERNAME=your-admin")
+        logger.warning("   PUTPLACE_ADMIN_PASSWORD=your-secure-password")
+        logger.warning("   PUTPLACE_ADMIN_EMAIL=admin@example.com")
+        logger.warning("=" * 80)
+
+        # Also write to a temporary file
+        from pathlib import Path
+        import tempfile
+
+        creds_dir = Path(tempfile.gettempdir())
+        creds_file = creds_dir / "putplace_initial_creds.txt"
+
+        try:
+            creds_file.write_text(
+                f"PutPlace Initial Admin Credentials\n"
+                f"{'=' * 40}\n"
+                f"Username: admin\n"
+                f"Password: {random_password}\n"
+                f"Created: {datetime.utcnow()}\n\n"
+                f"⚠️  DELETE THIS FILE after saving credentials!\n"
+            )
+            creds_file.chmod(0o600)  # Owner read/write only
+            logger.warning(f"📄 Credentials also written to: {creds_file}")
+            logger.warning("")
+        except Exception as e:
+            logger.debug(f"Could not write credentials file: {e}")
+
+    except Exception as e:
+        logger.error(f"Failed to ensure admin user exists: {e}")
+        # Don't raise - allow app to start even if admin creation fails
+
+
 def get_db() -> MongoDB:
     """Get database instance - dependency injection."""
     return database.mongodb
@@ -198,6 +310,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as e:
         logger.error(f"Failed to initialize storage backend: {e}")
         raise
+
+    # Ensure admin user exists (only creates if no users exist)
+    if database.mongodb.client is not None:
+        await ensure_admin_exists(database.mongodb)
 
     yield
 

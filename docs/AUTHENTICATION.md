@@ -1,10 +1,11 @@
 # Authentication Guide
 
-PutPlace API uses **API Key authentication** to secure all endpoints. This guide explains how to set up and use authentication.
+PutPlace API uses **API Key authentication** to secure API endpoints and **User authentication** for web access. This guide explains how to set up and use authentication.
 
 ## Table of Contents
 
 - [Overview](#overview)
+- [Initial Setup](#initial-setup)
 - [Quick Start](#quick-start)
 - [Creating Your First API Key](#creating-your-first-api-key)
 - [Using API Keys](#using-api-keys)
@@ -15,7 +16,9 @@ PutPlace API uses **API Key authentication** to secure all endpoints. This guide
 
 ## Overview
 
-**Authentication Method:** API Key (via `X-API-Key` header)
+**Authentication Methods:**
+- **API Key Authentication** (via `X-API-Key` header) - For API endpoints
+- **User Authentication** (username/password + JWT) - For web interface
 
 **Protected Endpoints:**
 - `POST /put_file` - Upload file metadata
@@ -29,6 +32,79 @@ PutPlace API uses **API Key authentication** to secure all endpoints. This guide
 **Public Endpoints** (no authentication required):
 - `GET /` - Root endpoint
 - `GET /health` - Health check
+- `POST /api/register` - User registration
+- `POST /api/login` - User login
+
+---
+
+## Initial Setup
+
+PutPlace automatically creates an initial admin user on first startup using a **hybrid approach**:
+
+### Automatic Admin Creation
+
+**On first startup (when no users exist), PutPlace will:**
+
+#### Option 1: Environment Variables (Recommended for Production)
+
+Set these environment variables before starting the server:
+
+```bash
+export PUTPLACE_ADMIN_USERNAME="admin"
+export PUTPLACE_ADMIN_PASSWORD="your-secure-password-here"
+export PUTPLACE_ADMIN_EMAIL="admin@example.com"
+```
+
+**Requirements:**
+- Password must be at least 8 characters
+- Username and password are required
+- Email is optional (defaults to `admin@localhost`)
+
+**Docker/Docker Compose:**
+```yaml
+services:
+  putplace:
+    environment:
+      - PUTPLACE_ADMIN_USERNAME=admin
+      - PUTPLACE_ADMIN_PASSWORD=${ADMIN_PASSWORD}  # From .env file
+      - PUTPLACE_ADMIN_EMAIL=admin@example.com
+```
+
+#### Option 2: Random Password Generation (Development)
+
+If no environment variables are set, PutPlace will:
+1. Generate a secure random password
+2. Create an admin user with username `admin`
+3. Display the credentials **once** in the server logs:
+
+```
+================================================================================
+🔐 INITIAL ADMIN CREDENTIALS GENERATED
+================================================================================
+   Username: admin
+   Password: AbCdEf1234567890XyZ
+
+⚠️  SAVE THESE CREDENTIALS NOW - They won't be shown again!
+
+For production, set environment variables instead:
+   PUTPLACE_ADMIN_USERNAME=your-admin
+   PUTPLACE_ADMIN_PASSWORD=your-secure-password
+   PUTPLACE_ADMIN_EMAIL=admin@example.com
+================================================================================
+```
+
+**Important Notes:**
+- ✅ Admin is only created if **no users exist**
+- ✅ Credentials are also written to `/tmp/putplace_initial_creds.txt`
+- ⚠️ Delete the credentials file after saving the password
+- ⚠️ Use environment variables in production for security
+
+### After Initial Setup
+
+Once the admin user exists:
+1. Log in to the web interface at `http://localhost:8000`
+2. Create additional users via `/api/register` endpoint
+3. Generate API keys for programmatic access
 
 ---
 

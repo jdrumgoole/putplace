@@ -144,7 +144,33 @@ sudo chown $USER:$USER /var/putplace/files
 chmod 755 /var/putplace/files
 ```
 
-### 3. Initialize Database
+### 3. Configure Initial Admin User (Optional)
+
+PutPlace automatically creates an admin user on first startup. You can control this behavior:
+
+**Option A: Use Environment Variables (Recommended for Production)**
+
+Add to your `.env` file:
+```bash
+# Admin user credentials
+PUTPLACE_ADMIN_USERNAME=admin
+PUTPLACE_ADMIN_PASSWORD=your-secure-password-here
+PUTPLACE_ADMIN_EMAIL=admin@example.com
+```
+
+**Option B: Let PutPlace Generate Credentials (Development)**
+
+If you don't set the environment variables, PutPlace will:
+- Generate a secure random password
+- Display credentials once in the server logs on first startup
+- Save credentials to `/tmp/putplace_initial_creds.txt`
+
+**Important:**
+- ⚠️ Save the generated credentials immediately - they're shown only once
+- ⚠️ Delete `/tmp/putplace_initial_creds.txt` after saving the password
+- ✅ Admin user is only created if no users exist in the database
+
+### 4. Initialize Database
 
 ```bash
 # Start the server (this will create indexes automatically)
@@ -154,9 +180,22 @@ uvicorn putplace.main:app
 python -m uvicorn putplace.main:app
 ```
 
-The database indexes will be created automatically on first startup.
+The database indexes and admin user will be created automatically on first startup.
 
-### 4. Create First API Key
+**First Startup Output:**
+```
+INFO:     Application startup: Database connected successfully
+WARNING:  ================================================================================
+WARNING:  🔐 INITIAL ADMIN CREDENTIALS GENERATED
+WARNING:  ================================================================================
+WARNING:     Username: admin
+WARNING:     Password: AbCdEf1234567890XyZ
+WARNING:
+WARNING:  ⚠️  SAVE THESE CREDENTIALS NOW - They won't be shown again!
+WARNING:  ================================================================================
+```
+
+### 5. Create First API Key
 
 ```bash
 # Create administrative API key

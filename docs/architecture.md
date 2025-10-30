@@ -96,7 +96,7 @@ PutPlace is a distributed file metadata storage and content deduplication system
 **Purpose:** MongoDB interface with async operations
 
 **Key Features:**
-- Async MongoDB operations using Motor
+- Async MongoDB operations using PyMongo async (native asyncio)
 - Connection pooling
 - Automatic index creation
 - Error handling and logging
@@ -115,8 +115,8 @@ PutPlace is a distributed file metadata storage and content deduplication system
   - `is_active`
 
 **Technology Stack:**
-- **Motor**: Async MongoDB driver
-- **pymongo**: MongoDB Python driver (synchronous fallback)
+- **PyMongo Async**: Native async MongoDB driver (PyMongo 4.10+)
+- Direct asyncio implementation for better performance vs deprecated Motor library
 
 ### 4. Authentication (`auth.py`)
 
@@ -654,6 +654,6 @@ Current coverage:
 
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [Pydantic Documentation](https://docs.pydantic.dev/)
-- [Motor Documentation](https://motor.readthedocs.io/)
+- [PyMongo Async Documentation](https://pymongo.readthedocs.io/en/stable/api/pymongo/asynchronous/index.html)
 - [AWS S3 Documentation](https://docs.aws.amazon.com/s3/)
 - [Content-Addressable Storage](https://en.wikipedia.org/wiki/Content-addressable_storage)

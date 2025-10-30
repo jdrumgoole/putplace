@@ -7,28 +7,73 @@ from typing import AsyncGenerator, Generator
 
 import pytest
 from httpx import AsyncClient
-from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo import AsyncMongoClient
 
 from putplace.config import Settings
 from putplace.database import MongoDB
 from putplace.main import app
 
 
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_test_databases():
+    """Clean up all test databases at the end of the test session.
+
+    This runs automatically after all tests complete to ensure
+    worker-specific databases don't accumulate.
+    """
+    yield
+
+    # Cleanup all test databases after tests complete
+    async def _cleanup():
+        client = AsyncMongoClient("mongodb://localhost:27017")
+        try:
+            # Get all database names
+            db_names = await client.list_database_names()
+
+            # Drop all test databases
+            for db_name in db_names:
+                if db_name.startswith("putplace_test_"):
+                    await client.drop_database(db_name)
+        finally:
+            await client.close()
+
+    # Run the async cleanup
+    asyncio.run(_cleanup())
+
+
 @pytest.fixture
-def test_settings() -> Settings:
-    """Test settings with test database."""
+def test_settings(worker_id: str) -> Settings:
+    """Test settings with test database.
+
+    Each pytest-xdist worker gets its own database to avoid race conditions.
+    In serial mode (no worker_id), uses 'master' as the identifier.
+
+    Args:
+        worker_id: pytest-xdist worker identifier (e.g., 'gw0', 'gw1', 'master')
+    """
+    # pytest-xdist provides worker_id (e.g., 'gw0', 'gw1')
+    # In serial mode, worker_id is 'master'
+    db_name = f"putplace_test_{worker_id}"
+
     return Settings(
         mongodb_url="mongodb://localhost:27017",
-        mongodb_database="putplace_test",
+        mongodb_database=db_name,
         mongodb_collection="file_metadata_test",
     )
 
 
 @pytest.fixture
 async def test_db(test_settings: Settings) -> AsyncGenerator[MongoDB, None]:
-    """Create test database instance."""
+    """Create test database instance.
+
+    Each pytest-xdist worker gets its own isolated database to prevent
+    race conditions during parallel test execution. Database names are
+    automatically generated based on worker ID (e.g., putplace_test_gw0).
+
+    The database and all collections are cleaned up after each test.
+    """
     db = MongoDB()
-    db.client = AsyncIOMotorClient(test_settings.mongodb_url)
+    db.client = AsyncMongoClient(test_settings.mongodb_url)
     test_db_instance = db.client[test_settings.mongodb_database]
     db.collection = test_db_instance[test_settings.mongodb_collection]
     db.users_collection = test_db_instance["users_test"]
@@ -55,7 +100,7 @@ async def test_db(test_settings: Settings) -> AsyncGenerator[MongoDB, None]:
         pass  # Ignore cleanup errors
 
     if db.client:
-        db.client.close()
+        await db.client.close()
 
 
 @pytest.fixture
@@ -70,25 +115,27 @@ async def client(test_db: MongoDB, test_storage: Path) -> AsyncGenerator[AsyncCl
     """Create test HTTP client."""
     from httpx import ASGITransport
     from putplace.storage import LocalStorage
+    from putplace.main import get_db, get_storage
+    from putplace.auth import get_auth_db
 
-    # Override the database dependency
-    from putplace import database, main
+    # Override dependencies using FastAPI's dependency_overrides
+    # This is thread-safe for parallel test execution
+    storage = LocalStorage(str(test_storage))
 
-    original_mongodb = database.mongodb
-    original_storage = main.storage_backend
+    app.dependency_overrides[get_db] = lambda: test_db
+    app.dependency_overrides[get_storage] = lambda: storage
+    app.dependency_overrides[get_auth_db] = lambda: test_db
 
-    database.mongodb = test_db
-    # Initialize storage backend
-    main.storage_backend = LocalStorage(str(test_storage))
-
-    async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://test"
-    ) as ac:
-        yield ac
-
-    # Restore originals
-    database.mongodb = original_mongodb
-    main.storage_backend = original_storage
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as ac:
+            yield ac
+    finally:
+        # Clean up only our specific overrides (not all overrides)
+        app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(get_storage, None)
+        app.dependency_overrides.pop(get_auth_db, None)
 
 
 @pytest.fixture

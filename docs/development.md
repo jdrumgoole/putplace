@@ -164,7 +164,10 @@ putplace/
 ### Run All Tests
 
 ```bash
-# Run all tests
+# Run all tests (parallel execution by default via invoke)
+invoke test-all
+
+# Run all tests with pytest directly
 pytest
 
 # Run with verbose output
@@ -177,6 +180,30 @@ pytest --cov=putplace --cov-report=html
 open htmlcov/index.html  # macOS
 xdg-open htmlcov/index.html  # Linux
 ```
+
+### Parallel Test Execution
+
+PutPlace supports parallel test execution using pytest-xdist for faster test runs:
+
+```bash
+# Run tests in parallel with 4 workers (default via invoke)
+invoke test-all
+
+# Run serially (most stable, useful for debugging)
+invoke test-all --parallel=False
+
+# Run with more workers
+invoke test-all --workers=8
+
+# Run directly with pytest-xdist
+pytest -n 4 --dist loadscope
+```
+
+**Per-Worker Database Isolation:**
+- Each worker gets its own isolated database (e.g., `putplace_test_gw0`, `putplace_test_gw1`)
+- Prevents race conditions in parallel execution
+- ~40% faster than serial execution with 4 workers
+- Databases are automatically cleaned up after test session
 
 ### Run Specific Tests
 
@@ -220,7 +247,7 @@ def client():
     return TestClient(app)
 
 @pytest.fixture
-def api_key(db):
+async def api_key(db):
     """Create test API key."""
     from putplace.auth import APIKeyAuth
     auth = APIKeyAuth(db)
@@ -234,14 +261,13 @@ def test_put_file(client, api_key):
         "hostname": "test-host",
         "ip_address": "127.0.0.1",
         "sha256": "a" * 64,
-        "size": 1234,
-        "permissions": "0644",
-        "owner": "user",
-        "group": "group",
-        "mtime": "2025-01-15T10:00:00Z",
-        "atime": "2025-01-15T10:00:00Z",
-        "ctime": "2025-01-15T10:00:00Z",
-        "is_symlink": False,
+        "file_size": 1234,
+        "file_mode": 33188,  # Regular file with rw-r--r-- (0644)
+        "file_uid": 1000,
+        "file_gid": 1000,
+        "file_mtime": 1609459200.0,  # Unix timestamp
+        "file_atime": 1609459200.0,
+        "file_ctime": 1609459200.0,
     }
 
     response = client.post(
@@ -633,14 +659,13 @@ class PutPlaceUser(HttpUser):
             "hostname": "test",
             "ip_address": "127.0.0.1",
             "sha256": "a" * 64,
-            "size": 1234,
-            "permissions": "0644",
-            "owner": "user",
-            "group": "group",
-            "mtime": "2025-01-15T10:00:00Z",
-            "atime": "2025-01-15T10:00:00Z",
-            "ctime": "2025-01-15T10:00:00Z",
-            "is_symlink": False,
+            "file_size": 1234,
+            "file_mode": 33188,  # Regular file with rw-r--r-- (0644)
+            "file_uid": 1000,
+            "file_gid": 1000,
+            "file_mtime": 1609459200.0,  # Unix timestamp
+            "file_atime": 1609459200.0,
+            "file_ctime": 1609459200.0,
         }
         self.client.post(
             "/put_file",
@@ -780,7 +805,7 @@ When suggesting features, include:
 
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
 - [Pydantic Documentation](https://docs.pydantic.dev/)
-- [MongoDB Motor Documentation](https://motor.readthedocs.io/)
+- [PyMongo Async Documentation](https://pymongo.readthedocs.io/en/stable/api/pymongo/asynchronous/index.html)
 - [pytest Documentation](https://docs.pytest.org/)
 - [Ruff Documentation](https://docs.astral.sh/ruff/)
 

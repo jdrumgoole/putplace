@@ -800,13 +800,13 @@ curl -X POST http://localhost:8000/put_file \
     "hostname": "test",
     "ip_address": "127.0.0.1",
     "sha256": "abc123...",
-    "size": 1234,
-    "permissions": "0644",
-    "owner": "user",
-    "group": "group",
-    "mtime": "2025-01-15T10:00:00Z",
-    "atime": "2025-01-15T10:00:00Z",
-    "ctime": "2025-01-15T10:00:00Z",
+    "file_size": 1234,
+    "file_mode": 33188,
+    "file_uid": 1000,
+    "file_gid": 1000,
+    "file_mtime": 1609459200.0,
+    "file_atime": 1609459200.0,
+    "file_ctime": 1609459200.0,
     "is_symlink": false
   }'
 

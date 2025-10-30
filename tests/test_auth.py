@@ -252,10 +252,8 @@ async def test_register_page_renders(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_password_is_hashed(client: AsyncClient):
+async def test_password_is_hashed(client: AsyncClient, test_db):
     """Test that passwords are stored hashed, not in plain text."""
-    from putplace import database
-
     user_data = {
         "username": "hasheduser",
         "email": "hashed@example.com",
@@ -266,12 +264,12 @@ async def test_password_is_hashed(client: AsyncClient):
     await client.post("/api/register", json=user_data)
 
     # Check database directly
-    user = await database.mongodb.get_user_by_username("hasheduser")
+    user = await test_db.get_user_by_username("hasheduser")
     assert user is not None
     assert "hashed_password" in user
 
-    # Password should be hashed (bcrypt hashes start with $2b$)
-    assert user["hashed_password"].startswith("$2b$")
+    # Password should be hashed (Argon2 hashes start with $argon2id$)
+    assert user["hashed_password"].startswith("$argon2id$")
     # Plain password should not be in the hash
     assert "myplainpassword123" not in user["hashed_password"]
 

@@ -3,16 +3,28 @@
 import hashlib
 import secrets
 from datetime import datetime
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from fastapi import Depends, HTTPException, Security, status
 from fastapi.security import APIKeyHeader
-from motor.motor_asyncio import AsyncIOMotorCollection
+from pymongo.asynchronous.collection import AsyncCollection
 
 from . import database
 
+if TYPE_CHECKING:
+    from .database import MongoDB
+
 # API key header name
 API_KEY_HEADER = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+def get_auth_db() -> "MongoDB":
+    """Get database instance for authentication.
+
+    This function is used as a dependency in FastAPI routes.
+    Returns the global database.mongodb instance.
+    """
+    return database.mongodb
 
 
 def generate_api_key() -> str:
@@ -47,7 +59,7 @@ class APIKeyAuth:
         """
         self.db = db
 
-    async def get_api_keys_collection(self) -> AsyncIOMotorCollection:
+    async def get_api_keys_collection(self) -> AsyncCollection:
         """Get the API keys collection.
 
         Returns:
@@ -206,11 +218,13 @@ class APIKeyAuth:
 # Dependency for protected endpoints
 async def get_current_api_key(
     api_key: str = Security(API_KEY_HEADER),
+    db: "MongoDB" = Depends(get_auth_db),
 ) -> dict:
     """FastAPI dependency to validate API key.
 
     Args:
         api_key: API key from request header
+        db: Database instance (injected)
 
     Returns:
         API key metadata if valid
@@ -226,7 +240,7 @@ async def get_current_api_key(
         )
 
     # Get API key authenticator
-    auth = APIKeyAuth(database.mongodb)
+    auth = APIKeyAuth(db)
 
     # Verify the key
     key_metadata = await auth.verify_api_key(api_key)
@@ -244,6 +258,7 @@ async def get_current_api_key(
 # Optional dependency - allows unauthenticated access
 async def get_optional_api_key(
     api_key: str = Security(API_KEY_HEADER),
+    db: "MongoDB" = Depends(get_auth_db),
 ) -> Optional[dict]:
     """FastAPI dependency for optional API key authentication.
 
@@ -252,6 +267,7 @@ async def get_optional_api_key(
 
     Args:
         api_key: API key from request header
+        db: Database instance (injected)
 
     Returns:
         API key metadata if valid, None if not provided or invalid
@@ -259,5 +275,5 @@ async def get_optional_api_key(
     if not api_key:
         return None
 
-    auth = APIKeyAuth(database.mongodb)
+    auth = APIKeyAuth(db)
     return await auth.verify_api_key(api_key)

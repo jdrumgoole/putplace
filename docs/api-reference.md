@@ -108,13 +108,13 @@ Store file metadata in database and determine if file upload is needed.
   "hostname": "web-server-01",
   "ip_address": "192.168.1.100",
   "sha256": "a1b2c3d4e5f6...",
-  "size": 1234,
-  "permissions": "0644",
-  "owner": "www-data",
-  "group": "www-data",
-  "mtime": "2025-01-15T10:30:00Z",
-  "atime": "2025-01-15T11:00:00Z",
-  "ctime": "2025-01-15T09:00:00Z",
+  "file_size": 1234,
+  "file_mode": 33188,
+  "file_uid": 33,
+  "file_gid": 33,
+  "file_mtime": 1609459200.0,
+  "file_atime": 1609459200.0,
+  "file_ctime": 1609459200.0,
   "is_symlink": false,
   "link_target": null
 }
@@ -128,13 +128,13 @@ Store file metadata in database and determine if file upload is needed.
   "hostname": "web-server-01",
   "ip_address": "192.168.1.100",
   "sha256": "a1b2c3d4e5f6...",
-  "size": 1234,
-  "permissions": "0644",
-  "owner": "www-data",
-  "group": "www-data",
-  "mtime": "2025-01-15T10:30:00Z",
-  "atime": "2025-01-15T11:00:00Z",
-  "ctime": "2025-01-15T09:00:00Z",
+  "file_size": 1234,
+  "file_mode": 33188,
+  "file_uid": 33,
+  "file_gid": 33,
+  "file_mtime": 1609459200.0,
+  "file_atime": 1609459200.0,
+  "file_ctime": 1609459200.0,
   "is_symlink": false,
   "link_target": null,
   "has_file_content": false,
@@ -170,13 +170,13 @@ curl -X POST http://localhost:8000/put_file \
     "hostname": "web-server-01",
     "ip_address": "192.168.1.100",
     "sha256": "abc123...",
-    "size": 1234,
-    "permissions": "0644",
-    "owner": "www-data",
-    "group": "www-data",
-    "mtime": "2025-01-15T10:30:00Z",
-    "atime": "2025-01-15T11:00:00Z",
-    "ctime": "2025-01-15T09:00:00Z",
+    "file_size": 1234,
+    "file_mode": 33188,
+    "file_uid": 33,
+    "file_gid": 33,
+    "file_mtime": 1609459200.0,
+    "file_atime": 1609459200.0,
+    "file_ctime": 1609459200.0,
     "is_symlink": false
   }'
 ```
@@ -209,7 +209,7 @@ Upload actual file content for previously registered metadata.
 {
   "message": "File uploaded successfully",
   "sha256": "a1b2c3d4e5f6...",
-  "size": 1234,
+  "file_size": 1234,
   "hostname": "web-server-01",
   "filepath": "/var/www/html/index.html"
 }
@@ -256,13 +256,13 @@ Retrieve file metadata by SHA256 hash.
   "hostname": "web-server-01",
   "ip_address": "192.168.1.100",
   "sha256": "a1b2c3d4e5f6...",
-  "size": 1234,
-  "permissions": "0644",
-  "owner": "www-data",
-  "group": "www-data",
-  "mtime": "2025-01-15T10:30:00Z",
-  "atime": "2025-01-15T11:00:00Z",
-  "ctime": "2025-01-15T09:00:00Z",
+  "file_size": 1234,
+  "file_mode": 33188,
+  "file_uid": 33,
+  "file_gid": 33,
+  "file_mtime": 1609459200.0,
+  "file_atime": 1609459200.0,
+  "file_ctime": 1609459200.0,
   "is_symlink": false,
   "link_target": null,
   "has_file_content": true,
@@ -585,13 +585,13 @@ File metadata submitted by client.
   "hostname": "string (required)",
   "ip_address": "string (required)",
   "sha256": "string (required, 64 chars)",
-  "size": "integer (required)",
-  "permissions": "string (required)",
-  "owner": "string (required)",
-  "group": "string (required)",
-  "mtime": "datetime (required)",
-  "atime": "datetime (required)",
-  "ctime": "datetime (required)",
+  "file_size": "integer (required)",
+  "file_mode": "integer (required)",
+  "file_uid": "integer (required)",
+  "file_gid": "integer (required)",
+  "file_mtime": "float (required)",
+  "file_atime": "float (required)",
+  "file_ctime": "float (required)",
   "is_symlink": "boolean (required)",
   "link_target": "string or null (required)"
 }
@@ -602,13 +602,13 @@ File metadata submitted by client.
 - `hostname` - Hostname where file is located
 - `ip_address` - IP address of the host
 - `sha256` - SHA256 hash of file content (64 hex characters)
-- `size` - File size in bytes
-- `permissions` - Unix permissions (e.g., "0644")
-- `owner` - File owner username
-- `group` - File group name
-- `mtime` - Last modification time (ISO 8601)
-- `atime` - Last access time (ISO 8601)
-- `ctime` - Creation/metadata change time (ISO 8601)
+- `file_size` - File size in bytes
+- `file_mode` - Unix file mode/permissions (integer, e.g., 33188 for rw-r--r--)
+- `file_uid` - File owner user ID (integer)
+- `file_gid` - File group ID (integer)
+- `file_mtime` - Last modification time (Unix timestamp)
+- `file_atime` - Last access time (Unix timestamp)
+- `file_ctime` - Creation/metadata change time (Unix timestamp)
 - `is_symlink` - Whether file is a symbolic link
 - `link_target` - Target path if symlink, null otherwise
 
@@ -623,13 +623,13 @@ File metadata returned from server (includes server-generated fields).
   "hostname": "string",
   "ip_address": "string",
   "sha256": "string",
-  "size": "integer",
-  "permissions": "string",
-  "owner": "string",
-  "group": "string",
-  "mtime": "datetime",
-  "atime": "datetime",
-  "ctime": "datetime",
+  "file_size": "integer",
+  "file_mode": "integer",
+  "file_uid": "integer",
+  "file_gid": "integer",
+  "file_mtime": "float",
+  "file_atime": "float",
+  "file_ctime": "float",
   "is_symlink": "boolean",
   "link_target": "string or null",
   "has_file_content": "boolean",
@@ -653,13 +653,13 @@ Response from POST /put_file (includes upload requirement info).
   "hostname": "string",
   "ip_address": "string",
   "sha256": "string",
-  "size": "integer",
-  "permissions": "string",
-  "owner": "string",
-  "group": "string",
-  "mtime": "datetime",
-  "atime": "datetime",
-  "ctime": "datetime",
+  "file_size": "integer",
+  "file_mode": "integer",
+  "file_uid": "integer",
+  "file_gid": "integer",
+  "file_mtime": "float",
+  "file_atime": "float",
+  "file_ctime": "float",
   "is_symlink": "boolean",
   "link_target": "string or null",
   "has_file_content": "boolean",
@@ -921,13 +921,13 @@ class PutPlaceClient:
             "hostname": hostname,
             "ip_address": "127.0.0.1",
             "sha256": sha256,
-            "size": stat.st_size,
-            "permissions": oct(stat.st_mode)[-4:],
-            "owner": "user",
-            "group": "group",
-            "mtime": datetime.fromtimestamp(stat.st_mtime).isoformat() + "Z",
-            "atime": datetime.fromtimestamp(stat.st_atime).isoformat() + "Z",
-            "ctime": datetime.fromtimestamp(stat.st_ctime).isoformat() + "Z",
+            "file_size": stat.st_size,
+            "file_mode": stat.st_mode,
+            "file_uid": stat.st_uid,
+            "file_gid": stat.st_gid,
+            "file_mtime": stat.st_mtime,
+            "file_atime": stat.st_atime,
+            "file_ctime": stat.st_ctime,
             "is_symlink": os.path.islink(filepath),
             "link_target": os.readlink(filepath) if os.path.islink(filepath) else None,
         }

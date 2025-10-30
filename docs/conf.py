@@ -9,7 +9,7 @@
 project = 'PutPlace'
 copyright = '2025, Joe Drumgoole'
 author = 'Joe Drumgoole'
-release = '0.4.0'
+release = '0.4.1'
 
 # -- General configuration ---------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
@@ -56,7 +56,7 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
     'fastapi': ('https://fastapi.tiangolo.com', None),
     'pydantic': ('https://docs.pydantic.dev/latest/', None),
-    'motor': ('https://motor.readthedocs.io/en/stable/', None),
+    'pymongo': ('https://pymongo.readthedocs.io/en/stable/', None),
 }
 
 # -- Options for autodoc -----------------------------------------------------
