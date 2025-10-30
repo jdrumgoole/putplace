@@ -65,8 +65,8 @@ class PutPlaceGUI(BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.orientation = 'vertical'
-        self.padding = 10
-        self.spacing = 10
+        self.padding = 15
+        self.spacing = 15
 
         # State variables
         self.selected_path: Optional[str] = None
@@ -74,8 +74,9 @@ class PutPlaceGUI(BoxLayout):
         self.is_uploading = False
         self.upload_thread: Optional[threading.Thread] = None
 
-        # Set window size
-        Window.size = (900, 700)
+        # Set window size and colors
+        Window.size = (1000, 750)
+        Window.clearcolor = (0.95, 0.95, 0.95, 1)  # Light gray background
 
         # Build UI
         self.build_header()
@@ -95,23 +96,28 @@ class PutPlaceGUI(BoxLayout):
         header = Label(
             text='PutPlace GUI Client',
             size_hint_y=None,
-            height=50,
-            font_size='24sp',
-            bold=True
+            height=60,
+            font_size='28sp',
+            bold=True,
+            color=(0.2, 0.4, 0.7, 1)  # Blue text
         )
         self.add_widget(header)
 
     def build_file_selector(self):
         """Build file/directory selector section."""
-        selector_layout = BoxLayout(orientation='vertical', size_hint_y=0.3, spacing=5)
+        selector_layout = BoxLayout(orientation='vertical', size_hint_y=0.3, spacing=8)
 
         # Label
         selector_label = Label(
             text='Select Directory to Scan:',
             size_hint_y=None,
-            height=30,
-            font_size='16sp'
+            height=35,
+            font_size='18sp',
+            bold=True,
+            color=(0.2, 0.2, 0.2, 1),
+            halign='left'
         )
+        selector_label.bind(size=selector_label.setter('text_size'))
         selector_layout.add_widget(selector_label)
 
         # File chooser
@@ -127,9 +133,10 @@ class PutPlaceGUI(BoxLayout):
         self.path_label = Label(
             text='No path selected',
             size_hint_y=None,
-            height=30,
-            font_size='14sp',
-            color=(0.5, 0.5, 0.5, 1)
+            height=35,
+            font_size='15sp',
+            color=(0.6, 0.6, 0.6, 1),
+            italic=True
         )
         selector_layout.add_widget(self.path_label)
 
@@ -137,42 +144,78 @@ class PutPlaceGUI(BoxLayout):
 
     def build_settings(self):
         """Build settings section."""
-        settings_layout = GridLayout(cols=2, size_hint_y=None, height=120, spacing=5)
+        settings_layout = GridLayout(cols=2, size_hint_y=None, height=140, spacing=10, row_spacing=8)
 
         # Server URL
-        settings_layout.add_widget(Label(text='Server URL:', size_hint_x=0.3))
+        settings_layout.add_widget(Label(
+            text='Server URL:',
+            size_hint_x=0.25,
+            color=(0.2, 0.2, 0.2, 1),
+            halign='right',
+            valign='middle'
+        ))
         self.server_input = TextInput(
             text='http://localhost:8000',
             multiline=False,
-            size_hint_x=0.7
+            size_hint_x=0.75,
+            background_color=(1, 1, 1, 1),
+            foreground_color=(0.2, 0.2, 0.2, 1),
+            padding=[10, 8]
         )
         settings_layout.add_widget(self.server_input)
 
         # API Key
-        settings_layout.add_widget(Label(text='API Key:', size_hint_x=0.3))
+        settings_layout.add_widget(Label(
+            text='API Key:',
+            size_hint_x=0.25,
+            color=(0.2, 0.2, 0.2, 1),
+            halign='right',
+            valign='middle'
+        ))
         self.api_key_input = TextInput(
             text='',
             multiline=False,
             password=True,
-            size_hint_x=0.7
+            size_hint_x=0.75,
+            background_color=(1, 1, 1, 1),
+            foreground_color=(0.2, 0.2, 0.2, 1),
+            padding=[10, 8]
         )
         settings_layout.add_widget(self.api_key_input)
 
         # Hostname
-        settings_layout.add_widget(Label(text='Hostname:', size_hint_x=0.3))
+        settings_layout.add_widget(Label(
+            text='Hostname:',
+            size_hint_x=0.25,
+            color=(0.2, 0.2, 0.2, 1),
+            halign='right',
+            valign='middle'
+        ))
         self.hostname_input = TextInput(
             text='',
             multiline=False,
-            size_hint_x=0.7
+            size_hint_x=0.75,
+            background_color=(1, 1, 1, 1),
+            foreground_color=(0.2, 0.2, 0.2, 1),
+            padding=[10, 8]
         )
         settings_layout.add_widget(self.hostname_input)
 
         # IP Address
-        settings_layout.add_widget(Label(text='IP Address:', size_hint_x=0.3))
+        settings_layout.add_widget(Label(
+            text='IP Address:',
+            size_hint_x=0.25,
+            color=(0.2, 0.2, 0.2, 1),
+            halign='right',
+            valign='middle'
+        ))
         self.ip_input = TextInput(
             text='',
             multiline=False,
-            size_hint_x=0.7
+            size_hint_x=0.75,
+            background_color=(1, 1, 1, 1),
+            foreground_color=(0.2, 0.2, 0.2, 1),
+            padding=[10, 8]
         )
         settings_layout.add_widget(self.ip_input)
 
@@ -180,19 +223,31 @@ class PutPlaceGUI(BoxLayout):
 
     def build_exclude_patterns(self):
         """Build exclude patterns section."""
-        exclude_layout = BoxLayout(orientation='vertical', size_hint_y=None, height=120, spacing=5)
+        exclude_layout = BoxLayout(orientation='vertical', size_hint_y=None, height=130, spacing=8)
 
         # Header with add button
-        header_layout = BoxLayout(size_hint_y=None, height=30, spacing=5)
-        header_layout.add_widget(Label(text='Exclude Patterns:', font_size='16sp'))
-        add_btn = Button(text='Add', size_hint_x=None, width=60)
+        header_layout = BoxLayout(size_hint_y=None, height=35, spacing=10)
+        header_layout.add_widget(Label(
+            text='Exclude Patterns:',
+            font_size='18sp',
+            bold=True,
+            color=(0.2, 0.2, 0.2, 1),
+            halign='left'
+        ))
+        add_btn = Button(
+            text='Add',
+            size_hint_x=None,
+            width=80,
+            background_color=(0.2, 0.6, 0.3, 1),
+            color=(1, 1, 1, 1)
+        )
         add_btn.bind(on_press=self.show_add_pattern_popup)
         header_layout.add_widget(add_btn)
         exclude_layout.add_widget(header_layout)
 
         # Patterns list
         scroll = ScrollView(size_hint_y=1)
-        self.patterns_layout = BoxLayout(orientation='vertical', size_hint_y=None, spacing=2)
+        self.patterns_layout = BoxLayout(orientation='vertical', size_hint_y=None, spacing=5)
         self.patterns_layout.bind(minimum_height=self.patterns_layout.setter('height'))
         scroll.add_widget(self.patterns_layout)
         exclude_layout.add_widget(scroll)
@@ -201,31 +256,37 @@ class PutPlaceGUI(BoxLayout):
 
     def build_progress_section(self):
         """Build progress display section."""
-        progress_layout = BoxLayout(orientation='vertical', size_hint_y=None, height=60, spacing=5)
+        progress_layout = BoxLayout(orientation='vertical', size_hint_y=None, height=70, spacing=8)
 
         self.progress_label = Label(
             text='Ready',
             size_hint_y=None,
-            height=20,
-            font_size='14sp'
+            height=25,
+            font_size='16sp',
+            color=(0.2, 0.2, 0.2, 1),
+            bold=True
         )
         progress_layout.add_widget(self.progress_label)
 
-        self.progress_bar = ProgressBar(max=100, value=0, size_hint_y=None, height=20)
+        self.progress_bar = ProgressBar(max=100, value=0, size_hint_y=None, height=25)
         progress_layout.add_widget(self.progress_bar)
 
         self.add_widget(progress_layout)
 
     def build_log_section(self):
         """Build log output section."""
-        log_layout = BoxLayout(orientation='vertical', size_hint_y=0.3, spacing=5)
+        log_layout = BoxLayout(orientation='vertical', size_hint_y=0.3, spacing=8)
 
         log_label = Label(
             text='Log Output:',
             size_hint_y=None,
-            height=30,
-            font_size='16sp'
+            height=35,
+            font_size='18sp',
+            bold=True,
+            color=(0.2, 0.2, 0.2, 1),
+            halign='left'
         )
+        log_label.bind(size=log_label.setter('text_size'))
         log_layout.add_widget(log_label)
 
         scroll = ScrollView()
@@ -233,7 +294,10 @@ class PutPlaceGUI(BoxLayout):
             text='',
             readonly=True,
             multiline=True,
-            size_hint_y=None
+            size_hint_y=None,
+            background_color=(1, 1, 1, 1),
+            foreground_color=(0.2, 0.2, 0.2, 1),
+            font_size='14sp'
         )
         self.log_output.bind(minimum_height=self.log_output.setter('height'))
         scroll.add_widget(self.log_output)
@@ -243,17 +307,35 @@ class PutPlaceGUI(BoxLayout):
 
     def build_controls(self):
         """Build control buttons."""
-        controls = BoxLayout(size_hint_y=None, height=50, spacing=10)
+        controls = BoxLayout(size_hint_y=None, height=55, spacing=12)
 
-        self.start_btn = Button(text='Start Upload')
+        self.start_btn = Button(
+            text='Start Upload',
+            background_color=(0.2, 0.5, 0.8, 1),
+            color=(1, 1, 1, 1),
+            font_size='16sp',
+            bold=True
+        )
         self.start_btn.bind(on_press=self.start_upload)
         controls.add_widget(self.start_btn)
 
-        self.stop_btn = Button(text='Stop', disabled=True)
+        self.stop_btn = Button(
+            text='Stop',
+            disabled=True,
+            background_color=(0.8, 0.3, 0.3, 1),
+            color=(1, 1, 1, 1),
+            font_size='16sp',
+            bold=True
+        )
         self.stop_btn.bind(on_press=self.stop_upload)
         controls.add_widget(self.stop_btn)
 
-        clear_btn = Button(text='Clear Log')
+        clear_btn = Button(
+            text='Clear Log',
+            background_color=(0.6, 0.6, 0.6, 1),
+            color=(1, 1, 1, 1),
+            font_size='16sp'
+        )
         clear_btn.bind(on_press=self.clear_log)
         controls.add_widget(clear_btn)
 
