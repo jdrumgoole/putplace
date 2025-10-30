@@ -163,9 +163,11 @@ def sync(c):
     c.run("uv pip sync requirements.txt")
 
 
-@task
+@task(pre=[mongo_start])
 def serve(c, host="127.0.0.1", port=8000, reload=True):
     """Run the FastAPI development server.
+
+    Automatically starts MongoDB if not running.
 
     Args:
         host: Host to bind to (default: 127.0.0.1)
@@ -176,9 +178,11 @@ def serve(c, host="127.0.0.1", port=8000, reload=True):
     c.run(f"uv run uvicorn putplace.main:app --host {host} --port {port} {reload_flag}")
 
 
-@task
+@task(pre=[mongo_start])
 def serve_prod(c, host="0.0.0.0", port=8000, workers=4):
     """Run the FastAPI server in production mode.
+
+    Automatically starts MongoDB if not running.
 
     Args:
         host: Host to bind to (default: 0.0.0.0)
