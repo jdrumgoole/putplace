@@ -14,6 +14,16 @@ jobs:
     name: Build and publish to PyPI
     runs-on: ubuntu-latest
 
+    # Required for trusted publishing with OIDC
+    permissions:
+      id-token: write
+      contents: read
+
+    # Environment for PyPI publishing (adds extra security layer)
+    environment:
+      name: pypi
+      url: https://pypi.org/p/putplace
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -58,7 +68,7 @@ jobs:
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
+          # No password needed - using OIDC trusted publishing
           verbose: true
 
       - name: Success message
