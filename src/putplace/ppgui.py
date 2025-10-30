@@ -144,7 +144,7 @@ class PutPlaceGUI(BoxLayout):
 
     def build_settings(self):
         """Build settings section."""
-        settings_layout = GridLayout(cols=2, size_hint_y=None, height=140, spacing=10, row_spacing=8)
+        settings_layout = GridLayout(cols=2, size_hint_y=None, height=140, spacing=10)
 
         # Server URL
         settings_layout.add_widget(Label(
