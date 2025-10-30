@@ -163,35 +163,6 @@ def sync(c):
     c.run("uv pip sync requirements.txt")
 
 
-@task(pre=[mongo_start])
-def serve(c, host="127.0.0.1", port=8000, reload=True):
-    """Run the FastAPI development server.
-
-    Automatically starts MongoDB if not running.
-
-    Args:
-        host: Host to bind to (default: 127.0.0.1)
-        port: Port to bind to (default: 8000)
-        reload: Enable auto-reload on code changes (default: True)
-    """
-    reload_flag = "--reload" if reload else ""
-    c.run(f"uv run uvicorn putplace.main:app --host {host} --port {port} {reload_flag}")
-
-
-@task(pre=[mongo_start])
-def serve_prod(c, host="0.0.0.0", port=8000, workers=4):
-    """Run the FastAPI server in production mode.
-
-    Automatically starts MongoDB if not running.
-
-    Args:
-        host: Host to bind to (default: 0.0.0.0)
-        port: Port to bind to (default: 8000)
-        workers: Number of worker processes (default: 4)
-    """
-    c.run(f"uv run uvicorn putplace.main:app --host {host} --port {port} --workers {workers}")
-
-
 # MongoDB management tasks
 @task
 def mongo_start(c, name="mongodb", port=27017):
@@ -279,6 +250,36 @@ def mongo_logs(c, name="mongodb", follow=False):
     """
     follow_flag = "-f" if follow else ""
     c.run(f"docker logs {follow_flag} {name}")
+
+
+# Server tasks
+@task(pre=[mongo_start])
+def serve(c, host="127.0.0.1", port=8000, reload=True):
+    """Run the FastAPI development server.
+
+    Automatically starts MongoDB if not running.
+
+    Args:
+        host: Host to bind to (default: 127.0.0.1)
+        port: Port to bind to (default: 8000)
+        reload: Enable auto-reload on code changes (default: True)
+    """
+    reload_flag = "--reload" if reload else ""
+    c.run(f"uv run uvicorn putplace.main:app --host {host} --port {port} {reload_flag}")
+
+
+@task(pre=[mongo_start])
+def serve_prod(c, host="0.0.0.0", port=8000, workers=4):
+    """Run the FastAPI server in production mode.
+
+    Automatically starts MongoDB if not running.
+
+    Args:
+        host: Host to bind to (default: 0.0.0.0)
+        port: Port to bind to (default: 8000)
+        workers: Number of worker processes (default: 4)
+    """
+    c.run(f"uv run uvicorn putplace.main:app --host {host} --port {port} --workers {workers}")
 
 
 # Quick setup tasks
