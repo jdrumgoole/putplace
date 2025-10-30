@@ -364,6 +364,37 @@ def serve_prod(c, host="0.0.0.0", port=8000, workers=4):
     c.run(f"uv run uvicorn putplace.main:app --host {host} --port {port} --workers {workers}")
 
 
+# Client tasks
+@task
+def gui(c):
+    """Launch the PutPlace GUI client (ppgui).
+
+    Requires Kivy to be installed:
+        pip install putplace[gui]
+    or:
+        uv pip install -e '.[gui]'
+
+    The GUI provides:
+        - Visual directory picker
+        - Settings panel (API key, server URL, hostname, IP)
+        - Exclude patterns manager
+        - Real-time upload progress
+        - Log output viewer
+    """
+    # Check if kivy is installed
+    result = c.run("uv run python -c 'import kivy'", hide=True, warn=True)
+    if not result.ok:
+        print("❌ Error: Kivy is not installed")
+        print("\nTo install GUI dependencies:")
+        print("  pip install putplace[gui]")
+        print("or:")
+        print("  uv pip install -e '.[gui]'")
+        return
+
+    print("🚀 Launching PutPlace GUI client...")
+    c.run("uv run ppgui")
+
+
 # Quick setup tasks
 @task(pre=[setup_venv])
 def setup(c):
