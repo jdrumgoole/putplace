@@ -70,6 +70,8 @@ The server will be available at http://localhost:8000
 
 ### Using the Client
 
+#### Command-Line Interface (CLI)
+
 ```bash
 # Scan a directory and upload metadata
 ppclient --path /var/log
@@ -80,6 +82,23 @@ ppclient --path /var/log --dry-run
 # With API key
 ppclient --path /var/log --api-key your-api-key-here
 ```
+
+#### Graphical User Interface (GUI)
+
+```bash
+# Install with GUI support
+pip install putplace[gui]
+
+# Launch GUI client
+ppgui
+```
+
+The GUI provides:
+- 📁 Visual directory picker
+- ⚙️ Settings panel (API key, server URL, hostname, IP)
+- 📋 Exclude patterns manager
+- 📊 Real-time upload progress
+- 📝 Log output viewer
 
 See the [Client Guide](https://putplace.readthedocs.io/en/latest/client-guide.html) for more details.
 

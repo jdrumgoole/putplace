@@ -41,6 +41,7 @@ dependencies = [
 [project.scripts]
 ppclient = "putplace.ppclient:main"
 ppserver = "putplace.ppserver:main"
+ppgui = "putplace.ppgui:main"
 
 [project.optional-dependencies]
 dev = [
@@ -55,6 +56,9 @@ dev = [
 ]
 s3 = [
     "aioboto3>=12.0.0",
+]
+gui = [
+    "kivy>=2.3.0",
 ]
 
 [build-system]
