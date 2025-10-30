@@ -163,10 +163,92 @@ def sync(c):
     c.run("uv pip sync requirements.txt")
 
 
-# MongoDB management tasks
+# Docker management tasks
 @task
+def docker_start(c):
+    """Start Docker Desktop/daemon if not running.
+
+    Automatically detects the platform and starts Docker accordingly:
+    - macOS: Starts Docker Desktop application
+    - Linux: Starts docker service via systemd
+    - Windows: Starts Docker Desktop (requires manual start)
+    """
+    import time
+    import platform
+
+    # Check if Docker is already running
+    result = c.run("docker ps", hide=True, warn=True)
+    if result.ok:
+        print("✓ Docker is already running")
+        return
+
+    system = platform.system()
+    print(f"Docker is not running. Starting Docker on {system}...")
+
+    if system == "Darwin":  # macOS
+        print("Starting Docker Desktop...")
+        c.run("open -a Docker", warn=True)
+
+        # Wait for Docker to be ready (max 60 seconds)
+        print("Waiting for Docker to start", end="", flush=True)
+        for i in range(60):
+            time.sleep(1)
+            print(".", end="", flush=True)
+            result = c.run("docker ps", hide=True, warn=True)
+            if result.ok:
+                print()
+                print("✓ Docker Desktop started successfully")
+                return
+
+        print()
+        print("⚠️  Docker Desktop is taking longer than expected to start")
+        print("   Please check Docker Desktop manually")
+
+    elif system == "Linux":
+        print("Starting Docker daemon...")
+        c.run("sudo systemctl start docker", warn=True)
+
+        # Wait for Docker to be ready
+        print("Waiting for Docker daemon", end="", flush=True)
+        for i in range(30):
+            time.sleep(1)
+            print(".", end="", flush=True)
+            result = c.run("docker ps", hide=True, warn=True)
+            if result.ok:
+                print()
+                print("✓ Docker daemon started successfully")
+                return
+
+        print()
+        print("⚠️  Docker daemon failed to start")
+        print("   Try: sudo systemctl status docker")
+
+    elif system == "Windows":
+        print("Please start Docker Desktop manually on Windows")
+        print("Waiting for Docker to start", end="", flush=True)
+        for i in range(60):
+            time.sleep(1)
+            print(".", end="", flush=True)
+            result = c.run("docker ps", hide=True, warn=True)
+            if result.ok:
+                print()
+                print("✓ Docker Desktop is running")
+                return
+
+        print()
+        print("⚠️  Docker Desktop is not running")
+        print("   Please start Docker Desktop manually")
+    else:
+        print(f"⚠️  Unsupported platform: {system}")
+        print("   Please start Docker manually")
+
+
+# MongoDB management tasks
+@task(pre=[docker_start])
 def mongo_start(c, name="mongodb", port=27017):
     """Start MongoDB in Docker.
+
+    Automatically starts Docker if not running.
 
     Args:
         name: Container name (default: mongodb)
