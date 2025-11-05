@@ -5,6 +5,63 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2025-11-05
+
+### Added
+
+#### Electron Desktop GUI
+- **Cross-Platform Desktop Application**: New Electron-based GUI client built with TypeScript
+  - Native macOS, Windows, and Linux support
+  - Proper application branding with "PutPlace Client" menu name
+  - Custom application menu with standard macOS items
+  - Packaged .app bundle with correct Info.plist metadata
+  - DMG installer for easy distribution
+
+- **Authentication & Security**:
+  - JWT-based authentication (replaced API key authentication)
+  - User login and registration forms
+  - Password visibility toggle with eye icon
+  - Session persistence using localStorage
+  - Secure IPC communication with context isolation
+
+- **User Interface Features**:
+  - Native directory picker dialog
+  - Exclude patterns manager with wildcard support
+  - Real-time progress tracking with statistics
+  - Color-coded log output (success, error, warning, info)
+  - System information display (hostname, IP address)
+  - Settings persistence between sessions
+
+- **Build & Development Tools**:
+  - `invoke gui-electron` - Launch packaged app (recommended)
+  - `invoke gui-electron-package` - Package app into .app bundle and DMG
+  - `invoke gui-electron-build` - Build TypeScript source
+  - `invoke gui-electron-test-install` - Semi-automated installation testing
+    - Automated mode (`--automated` flag) for CI/CD
+    - Automatic app quit after testing
+    - Full cleanup of app data and preferences
+
+- **Documentation**:
+  - Updated README with Electron GUI usage
+  - Added installation and testing instructions
+  - Documented new invoke tasks
+
+### Changed
+- **GUI Client**: Replaced Kivy GUI with Electron + TypeScript implementation
+  - Better cross-platform support
+  - More native look and feel
+  - Easier to maintain and extend
+  - Modern web technologies (HTML, CSS, TypeScript)
+
+### Technical
+- Electron application structure:
+  - `src/main.ts` - Main process with IPC handlers
+  - `src/preload.ts` - Secure IPC bridge
+  - `src/renderer/` - UI components (HTML, CSS, TypeScript)
+- electron-builder configuration for packaging
+- TypeScript compilation with strict type checking
+- Automated testing with installation/uninstallation verification
+
 ## [0.4.2] - 2025-10-30
 
 ### Changed

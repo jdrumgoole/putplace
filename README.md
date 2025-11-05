@@ -85,20 +85,43 @@ ppclient --path /var/log --api-key your-api-key-here
 
 #### Graphical User Interface (GUI)
 
-```bash
-# Install with GUI support
-pip install putplace[gui]
+Cross-platform desktop application built with Electron and TypeScript:
 
-# Launch GUI client
-ppgui
+```bash
+# Run the packaged app (recommended - correct menu names)
+invoke gui-electron
+
+# Or run in development mode with DevTools
+invoke gui-electron --dev
+
+# Package the app into a distributable .app bundle
+invoke gui-electron-package
+
+# Test installation/uninstallation flow (manual)
+invoke gui-electron-test-install
+
+# Test installation/uninstallation flow (automated)
+invoke gui-electron-test-install --automated
+
+# Build only (compile TypeScript)
+invoke gui-electron-build
+
+# Run unpacked development version (menu shows "Electron")
+invoke gui-electron --packaged=False
 ```
 
-The GUI provides:
-- 📁 Visual directory picker
-- ⚙️ Settings panel (API key, server URL, hostname, IP)
-- 📋 Exclude patterns manager
-- 📊 Real-time upload progress
-- 📝 Log output viewer
+The Electron GUI provides:
+- 🖥️ Native cross-platform desktop application (Windows, macOS, Linux)
+- 📁 Native OS directory picker
+- 🔐 JWT-based authentication with login/registration
+- 👁️ Password visibility toggle
+- ⚙️ Settings panel with persistence (server URL, hostname, IP)
+- 📋 Exclude patterns manager with wildcards support
+- 📊 Real-time progress tracking with statistics
+- 📝 Color-coded log output (success, error, warning, info)
+- 💾 Settings saved between sessions (localStorage)
+- 🔐 Secure IPC communication
+- 🎨 Custom menu bar with proper branding
 
 See the [Client Guide](https://putplace.readthedocs.io/en/latest/client-guide.html) for more details.
 
@@ -156,6 +179,11 @@ invoke lint --fix         # Auto-fix linting issues
 invoke format             # Format code with black
 invoke typecheck          # Run mypy type checker
 invoke check              # Run all checks (format, lint, typecheck, test)
+
+# GUI Client
+invoke gui-electron-build # Build Electron desktop app
+invoke gui-electron       # Run Electron desktop app
+invoke gui-electron --dev # Run Electron app with DevTools
 
 # Other
 invoke build              # Build package

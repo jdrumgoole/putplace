@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PutPlace GUI</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>PutPlace GUI Client</h1>
+            <div id="auth-status" class="auth-status">Not logged in</div>
+        </header>
+
+        <!-- Auth Section -->
+        <section id="auth-section" class="card">
+            <!-- Login Form -->
+            <div id="login-form">
+                <h2>Login to PutPlace Server</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="login-username">Username:</label>
+                        <input type="text" id="login-username" placeholder="Enter username" />
+                    </div>
+                    <div class="form-group">
+                        <label for="login-password">Password:</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="login-password" placeholder="Enter password" />
+                            <button type="button" id="toggle-password" class="password-toggle" aria-label="Toggle password visibility">
+                                <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                                <svg id="eye-off-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+                                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                                    <line x1="1" y1="1" x2="23" y2="23"></line>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="login-server">Server URL:</label>
+                        <input type="text" id="login-server" value="http://localhost:8000" />
+                    </div>
+                </div>
+                <div class="auth-controls">
+                    <button id="login-btn" class="btn btn-primary">Login</button>
+                    <button id="logout-btn" class="btn btn-secondary" style="display: none;">Logout</button>
+                </div>
+                <div class="auth-toggle">
+                    Don't have an account? <a href="#" id="show-register">Register here</a>
+                </div>
+            </div>
+
+            <!-- Registration Form -->
+            <div id="register-form" style="display: none;">
+                <h2>Register New Account</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="register-username">Username:</label>
+                        <input type="text" id="register-username" placeholder="Enter username (min 3 chars)" />
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="register-email">Email:</label>
+                        <input type="email" id="register-email" placeholder="Enter email address" />
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="register-password">Password:</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="register-password" placeholder="Enter password (min 8 chars)" />
+                            <button type="button" id="toggle-register-password" class="password-toggle" aria-label="Toggle password visibility">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="register-fullname">Full Name (optional):</label>
+                        <input type="text" id="register-fullname" placeholder="Enter your full name" />
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="register-server">Server URL:</label>
+                        <input type="text" id="register-server" value="http://localhost:8000" />
+                    </div>
+                </div>
+                <div class="auth-controls">
+                    <button id="register-btn" class="btn btn-success">Register</button>
+                </div>
+                <div class="auth-toggle">
+                    Already have an account? <a href="#" id="show-login">Login here</a>
+                </div>
+            </div>
+
+            <div id="auth-message" class="message"></div>
+        </section>
+
+        <main id="main-content" style="display: none;">
+            <!-- Directory Selection -->
+            <section class="card">
+                <h2>Directory Selection</h2>
+                <div class="form-group">
+                    <button id="select-dir-btn" class="btn btn-primary">Select Directory</button>
+                    <div id="selected-path" class="path-display">No directory selected</div>
+                </div>
+            </section>
+
+            <!-- Settings -->
+            <section class="card">
+                <h2>System Information</h2>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="hostname">Hostname:</label>
+                        <input type="text" id="hostname" readonly />
+                    </div>
+                    <div class="form-group">
+                        <label for="ip-address">IP Address:</label>
+                        <input type="text" id="ip-address" readonly />
+                    </div>
+                </div>
+            </section>
+
+            <!-- Exclude Patterns -->
+            <section class="card">
+                <h2>Exclude Patterns</h2>
+                <div class="form-group">
+                    <div class="exclude-controls">
+                        <input type="text" id="pattern-input" placeholder="e.g., .git, *.log, node_modules" />
+                        <button id="add-pattern-btn" class="btn btn-small">Add Pattern</button>
+                    </div>
+                    <div id="patterns-list" class="patterns-list"></div>
+                </div>
+            </section>
+
+            <!-- Progress -->
+            <section class="card">
+                <h2>Progress</h2>
+                <div id="progress-text" class="progress-text">Ready</div>
+                <div class="progress-bar">
+                    <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
+                </div>
+                <div id="stats" class="stats">
+                    <span>Total: <strong id="stat-total">0</strong></span>
+                    <span>Successful: <strong id="stat-success">0</strong></span>
+                    <span>Failed: <strong id="stat-failed">0</strong></span>
+                </div>
+            </section>
+
+            <!-- Log Output -->
+            <section class="card">
+                <h2>Log Output</h2>
+                <div id="log-output" class="log-output"></div>
+            </section>
+
+            <!-- Controls -->
+            <section class="controls">
+                <button id="start-btn" class="btn btn-success">Start Upload</button>
+                <button id="stop-btn" class="btn btn-danger" disabled>Stop</button>
+                <button id="clear-log-btn" class="btn btn-secondary">Clear Log</button>
+            </section>
+        </main>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+</html>

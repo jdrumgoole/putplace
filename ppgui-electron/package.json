@@ -1,0 +1,36 @@
+{
+  "name": "ppgui-electron",
+  "productName": "PutPlace Client",
+  "version": "1.0.0",
+  "description": "PutPlace GUI - Desktop client for file metadata management",
+  "main": "dist/main.js",
+  "scripts": {
+    "build": "tsc && mkdir -p dist/renderer && cp src/renderer/*.html dist/renderer/ && cp src/renderer/*.css dist/renderer/",
+    "start": "npm run build && electron .",
+    "dev": "npm run build && electron . --dev",
+    "package": "npm run build && electron-builder"
+  },
+  "keywords": ["putplace", "file", "metadata", "electron"],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "electron": "^39.0.0",
+    "electron-builder": "^26.0.12",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "axios": "^1.13.1"
+  },
+  "build": {
+    "appId": "com.putplace.client",
+    "productName": "PutPlace Client",
+    "mac": {
+      "category": "public.app-category.utilities",
+      "target": ["dmg", "zip"]
+    },
+    "directories": {
+      "output": "release"
+    }
+  }
+}
