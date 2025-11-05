@@ -1,6 +1,7 @@
 """Pytest configuration and shared fixtures."""
 
 import asyncio
+import os
 import tempfile
 from pathlib import Path
 from typing import AsyncGenerator, Generator
@@ -15,6 +16,25 @@ from putplace.main import app
 
 
 @pytest.fixture(scope="session", autouse=True)
+def setup_test_jwt_secret():
+    """Set up JWT secret key for testing.
+
+    This runs automatically before all tests to ensure JWT authentication works.
+    """
+    # Set test JWT secret if not already set
+    if not os.environ.get("PUTPLACE_JWT_SECRET_KEY"):
+        os.environ["PUTPLACE_JWT_SECRET_KEY"] = "test-secret-key-for-testing-only-do-not-use-in-production"
+
+    # Reload settings to pick up the environment variable
+    from putplace import config
+    config.settings.jwt_secret_key = os.environ["PUTPLACE_JWT_SECRET_KEY"]
+
+    yield
+
+    # Cleanup is handled by pytest
+
+
+@pytest.fixture(scope="session", autouse=True)
 def cleanup_test_databases():
     """Clean up all test databases at the end of the test session.
 
@@ -25,17 +45,21 @@ def cleanup_test_databases():
 
     # Cleanup all test databases after tests complete
     async def _cleanup():
-        client = AsyncMongoClient("mongodb://localhost:27017")
         try:
-            # Get all database names
-            db_names = await client.list_database_names()
+            client = AsyncMongoClient("mongodb://localhost:27017", serverSelectionTimeoutMS=2000)
+            try:
+                # Get all database names
+                db_names = await client.list_database_names()
 
-            # Drop all test databases
-            for db_name in db_names:
-                if db_name.startswith("putplace_test_"):
-                    await client.drop_database(db_name)
-        finally:
-            await client.close()
+                # Drop all test databases
+                for db_name in db_names:
+                    if db_name.startswith("putplace_test_"):
+                        await client.drop_database(db_name)
+            finally:
+                await client.close()
+        except Exception:
+            # Silently ignore cleanup errors (MongoDB might not be running)
+            pass
 
     # Run the async cleanup
     asyncio.run(_cleanup())

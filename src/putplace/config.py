@@ -59,7 +59,9 @@ def sanitize_mongodb_url(url: str) -> str:
     """
     import re
     # Replace password in mongodb://user:pass@host/db with mongodb://user:****@host/db
-    return re.sub(r'://([^:]+):([^@]+)@', r'://\1:****@', url)
+    # Use greedy match (.+) for password to handle @ symbols in passwords
+    # The last @ before the host will be the delimiter
+    return re.sub(r'://([^:]+):(.+)@', r'://\1:****@', url)
 
 
 def load_toml_config() -> dict[str, Any]:
