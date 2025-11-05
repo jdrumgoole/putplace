@@ -12,7 +12,7 @@ from pymongo.errors import (
     ServerSelectionTimeoutError,
 )
 
-from .config import settings
+from .config import settings, sanitize_mongodb_url
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,7 @@ class MongoDB:
             OperationFailure: If authentication or other operation fails
         """
         try:
-            logger.info(f"Connecting to MongoDB at {settings.mongodb_url}")
+            logger.info(f"Connecting to MongoDB at {sanitize_mongodb_url(settings.mongodb_url)}")
             self.client = AsyncMongoClient(
                 settings.mongodb_url,
                 serverSelectionTimeoutMS=5000,  # 5 second timeout
@@ -68,7 +68,7 @@ class MongoDB:
             logger.error(f"MongoDB connection timeout: {e}")
             self.client = None
             self.collection = None
-            raise ConnectionFailure(f"Could not connect to MongoDB at {settings.mongodb_url}") from e
+            raise ConnectionFailure(f"Could not connect to MongoDB at {sanitize_mongodb_url(settings.mongodb_url)}") from e
         except ConnectionFailure as e:
             logger.error(f"MongoDB connection failed: {e}")
             self.client = None

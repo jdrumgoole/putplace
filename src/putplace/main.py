@@ -4,10 +4,14 @@ import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pymongo.errors import ConnectionFailure
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
 
 from .config import settings
 from . import database
@@ -331,6 +335,49 @@ app = FastAPI(
     description=settings.api_description,
     lifespan=lifespan,
 )
+
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address, enabled=settings.rate_limit_enabled)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Add CORS middleware
+cors_origins = settings.cors_allow_origins.split(",") if settings.cors_allow_origins != "*" else ["*"]
+cors_methods = settings.cors_allow_methods.split(",")
+cors_headers = settings.cors_allow_headers.split(",") if settings.cors_allow_headers != "*" else ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=settings.cors_allow_credentials,
+    allow_methods=cors_methods,
+    allow_headers=cors_headers,
+)
+
+
+# Add security headers middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """Add security headers to all responses."""
+    response = await call_next(request)
+
+    # HSTS - Force HTTPS (only in production)
+    if not settings.debug_mode:
+        response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+    # Prevent MIME type sniffing
+    response.headers["X-Content-Type-Options"] = "nosniff"
+
+    # Prevent clickjacking
+    response.headers["X-Frame-Options"] = "DENY"
+
+    # XSS protection (legacy browsers)
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+
+    # Content Security Policy
+    response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'"
+
+    return response
 
 
 @app.get("/", response_class=HTMLResponse, tags=["health"])
@@ -691,7 +738,9 @@ async def health(db: MongoDB = Depends(get_db)) -> dict[str, str | dict]:
     status_code=status.HTTP_201_CREATED,
     tags=["files"],
 )
+@limiter.limit(settings.rate_limit_api)
 async def put_file(
+    request: Request,
     file_metadata: FileMetadata,
     db: MongoDB = Depends(get_db),
     api_key: dict = Depends(get_current_api_key),
@@ -794,7 +843,9 @@ async def get_file(
     status_code=status.HTTP_200_OK,
     tags=["files"],
 )
+@limiter.limit(settings.rate_limit_api)
 async def upload_file(
+    request: Request,
     sha256: str,
     hostname: str,
     filepath: str,
@@ -2084,7 +2135,8 @@ async def register_page() -> str:
 
 
 @app.post("/api/register", tags=["users"])
-async def register_user(user_data: UserCreate, db: MongoDB = Depends(get_db)) -> dict:
+@limiter.limit(settings.rate_limit_login)
+async def register_user(request: Request, user_data: UserCreate, db: MongoDB = Depends(get_db)) -> dict:
     """Register a new user."""
     from pymongo.errors import DuplicateKeyError
     from .user_auth import get_password_hash
@@ -2111,33 +2163,62 @@ async def register_user(user_data: UserCreate, db: MongoDB = Depends(get_db)) ->
 
 
 @app.post("/api/login", response_model=Token, tags=["users"])
-async def login_user(user_login: UserLogin, db: MongoDB = Depends(get_db)) -> Token:
-    """Login and get access token."""
+@limiter.limit(settings.rate_limit_login)
+async def login_user(request: Request, user_login: UserLogin, db: MongoDB = Depends(get_db)) -> Token:
+    """Login and get access token.
+
+    Rate limited to prevent brute force attacks.
+    Account lockout after 5 failed attempts in 15 minutes.
+    """
     from .user_auth import verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
+    from .lockout import (
+        is_account_locked,
+        get_lockout_time_remaining,
+        record_failed_login,
+        clear_failed_attempts,
+    )
     from datetime import timedelta
-    
+
+    # Check if account is locked
+    if is_account_locked(user_login.username):
+        remaining = get_lockout_time_remaining(user_login.username)
+        logger.warning(f"Login attempt for locked account: {user_login.username}")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Account temporarily locked due to too many failed login attempts. "
+                   f"Try again in {remaining} seconds.",
+            headers={"Retry-After": str(remaining)},
+        )
+
     # Get user from database
     user = await db.get_user_by_username(user_login.username)
-    
+
     if not user or not verify_password(user_login.password, user["hashed_password"]):
+        # Record failed attempt
+        record_failed_login(user_login.username)
+        logger.warning(f"Failed login attempt for: {user_login.username}")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     if not user.get("is_active", True):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Inactive user account"
         )
-    
+
+    # Successful login - clear any failed attempts
+    clear_failed_attempts(user_login.username)
+    logger.info(f"Successful login for: {user_login.username}")
+
     # Create access token
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user["username"]}, expires_delta=access_token_expires
     )
-    
+
     return Token(access_token=access_token)
 
 

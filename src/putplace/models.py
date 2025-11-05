@@ -1,9 +1,10 @@
 """Data models for file metadata and authentication."""
 
+import re
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class FileMetadata(BaseModel):
@@ -122,15 +123,39 @@ class UserCreate(BaseModel):
 
     username: str = Field(..., description="Username", min_length=3, max_length=50)
     email: str = Field(..., description="Email address")
-    password: str = Field(..., description="Password", min_length=8)
+    password: str = Field(..., description="Password", min_length=12, max_length=128)
     full_name: Optional[str] = Field(None, description="Full name")
+
+    @field_validator('password')
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        """Validate password meets security requirements.
+
+        Requirements:
+        - At least 12 characters long
+        - At least one uppercase letter
+        - At least one lowercase letter
+        - At least one digit
+        - At least one special character
+        """
+        if len(v) < 12:
+            raise ValueError('Password must be at least 12 characters long')
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        if not re.search(r'[a-z]', v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        if not re.search(r'\d', v):
+            raise ValueError('Password must contain at least one digit')
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>_\-+=\[\]\\\/;\'`~]', v):
+            raise ValueError('Password must contain at least one special character')
+        return v
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "username": "johndoe",
                 "email": "john@example.com",
-                "password": "securepassword123",
+                "password": "SecurePass123!",
                 "full_name": "John Doe"
             }
         }

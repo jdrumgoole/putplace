@@ -48,6 +48,20 @@ def find_config_file() -> Optional[Path]:
     return None
 
 
+def sanitize_mongodb_url(url: str) -> str:
+    """Remove credentials from MongoDB URL for safe logging.
+
+    Args:
+        url: MongoDB connection URL
+
+    Returns:
+        Sanitized URL with password replaced by ****
+    """
+    import re
+    # Replace password in mongodb://user:pass@host/db with mongodb://user:****@host/db
+    return re.sub(r'://([^:]+):([^@]+)@', r'://\1:****@', url)
+
+
 def load_toml_config() -> dict[str, Any]:
     """Load configuration from TOML file.
 
@@ -155,6 +169,26 @@ class Settings(BaseSettings):
     aws_profile: Optional[str] = None  # Use specific profile from ~/.aws/credentials
     aws_access_key_id: Optional[str] = None  # NOT RECOMMENDED: use IAM roles or profiles instead
     aws_secret_access_key: Optional[str] = None  # NOT RECOMMENDED: use IAM roles or profiles instead
+
+    # Security settings
+    jwt_secret_key: Optional[str] = None  # REQUIRED for JWT authentication
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 30
+
+    # CORS settings
+    cors_allow_origins: str = "*"  # Comma-separated list or "*" for all (use specific domains in production)
+    cors_allow_credentials: bool = True
+    cors_allow_methods: str = "GET,POST,PUT,DELETE,OPTIONS"
+    cors_allow_headers: str = "*"
+
+    # Rate limiting settings
+    rate_limit_enabled: bool = True
+    rate_limit_login: str = "5/minute"  # Login endpoint rate limit
+    rate_limit_api: str = "100/minute"  # General API rate limit
+
+    # Application settings
+    debug_mode: bool = False  # Set to True for development
+    allowed_hosts: str = "*"  # Comma-separated list of allowed hosts for TrustedHostMiddleware
 
     model_config = SettingsConfigDict(
         case_sensitive=False,
