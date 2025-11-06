@@ -1,0 +1,625 @@
+#!/usr/bin/env python3
+"""PutPlace Configuration Script
+
+This script configures a PutPlace installation by:
+- Creating an initial admin user
+- Checking AWS S3 and SES access
+- Configuring storage backend (local or S3)
+- Setting up environment variables
+- Validating the configuration
+
+Can run interactively or non-interactively for automation.
+"""
+
+import argparse
+import asyncio
+import os
+import sys
+from pathlib import Path
+from typing import Optional
+import secrets
+import string
+
+try:
+    from rich.console import Console
+    from rich.prompt import Prompt, Confirm
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich import print as rprint
+    RICH_AVAILABLE = True
+except ImportError:
+    RICH_AVAILABLE = False
+    Console = None
+
+
+def print_message(message: str, style: str = ""):
+    """Print message with or without rich formatting."""
+    if RICH_AVAILABLE:
+        rprint(f"[{style}]{message}[/{style}]" if style else message)
+    else:
+        print(message)
+
+
+def print_panel(message: str, title: str = "", style: str = ""):
+    """Print a panel with or without rich."""
+    if RICH_AVAILABLE:
+        console = Console()
+        console.print(Panel(message, title=title, border_style=style))
+    else:
+        print(f"\n=== {title} ===")
+        print(message)
+        print("=" * (len(title) + 8))
+
+
+def generate_secure_password(length: int = 21) -> str:
+    """Generate a cryptographically secure random password."""
+    alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
+
+
+async def check_mongodb_connection(mongodb_url: str) -> tuple[bool, str]:
+    """Check if MongoDB is accessible."""
+    try:
+        from motor.motor_asyncio import AsyncIOMotorClient
+
+        client = AsyncIOMotorClient(mongodb_url, serverSelectionTimeoutMS=5000)
+        # Try to get server info
+        await client.admin.command('ping')
+        await client.close()
+        return True, "MongoDB connection successful"
+    except ImportError:
+        return False, "motor library not installed (PyMongo 4.10+ required)"
+    except Exception as e:
+        return False, f"MongoDB connection failed: {str(e)}"
+
+
+async def check_s3_access(aws_region: Optional[str] = None) -> tuple[bool, str]:
+    """Check if AWS S3 is accessible."""
+    try:
+        import boto3
+        from botocore.exceptions import NoCredentialsError, ClientError
+
+        # Create S3 client
+        if aws_region:
+            s3_client = boto3.client('s3', region_name=aws_region)
+        else:
+            s3_client = boto3.client('s3')
+
+        # Try to list buckets as a simple connectivity test
+        s3_client.list_buckets()
+        return True, "AWS S3 access confirmed"
+    except ImportError:
+        return False, "boto3 library not installed"
+    except NoCredentialsError:
+        return False, "AWS credentials not configured"
+    except ClientError as e:
+        return False, f"AWS S3 access failed: {e.response['Error']['Message']}"
+    except Exception as e:
+        return False, f"AWS S3 check failed: {str(e)}"
+
+
+async def check_ses_access(aws_region: Optional[str] = None) -> tuple[bool, str]:
+    """Check if AWS SES is accessible."""
+    try:
+        import boto3
+        from botocore.exceptions import NoCredentialsError, ClientError
+
+        # Create SES client
+        if aws_region:
+            ses_client = boto3.client('ses', region_name=aws_region)
+        else:
+            ses_client = boto3.client('ses')
+
+        # Try to get account sending quota
+        ses_client.get_send_quota()
+        return True, "AWS SES access confirmed"
+    except ImportError:
+        return False, "boto3 library not installed"
+    except NoCredentialsError:
+        return False, "AWS credentials not configured"
+    except ClientError as e:
+        return False, f"AWS SES access failed: {e.response['Error']['Message']}"
+    except Exception as e:
+        return False, f"AWS SES check failed: {str(e)}"
+
+
+async def create_admin_user(
+    mongodb_url: str,
+    username: str,
+    email: str,
+    password: str
+) -> tuple[bool, str]:
+    """Create an admin user in the database."""
+    try:
+        from motor.motor_asyncio import AsyncIOMotorClient
+        from putplace.user_auth import hash_password
+        from datetime import datetime
+
+        client = AsyncIOMotorClient(mongodb_url)
+        db = client.get_database("putplace")
+        users_collection = db.users
+
+        # Check if user already exists
+        existing_user = await users_collection.find_one({"username": username})
+        if existing_user:
+            await client.close()
+            return False, f"User '{username}' already exists"
+
+        # Create user document
+        user_doc = {
+            "username": username,
+            "email": email,
+            "password_hash": hash_password(password),
+            "full_name": "Administrator",
+            "is_admin": True,
+            "created_at": datetime.utcnow()
+        }
+
+        # Insert user
+        await users_collection.insert_one(user_doc)
+        await client.close()
+
+        return True, f"Admin user '{username}' created successfully"
+    except ImportError as e:
+        return False, f"Required libraries not installed: {e}"
+    except Exception as e:
+        return False, f"Failed to create admin user: {str(e)}"
+
+
+def write_toml_file(config: dict, toml_path: Path) -> tuple[bool, str]:
+    """Write configuration to ppserver.toml file."""
+    try:
+        import tomli_w
+
+        # Build TOML configuration
+        toml_config = {
+            "database": {
+                "mongodb_url": config.get('mongodb_url', 'mongodb://localhost:27017'),
+                "mongodb_database": config.get('mongodb_database', 'putplace'),
+                "mongodb_collection": "file_metadata"
+            },
+            "api": {
+                "title": "PutPlace API",
+                "description": "File metadata storage API"
+            },
+            "storage": {}
+        }
+
+        # Storage configuration
+        storage_backend = config.get('storage_backend', 'local')
+        toml_config["storage"]["backend"] = storage_backend
+
+        if storage_backend == 'local':
+            toml_config["storage"]["path"] = config.get('storage_path', './storage/files')
+        elif storage_backend == 's3':
+            toml_config["storage"]["s3_bucket_name"] = config.get('s3_bucket', '')
+            if config.get('aws_region'):
+                toml_config["storage"]["s3_region_name"] = config['aws_region']
+            toml_config["storage"]["s3_prefix"] = "files/"
+
+        # Write TOML file with header comment
+        header = "# PutPlace Server Configuration\n"
+        header += "# Generated by putplace-configure\n\n"
+
+        toml_content = tomli_w.dumps(toml_config)
+
+        # Add AWS section comments if S3 is used
+        if storage_backend == 's3':
+            aws_comments = "\n[aws]\n"
+            aws_comments += "# AWS credentials use the standard AWS credential chain\n"
+            aws_comments += "# Recommended: Use IAM roles or AWS CLI config instead of hardcoding credentials\n"
+            toml_content += aws_comments
+
+        toml_path.write_text(header + toml_content)
+
+        return True, f"Configuration written to {toml_path}"
+    except ImportError:
+        return False, "tomli-w library not installed (required for TOML writing)"
+    except Exception as e:
+        return False, f"Failed to write TOML file: {str(e)}"
+
+
+async def run_interactive_config() -> dict:
+    """Run interactive configuration wizard."""
+    config = {}
+
+    if RICH_AVAILABLE:
+        console = Console()
+        console.print("\n[bold cyan]PutPlace Configuration Wizard[/bold cyan]\n")
+    else:
+        print("\n=== PutPlace Configuration Wizard ===\n")
+
+    # MongoDB Configuration
+    print_panel("MongoDB Configuration", title="Step 1/5", style="cyan")
+
+    if RICH_AVAILABLE:
+        mongodb_url = Prompt.ask(
+            "MongoDB URL",
+            default="mongodb://localhost:27017"
+        )
+    else:
+        mongodb_url = input("MongoDB URL [mongodb://localhost:27017]: ").strip() or "mongodb://localhost:27017"
+
+    config['mongodb_url'] = mongodb_url
+
+    # Test MongoDB connection
+    print_message("Testing MongoDB connection...", "yellow")
+    success, message = await check_mongodb_connection(mongodb_url)
+    print_message(f"{'✓' if success else '✗'} {message}", "green" if success else "red")
+
+    if not success:
+        print_message("Warning: MongoDB connection failed. Configuration will continue but server may not start.", "yellow")
+
+    # Admin User Configuration
+    print_panel("Admin User Configuration", title="Step 2/5", style="cyan")
+
+    if RICH_AVAILABLE:
+        admin_username = Prompt.ask("Admin username", default="admin")
+        admin_email = Prompt.ask("Admin email", default="admin@localhost")
+        generate_pwd = Confirm.ask("Generate secure password?", default=True)
+    else:
+        admin_username = input("Admin username [admin]: ").strip() or "admin"
+        admin_email = input("Admin email [admin@localhost]: ").strip() or "admin@localhost"
+        generate_pwd_input = input("Generate secure password? [Y/n]: ").strip().lower()
+        generate_pwd = generate_pwd_input != 'n'
+
+    if generate_pwd:
+        admin_password = generate_secure_password()
+        print_message(f"Generated password: {admin_password}", "green bold")
+        print_message("IMPORTANT: Save this password securely!", "red bold")
+    else:
+        if RICH_AVAILABLE:
+            admin_password = Prompt.ask("Admin password", password=True)
+        else:
+            import getpass
+            admin_password = getpass.getpass("Admin password: ")
+
+    config['admin_username'] = admin_username
+    config['admin_email'] = admin_email
+    config['admin_password'] = admin_password
+
+    # Create admin user
+    print_message("Creating admin user...", "yellow")
+    success, message = await create_admin_user(mongodb_url, admin_username, admin_email, admin_password)
+    print_message(f"{'✓' if success else '✗'} {message}", "green" if success else "red")
+
+    # AWS Configuration
+    print_panel("AWS Configuration (Optional)", title="Step 3/5", style="cyan")
+
+    if RICH_AVAILABLE:
+        check_aws = Confirm.ask("Check AWS access (S3/SES)?", default=False)
+    else:
+        check_aws_input = input("Check AWS access (S3/SES)? [y/N]: ").strip().lower()
+        check_aws = check_aws_input == 'y'
+
+    config['has_s3_access'] = False
+    config['has_ses_access'] = False
+
+    if check_aws:
+        if RICH_AVAILABLE:
+            aws_region = Prompt.ask("AWS Region", default="us-east-1")
+        else:
+            aws_region = input("AWS Region [us-east-1]: ").strip() or "us-east-1"
+
+        config['aws_region'] = aws_region
+
+        # Check S3 access
+        print_message("Checking S3 access...", "yellow")
+        s3_success, s3_message = await check_s3_access(aws_region)
+        print_message(f"{'✓' if s3_success else '✗'} {s3_message}", "green" if s3_success else "red")
+        config['has_s3_access'] = s3_success
+
+        # Check SES access
+        print_message("Checking SES access...", "yellow")
+        ses_success, ses_message = await check_ses_access(aws_region)
+        print_message(f"{'✓' if ses_success else '✗'} {ses_message}", "green" if ses_success else "red")
+        config['has_ses_access'] = ses_success
+
+    # Storage Backend Selection
+    print_panel("Storage Backend Selection", title="Step 4/5", style="cyan")
+
+    if config.get('has_s3_access'):
+        if RICH_AVAILABLE:
+            use_s3 = Confirm.ask("Use S3 for storage?", default=True)
+        else:
+            use_s3_input = input("Use S3 for storage? [Y/n]: ").strip().lower()
+            use_s3 = use_s3_input != 'n'
+
+        if use_s3:
+            if RICH_AVAILABLE:
+                s3_bucket = Prompt.ask("S3 bucket name")
+            else:
+                s3_bucket = input("S3 bucket name: ").strip()
+
+            config['storage_backend'] = 's3'
+            config['s3_bucket'] = s3_bucket
+        else:
+            config['storage_backend'] = 'local'
+    else:
+        config['storage_backend'] = 'local'
+        print_message("Using local storage (S3 not available)", "yellow")
+
+    if config['storage_backend'] == 'local':
+        if RICH_AVAILABLE:
+            storage_path = Prompt.ask("Local storage path", default="./storage/files")
+        else:
+            storage_path = input("Local storage path [./storage/files]: ").strip() or "./storage/files"
+
+        config['storage_path'] = storage_path
+
+    # Configuration File
+    print_panel("Configuration File", title="Step 5/5", style="cyan")
+
+    if RICH_AVAILABLE:
+        config_path_str = Prompt.ask("Path to configuration file", default="ppserver.toml")
+    else:
+        config_path_str = input("Path to configuration file [ppserver.toml]: ").strip() or "ppserver.toml"
+
+    config['config_path'] = Path(config_path_str)
+
+    return config
+
+
+async def run_noninteractive_config(args) -> dict:
+    """Run non-interactive configuration using command-line arguments."""
+    config = {
+        'mongodb_url': args.mongodb_url,
+        'mongodb_database': args.mongodb_database,
+        'admin_username': args.admin_username,
+        'admin_email': args.admin_email,
+        'storage_backend': args.storage_backend,
+        'config_path': Path(args.config_file),
+    }
+
+    # Generate or use provided password
+    if args.admin_password:
+        config['admin_password'] = args.admin_password
+    else:
+        config['admin_password'] = generate_secure_password()
+        print_message(f"Generated admin password: {config['admin_password']}", "green bold")
+        print_message("IMPORTANT: Save this password securely!", "red bold")
+
+    # Storage configuration
+    if args.storage_backend == 'local':
+        config['storage_path'] = args.storage_path
+    elif args.storage_backend == 's3':
+        config['s3_bucket'] = args.s3_bucket
+        config['aws_region'] = args.aws_region
+
+    # Test MongoDB
+    print_message("Testing MongoDB connection...", "yellow")
+    success, message = await check_mongodb_connection(config['mongodb_url'])
+    print_message(f"{'✓' if success else '✗'} {message}", "green" if success else "red")
+
+    if not success and not args.skip_checks:
+        print_message("Error: MongoDB connection failed. Use --skip-checks to continue anyway.", "red")
+        sys.exit(1)
+
+    # Create admin user
+    print_message("Creating admin user...", "yellow")
+    success, message = await create_admin_user(
+        config['mongodb_url'],
+        config['admin_username'],
+        config['admin_email'],
+        config['admin_password']
+    )
+    print_message(f"{'✓' if success else '✗'} {message}", "green" if success else "red")
+
+    if not success and not args.skip_checks:
+        print_message("Error: Failed to create admin user.", "red")
+        sys.exit(1)
+
+    # Check AWS if S3 backend
+    if args.storage_backend == 's3' and not args.skip_aws_checks:
+        print_message("Checking S3 access...", "yellow")
+        s3_success, s3_message = await check_s3_access(args.aws_region)
+        print_message(f"{'✓' if s3_success else '✗'} {s3_message}", "green" if s3_success else "red")
+
+        if not s3_success and not args.skip_checks:
+            print_message("Error: S3 access check failed.", "red")
+            sys.exit(1)
+
+    return config
+
+
+def print_summary(config: dict):
+    """Print configuration summary."""
+    if RICH_AVAILABLE:
+        console = Console()
+
+        table = Table(title="Configuration Summary", show_header=True)
+        table.add_column("Setting", style="cyan")
+        table.add_column("Value", style="green")
+
+        table.add_row("MongoDB URL", config.get('mongodb_url', 'N/A'))
+        table.add_row("Admin Username", config.get('admin_username', 'N/A'))
+        table.add_row("Admin Email", config.get('admin_email', 'N/A'))
+        table.add_row("Storage Backend", config.get('storage_backend', 'N/A'))
+
+        if config.get('storage_backend') == 'local':
+            table.add_row("Storage Path", config.get('storage_path', 'N/A'))
+        elif config.get('storage_backend') == 's3':
+            table.add_row("S3 Bucket", config.get('s3_bucket', 'N/A'))
+            table.add_row("AWS Region", config.get('aws_region', 'N/A'))
+
+        table.add_row("Configuration File", str(config.get('config_path', 'N/A')))
+
+        console.print(table)
+    else:
+        print("\n=== Configuration Summary ===")
+        print(f"MongoDB URL: {config.get('mongodb_url', 'N/A')}")
+        print(f"Admin Username: {config.get('admin_username', 'N/A')}")
+        print(f"Admin Email: {config.get('admin_email', 'N/A')}")
+        print(f"Storage Backend: {config.get('storage_backend', 'N/A')}")
+
+        if config.get('storage_backend') == 'local':
+            print(f"Storage Path: {config.get('storage_path', 'N/A')}")
+        elif config.get('storage_backend') == 's3':
+            print(f"S3 Bucket: {config.get('s3_bucket', 'N/A')}")
+            print(f"AWS Region: {config.get('aws_region', 'N/A')}")
+
+        print(f"Configuration File: {config.get('config_path', 'N/A')}")
+        print("=" * 30)
+
+
+async def async_main():
+    """Async main function for the configuration script."""
+    parser = argparse.ArgumentParser(
+        description="Configure PutPlace server installation",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Interactive configuration
+  putplace-configure
+
+  # Non-interactive with local storage
+  putplace-configure --non-interactive \\
+    --admin-username admin \\
+    --admin-email admin@example.com \\
+    --storage-backend local
+
+  # Non-interactive with S3 storage
+  putplace-configure --non-interactive \\
+    --admin-username admin \\
+    --admin-email admin@example.com \\
+    --storage-backend s3 \\
+    --s3-bucket my-putplace-bucket \\
+    --aws-region us-west-2
+        """
+    )
+
+    # General options
+    parser.add_argument(
+        '--non-interactive',
+        action='store_true',
+        help='Run in non-interactive mode (requires all options)'
+    )
+    parser.add_argument(
+        '--skip-checks',
+        action='store_true',
+        help='Skip validation checks and continue on errors'
+    )
+    parser.add_argument(
+        '--skip-aws-checks',
+        action='store_true',
+        help='Skip AWS S3/SES connectivity checks'
+    )
+
+    # MongoDB options
+    parser.add_argument(
+        '--mongodb-url',
+        default='mongodb://localhost:27017',
+        help='MongoDB connection URL (default: mongodb://localhost:27017)'
+    )
+    parser.add_argument(
+        '--mongodb-database',
+        default='putplace',
+        help='MongoDB database name (default: putplace)'
+    )
+
+    # Admin user options
+    parser.add_argument(
+        '--admin-username',
+        default='admin',
+        help='Admin username (default: admin)'
+    )
+    parser.add_argument(
+        '--admin-email',
+        default='admin@localhost',
+        help='Admin email (default: admin@localhost)'
+    )
+    parser.add_argument(
+        '--admin-password',
+        help='Admin password (will be generated if not provided)'
+    )
+
+    # Storage options
+    parser.add_argument(
+        '--storage-backend',
+        choices=['local', 's3'],
+        default='local',
+        help='Storage backend to use (default: local)'
+    )
+    parser.add_argument(
+        '--storage-path',
+        default='./storage/files',
+        help='Local storage path (default: ./storage/files)'
+    )
+    parser.add_argument(
+        '--s3-bucket',
+        help='S3 bucket name (required if storage-backend=s3)'
+    )
+    parser.add_argument(
+        '--aws-region',
+        default='us-east-1',
+        help='AWS region (default: us-east-1)'
+    )
+
+    # Configuration file options
+    parser.add_argument(
+        '--config-file',
+        default='ppserver.toml',
+        help='Path to configuration file (default: ppserver.toml)'
+    )
+
+    args = parser.parse_args()
+
+    # Validate S3 options
+    if args.non_interactive and args.storage_backend == 's3' and not args.s3_bucket:
+        parser.error("--s3-bucket is required when using --storage-backend=s3")
+
+    try:
+        # Run configuration
+        if args.non_interactive:
+            print_panel("Non-Interactive Configuration Mode", style="cyan")
+            config = await run_noninteractive_config(args)
+        else:
+            config = await run_interactive_config()
+
+        # Write configuration file
+        print_message("\nWriting configuration...", "yellow")
+        success, message = write_toml_file(config, config['config_path'])
+        print_message(f"{'✓' if success else '✗'} {message}", "green" if success else "red")
+
+        if not success:
+            sys.exit(1)
+
+        # Print summary
+        print_summary(config)
+
+        # Final instructions
+        print_panel(
+            f"""Configuration complete!
+
+Next steps:
+1. Review the generated configuration: {config['config_path']}
+2. Start MongoDB if not already running: invoke mongo-start
+3. Start the PutPlace server: invoke serve
+
+Admin credentials:
+  Username: {config['admin_username']}
+  Password: {config['admin_password']}
+  Email: {config['admin_email']}
+
+IMPORTANT: Save the admin password securely!
+""",
+            title="Setup Complete",
+            style="green"
+        )
+
+    except KeyboardInterrupt:
+        print_message("\n\nConfiguration cancelled by user.", "yellow")
+        sys.exit(1)
+    except Exception as e:
+        print_message(f"\nError: {e}", "red")
+        if not args.skip_checks:
+            sys.exit(1)
+
+
+def main():
+    """Synchronous entry point wrapper."""
+    asyncio.run(async_main())
+
+
+if __name__ == '__main__':
+    main()

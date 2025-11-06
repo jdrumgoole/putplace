@@ -12,9 +12,11 @@ PutPlace server supports multiple configuration methods (in priority order):
 2. **ppserver.toml** - Recommended configuration file
 3. **Default values** - Lowest priority
 
+**Important:** As of version 0.5.1, environment variables correctly take precedence over `ppserver.toml` settings. Prior versions had a bug where TOML values would override environment variables.
+
 **Note:** `.env` files are no longer supported as of version 0.2.0. Use `ppserver.toml` instead.
 
-**Recommendation:** Use `ppserver.toml` for structured configuration. Environment variables are useful for overrides in production.
+**Recommendation:** Use `ppserver.toml` for structured configuration. Environment variables are useful for overrides in production and testing.
 
 ### Environment Variables
 

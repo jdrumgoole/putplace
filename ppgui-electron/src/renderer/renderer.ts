@@ -497,5 +497,105 @@ function resetUploadState() {
   progressFill.style.width = '0%';
 }
 
+// Google OAuth handling
+declare const google: any;  // Google Sign-In library
+
+// Google Sign-In configuration
+const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';  // Will be set from server config
+
+async function initializeGoogleSignIn() {
+  // Wait for Google library to load
+  if (typeof google === 'undefined') {
+    console.log('Google Sign-In library not loaded yet, waiting...');
+    setTimeout(initializeGoogleSignIn, 100);
+    return;
+  }
+
+  // Fetch Google Client ID from server
+  try {
+    const response = await fetch(`${serverUrl}/api/oauth/config`);
+    const config = await response.json();
+
+    if (!config.google_client_id) {
+      console.log('Google OAuth not configured on server');
+      return;
+    }
+
+    // Initialize Google Sign-In button
+    google.accounts.id.initialize({
+      client_id: config.google_client_id,
+      callback: handleGoogleCallback
+    });
+
+    google.accounts.id.renderButton(
+      document.getElementById('google-signin-button'),
+      {
+        theme: 'outline',
+        size: 'large',
+        text: 'signin_with',
+        width: 250
+      }
+    );
+
+    console.log('Google Sign-In initialized');
+  } catch (error) {
+    console.log('Could not initialize Google Sign-In:', error);
+    // Hide Google Sign-In button if not configured
+    const googleButton = document.getElementById('google-signin-button');
+    if (googleButton && googleButton.parentElement) {
+      googleButton.parentElement.style.display = 'none';
+      const separator = document.querySelector('.oauth-separator');
+      if (separator) {
+        (separator as HTMLElement).style.display = 'none';
+      }
+    }
+  }
+}
+
+async function handleGoogleCallback(response: any) {
+  const idToken = response.credential;
+
+  loginBtn.disabled = true;
+  showAuthMessage('Signing in with Google...', 'info');
+
+  try {
+    // Send ID token to backend
+    const result = await fetch(`${serverUrl}/api/auth/google`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ id_token: idToken })
+    });
+
+    const data = await result.json();
+
+    if (result.ok && data.access_token) {
+      accessToken = data.access_token;
+
+      // Decode JWT to get username (simple base64 decode)
+      const payload = JSON.parse(atob(data.access_token.split('.')[1]));
+      currentUsername = payload.sub;
+
+      // Save to localStorage
+      localStorage.setItem('accessToken', accessToken!);
+      localStorage.setItem('username', currentUsername!);
+      localStorage.setItem('serverUrl', serverUrl);
+
+      showAuthMessage('Successfully signed in with Google!', 'success');
+      showMainContent();
+    } else {
+      showAuthMessage(data.detail || 'Google Sign-In failed', 'error');
+      loginBtn.disabled = false;
+    }
+  } catch (error: any) {
+    showAuthMessage(`Error: ${error.message}`, 'error');
+    loginBtn.disabled = false;
+  }
+}
+
 // Initialize app
 init();
+
+// Initialize Google Sign-In after a delay to ensure library is loaded
+setTimeout(initializeGoogleSignIn, 500);

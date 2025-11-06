@@ -248,7 +248,6 @@ async def test_e2e_file_content_upload_and_deduplication(client, test_db, temp_t
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-@pytest.mark.skip(reason="Subprocess approach has authentication issues - using simpler test above instead")
 async def test_e2e_real_server_and_client_with_upload():
     """Test complete workflow with real server and client subprocess.
 
@@ -348,6 +347,13 @@ async def test_e2e_real_server_and_client_with_upload():
                 except (httpx.ConnectError, httpx.TimeoutException):
                     time.sleep(1)
 
+            if not server_ready:
+                # Server failed to start - get logs
+                server_stdout = server_stdout_file.read_text() if server_stdout_file.exists() else ""
+                server_stderr = server_stderr_file.read_text() if server_stderr_file.exists() else ""
+                print(f"\n=== SERVER START FAILURE ===")
+                print(f"\n=== SERVER STDOUT ===\n{server_stdout}")
+                print(f"\n=== SERVER STDERR ===\n{server_stderr}")
             assert server_ready, "Server failed to start within 30 seconds"
 
             # Give server a moment to fully initialize
@@ -413,12 +419,15 @@ async def test_e2e_real_server_and_client_with_upload():
                 timeout=30,
             )
 
+            # Print client output for debugging
+            print(f"\n=== CLIENT STDOUT ===\n{result.stdout}")
+            print(f"\n=== CLIENT STDERR ===\n{result.stderr}")
+
             if result.returncode != 0:
                 # Get server logs for debugging
                 server_stdout = server_stdout_file.read_text() if server_stdout_file.exists() else ""
                 server_stderr = server_stderr_file.read_text() if server_stderr_file.exists() else ""
                 print(f"\n=== SERVER STDOUT ===\n{server_stdout}\n=== SERVER STDERR ===\n{server_stderr}")
-                print(f"\n=== CLIENT STDOUT ===\n{result.stdout}\n=== CLIENT STDERR ===\n{result.stderr}")
 
             assert result.returncode == 0, f"Client failed with status {result.returncode}"
 
@@ -430,7 +439,8 @@ async def test_e2e_real_server_and_client_with_upload():
             assert doc1["file_size"] == test_file1.stat().st_size
 
             # Verify file content was stored in storage backend
-            stored_file_path = storage_path / sha256_file1[:2] / sha256_file1[2:4] / sha256_file1
+            # Storage backend uses first 2 chars as subdirectory: storage/37/SHA256
+            stored_file_path = storage_path / sha256_file1[:2] / sha256_file1
             assert stored_file_path.exists(), "File content not stored in storage backend"
             assert stored_file_path.read_text() == "Hello from PutPlace test file 1"
 
@@ -456,7 +466,7 @@ async def test_e2e_real_server_and_client_with_upload():
             assert doc2["sha256"] == sha256_file2
 
             # Verify second file content
-            stored_file_path2 = storage_path / sha256_file2[:2] / sha256_file2[2:4] / sha256_file2
+            stored_file_path2 = storage_path / sha256_file2[:2] / sha256_file2
             assert stored_file_path2.exists(), "Second file content not stored"
             assert stored_file_path2.read_text() == "Hello from PutPlace test file 2"
 

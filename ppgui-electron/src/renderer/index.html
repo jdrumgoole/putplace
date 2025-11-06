@@ -50,6 +50,12 @@
                     <button id="login-btn" class="btn btn-primary">Login</button>
                     <button id="logout-btn" class="btn btn-secondary" style="display: none;">Logout</button>
                 </div>
+                <div class="oauth-separator">
+                    <span>OR</span>
+                </div>
+                <div class="oauth-controls">
+                    <div id="google-signin-button" class="google-signin-button"></div>
+                </div>
                 <div class="auth-toggle">
                     Don't have an account? <a href="#" id="show-register">Register here</a>
                 </div>
@@ -174,5 +180,7 @@
     </div>
 
     <script src="renderer.js"></script>
+    <!-- Google Sign-In Library -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
 </body>
 </html>

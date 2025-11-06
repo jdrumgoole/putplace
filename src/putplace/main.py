@@ -1,6 +1,7 @@
 """FastAPI application for file metadata storage."""
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -20,6 +21,7 @@ from .models import (
     FileMetadata,
     FileMetadataResponse,
     FileMetadataUploadResponse,
+    GoogleOAuthLogin,
     Token,
     User,
     UserCreate,
@@ -44,7 +46,6 @@ async def ensure_admin_exists(db: MongoDB) -> None:
     Args:
         db: MongoDB database instance
     """
-    import os
     from datetime import datetime
 
     try:
@@ -238,7 +239,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             logger.info(f"Initialized local storage backend at {settings.storage_path}")
 
             # Test write access to storage directory
-            import os
             from pathlib import Path
             storage_path = Path(settings.storage_path).resolve()
 
@@ -2139,6 +2139,133 @@ async def login_user(user_login: UserLogin, db: MongoDB = Depends(get_db)) -> To
     )
     
     return Token(access_token=access_token)
+
+
+@app.post("/api/auth/google", response_model=Token, tags=["users"])
+async def google_oauth_login(
+    oauth_data: GoogleOAuthLogin,
+    db: MongoDB = Depends(get_db)
+) -> Token:
+    """Login or register using Google OAuth.
+
+    The client sends a Google ID token obtained from Google Sign-In.
+    We verify the token and either:
+    1. Login existing user (if email matches)
+    2. Create new user (if email is new)
+    """
+    from google.oauth2 import id_token
+    from google.auth.transport import requests
+    from .user_auth import create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
+    from datetime import timedelta, datetime
+    import secrets
+
+    # Verify the Google ID token
+    try:
+        if not settings.google_client_id:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Google OAuth not configured on server"
+            )
+
+        # Verify token with Google
+        idinfo = id_token.verify_oauth2_token(
+            oauth_data.id_token,
+            requests.Request(),
+            settings.google_client_id
+        )
+
+        # Extract user info from token
+        google_user_id = idinfo['sub']
+        email = idinfo['email']
+        email_verified = idinfo.get('email_verified', False)
+        name = idinfo.get('name', '')
+        picture = idinfo.get('picture', '')
+
+        if not email_verified:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email not verified by Google"
+            )
+
+    except ValueError as e:
+        # Invalid token
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Invalid Google ID token: {str(e)}"
+        )
+
+    # Check if user exists (by email or oauth_id)
+    existing_user = await db.get_user_by_email(email)
+
+    if existing_user:
+        # User exists - update OAuth info if needed
+        if existing_user.get("auth_provider") != "google":
+            # Update user to use Google OAuth
+            await db.users.update_one(
+                {"email": email},
+                {
+                    "$set": {
+                        "auth_provider": "google",
+                        "oauth_id": google_user_id,
+                        "picture": picture
+                    }
+                }
+            )
+
+        username = existing_user["username"]
+    else:
+        # Create new user with Google OAuth
+        # Generate username from email
+        username_base = email.split('@')[0]
+        username = username_base
+        counter = 1
+
+        # Ensure username is unique
+        while await db.get_user_by_username(username):
+            username = f"{username_base}{counter}"
+            counter += 1
+
+        # Create user document
+        user_doc = {
+            "username": username,
+            "email": email,
+            "full_name": name,
+            "is_active": True,
+            "created_at": datetime.utcnow(),
+            "auth_provider": "google",
+            "oauth_id": google_user_id,
+            "picture": picture,
+            # No password hash for OAuth users
+        }
+
+        try:
+            await db.users.insert_one(user_doc)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to create user: {str(e)}"
+            )
+
+    # Create access token
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token(
+        data={"sub": username}, expires_delta=access_token_expires
+    )
+
+    return Token(access_token=access_token)
+
+
+@app.get("/api/oauth/config", tags=["users"])
+async def get_oauth_config() -> dict:
+    """Get OAuth configuration for client.
+
+    Returns only non-sensitive configuration like client IDs.
+    Client secrets are never exposed to the frontend.
+    """
+    return {
+        "google_client_id": settings.google_client_id,
+        "google_enabled": bool(settings.google_client_id)
+    }
 
 
 @app.get("/api/my_files", response_model=list[FileMetadataResponse], tags=["files"])

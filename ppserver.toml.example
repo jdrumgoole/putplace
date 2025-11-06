@@ -30,11 +30,33 @@ path = "./storage/files"
 # access_key_id = "your-access-key"
 # secret_access_key = "your-secret-key"
 
-[security]
-# JWT secret key - CHANGE THIS IN PRODUCTION!
-# Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
-# secret_key = "your-secret-key-here"
+[oauth]
+# Google OAuth Configuration
+# To enable Google Sign-In:
+# 1. Go to https://console.cloud.google.com/
+# 2. Create a new project (or select existing)
+# 3. Enable "Google Sign-In API"
+# 4. Create OAuth 2.0 credentials (Web application)
+# 5. Add authorized JavaScript origins: http://localhost:8000
+# 6. Copy the Client ID below
+google_client_id = ""  # e.g., "123456789-abcdefghijk.apps.googleusercontent.com"
+# Note: google_client_secret is not needed for ID token verification
 
-# API key for client authentication
-# Generate with: python -m putplace.scripts.create_api_key
-# putplace_api_key = "your-api-key-here"
+# =============================================================================
+# Usage Notes
+# =============================================================================
+#
+# 1. Copy this file to ppserver.toml:
+#    cp ppserver.toml.example ppserver.toml
+#
+# 2. Edit ppserver.toml with your configuration
+#
+# 3. Or use the configuration wizard:
+#    putplace-configure
+#    (or: invoke configure)
+#
+# 4. Never commit ppserver.toml to version control (already in .gitignore)
+#
+# 5. Set restrictive file permissions:
+#    chmod 600 ppserver.toml
+#

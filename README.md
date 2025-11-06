@@ -25,7 +25,8 @@ A distributed file metadata storage and content deduplication system with SHA256
 - 🔄 **Content Deduplication** - Upload files only once, deduplicated by SHA256
 - 👥 **Clone Detection** - Track duplicate files across all users with epoch file identification
 - 💾 **Multiple Storage Backends** - Local filesystem or AWS S3 for file content
-- 🔐 **Dual Authentication** - API key (for clients) and JWT (for web UI)
+- 🔐 **Flexible Authentication** - API key (for clients), JWT (for web UI), and Google OAuth
+- 🌐 **Google Sign-In Integration** - One-click authentication with Google accounts
 - 🌐 **Interactive Web UI** - Tree-based file browser with clone visualization
 - 🚀 **Production Ready** - Comprehensive tests, TOML configuration, graceful interrupt handling
 
@@ -58,15 +59,66 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 git clone https://github.com/jdrumgoole/putplace.git
 cd putplace
 
-# Complete setup (venv + dependencies + MongoDB)
+# Complete setup (venv + dependencies)
 invoke setup
+
+# Configure the server (create admin user, check AWS, set storage backend)
 source .venv/bin/activate
+invoke configure
+# Or directly: putplace-configure
 
 # Start MongoDB and server
 invoke quickstart
 ```
 
 The server will be available at http://localhost:8000
+
+### Configuration Tool
+
+PutPlace includes a configuration wizard to set up your server after installation:
+
+```bash
+# Interactive configuration (recommended for first-time setup)
+putplace-configure
+
+# Non-interactive configuration (for automation/CI/CD)
+putplace-configure --non-interactive \
+  --admin-username admin \
+  --admin-email admin@example.com \
+  --storage-backend local
+
+# With S3 storage
+putplace-configure --non-interactive \
+  --admin-username admin \
+  --admin-email admin@example.com \
+  --storage-backend s3 \
+  --s3-bucket my-putplace-bucket \
+  --aws-region us-west-2
+
+# Skip validation checks (useful for testing)
+putplace-configure --skip-checks
+```
+
+**Features:**
+- ✅ **Creates admin user** with secure password generation
+- ✅ **Tests MongoDB connection** before configuration
+- ✅ **Checks AWS S3 and SES access** (optional)
+- ✅ **Configures storage backend** (local or S3)
+- ✅ **Generates `ppserver.toml`** configuration file
+- ✅ **Non-interactive mode** for automation
+- ✅ **Beautiful terminal UI** with rich formatting (when available)
+
+**Interactive Mode:**
+- Step-by-step wizard with prompts
+- Automatic password generation option
+- AWS connectivity checks
+- Storage backend selection based on availability
+
+**Non-Interactive Mode:**
+- Perfect for automation and CI/CD pipelines
+- All configuration via command-line flags
+- Optional validation checks can be skipped
+- Secure password auto-generation
 
 ### Using the Client
 
@@ -113,7 +165,8 @@ invoke gui-electron --packaged=False
 The Electron GUI provides:
 - 🖥️ Native cross-platform desktop application (Windows, macOS, Linux)
 - 📁 Native OS directory picker
-- 🔐 JWT-based authentication with login/registration
+- 🔐 **Dual authentication**: Username/password OR Google Sign-In
+- 🌐 **Google OAuth integration**: One-click sign-in with Google accounts
 - 👁️ Password visibility toggle
 - ⚙️ Settings panel with persistence (server URL, hostname, IP)
 - 📋 Exclude patterns manager with wildcards support
@@ -123,7 +176,7 @@ The Electron GUI provides:
 - 🔐 Secure IPC communication
 - 🎨 Custom menu bar with proper branding
 
-See the [Client Guide](https://putplace.readthedocs.io/en/latest/client-guide.html) for more details.
+See the [Client Guide](https://putplace.readthedocs.io/en/latest/client-guide.html) and [OAuth Setup Guide](OAUTH_SETUP.md) for more details.
 
 ## Development
 
@@ -151,7 +204,8 @@ This project uses [invoke](https://www.pyinvoke.org/) for task automation:
 
 ```bash
 # Setup
-invoke setup              # Complete project setup
+invoke setup              # Complete project setup (venv + dependencies)
+invoke configure          # Configure server (interactive wizard)
 invoke setup-venv         # Create virtual environment only
 invoke install            # Install dependencies
 
@@ -257,7 +311,7 @@ The server looks for `ppserver.toml` in:
 2. `~/.config/putplace/ppserver.toml` (user config)
 3. `/etc/putplace/ppserver.toml` (system config)
 
-Environment variables override all settings. See [Configuration Guide](https://putplace.readthedocs.io/en/latest/configuration.html) for details.
+You can also use `invoke configure` or `putplace-configure` for guided setup. Environment variables can override TOML settings if needed. See [Configuration Guide](https://putplace.readthedocs.io/en/latest/configuration.html) for details.
 
 ## API Endpoints
 
