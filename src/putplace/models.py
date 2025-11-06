@@ -153,6 +153,20 @@ class UserLogin(BaseModel):
     )
 
 
+class GoogleOAuthLogin(BaseModel):
+    """Request model for Google OAuth login."""
+
+    id_token: str = Field(..., description="Google ID token")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id_token": "eyJhbGciOiJSUzI1NiIsImtpZCI6..."
+            }
+        }
+    )
+
+
 class User(BaseModel):
     """User model (without password)."""
 
@@ -162,6 +176,10 @@ class User(BaseModel):
     full_name: Optional[str] = Field(None, description="Full name")
     is_active: bool = Field(default=True, description="Whether the user account is active")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="When the user was created")
+    # OAuth fields
+    auth_provider: Optional[str] = Field(None, description="OAuth provider (e.g., 'google', 'local')")
+    oauth_id: Optional[str] = Field(None, description="OAuth provider user ID")
+    picture: Optional[str] = Field(None, description="Profile picture URL")
 
     model_config = ConfigDict(populate_by_name=True)
 

@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2025-01-06
+
+### Fixed
+- **Configuration Priority**: Fixed critical bug where `ppserver.toml` values were overriding environment variables
+  - Environment variables now correctly take precedence over TOML configuration
+  - Proper priority order: env vars > TOML > defaults
+  - Rewrote `Settings.__init__()` to check environment variables first
+  - Fixes issues with test environments and containerized deployments
+- **Server Startup**: Fixed `UnboundLocalError` crash caused by local `os` import after usage
+  - Moved `import os` to module-level imports in `main.py`
+- **E2E Test Suite**: Fixed and re-enabled `test_e2e_real_server_and_client_with_upload`
+  - Corrected storage path assumptions to match actual storage backend structure
+  - Test now passes successfully in isolation
+  - Storage backend uses single-level subdirectory: `storage/XX/SHA256` (not `storage/XX/XX/SHA256`)
+
+### Changed
+- Updated configuration loading in `config.py` to properly respect environment variable precedence
+- Cleaned up redundant local imports in `main.py`
+
 ## [0.5.0] - 2025-11-05
 
 ### Added

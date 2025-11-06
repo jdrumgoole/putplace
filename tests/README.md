@@ -8,7 +8,12 @@ This directory contains comprehensive tests for the PutPlace application.
 - **test_api.py** - FastAPI endpoint tests
 - **test_database.py** - MongoDB database operation tests
 - **test_client.py** - ppclient.py functionality tests
+- **test_auth.py** - Authentication and authorization tests
+- **test_storage.py** - Storage backend tests (local and S3)
+- **test_admin_creation.py** - Admin user creation tests
+- **test_console_scripts.py** - CLI script installation tests
 - **test_e2e.py** - End-to-end integration tests
+- **test_electron_gui.py** - Electron desktop GUI tests (macOS only)
 - **conftest.py** - Shared pytest fixtures
 
 ## Running Tests
@@ -48,6 +53,9 @@ pytest tests/test_api.py
 
 # Test client only
 pytest tests/test_client.py
+
+# Test Electron GUI only (macOS only, requires packaged app)
+pytest tests/test_electron_gui.py
 ```
 
 ### Specific Test Functions
@@ -121,6 +129,49 @@ def test_example(sample_file_metadata, temp_test_dir):
 ## Markers
 
 - **integration** - Tests requiring external services (MongoDB, running server)
+
+## Electron GUI Tests
+
+The Electron GUI tests (`test_electron_gui.py`) verify the desktop application functionality:
+
+### Prerequisites
+
+1. **macOS only** - Tests automatically skip on other platforms
+2. **Packaged app required** - Run `invoke gui-electron-package` before testing
+
+```bash
+# Package the Electron app first
+invoke gui-electron-package
+
+# Then run the tests
+pytest tests/test_electron_gui.py -v
+```
+
+### What's Tested
+
+- ✅ DMG package creation
+- ✅ App bundle structure (Contents, MacOS, Info.plist)
+- ✅ Info.plist product name verification
+- ✅ TypeScript compilation (dist/ files)
+- ✅ npm dependencies installation
+- ✅ Complete install → launch → quit → uninstall flow
+
+### Test Flow
+
+The main integration test (`test_electron_app_install_launch_uninstall`) performs:
+
+1. **Install**: Copies app bundle to /Applications
+2. **Launch**: Opens the installed app using `open -a`
+3. **Verify**: Checks app is running via process ID
+4. **Quit**: Programmatically quits app via AppleScript
+5. **Cleanup**: Removes app and support files
+
+### Notes
+
+- Tests use fixtures for automatic cleanup
+- Safe to run multiple times - cleans up after each run
+- Uses subprocess for isolated command execution
+- Skips gracefully if app not packaged
 
 ## Continuous Integration
 

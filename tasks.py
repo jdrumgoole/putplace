@@ -24,18 +24,6 @@ def install(c):
 
 
 @task
-def setup_env(c):
-    """Copy .env.example to .env if it doesn't exist."""
-    result = c.run("test -f .env", warn=True)
-    if result.ok:
-        print("✓ .env file already exists")
-    else:
-        c.run("cp .env.example .env")
-        print("✓ Created .env file from .env.example")
-        print("  Edit .env to customize your configuration")
-
-
-@task
 def test(c, verbose=False, coverage=True):
     """Run the test suite with pytest."""
     cmd = "uv run pytest"
@@ -50,6 +38,11 @@ def test(c, verbose=False, coverage=True):
 def test_all(c, verbose=True, coverage=True, parallel=True, workers=4):
     """Run all tests with proper PYTHONPATH setup.
 
+    Tests include:
+        - Python unit tests (models, API, database, auth, storage)
+        - Integration tests (end-to-end, admin creation)
+        - Electron GUI tests (packaging, installation, launch/quit) - macOS only
+
     Args:
         verbose: Show verbose test output (default: True)
         coverage: Generate coverage report (default: True)
@@ -63,6 +56,7 @@ def test_all(c, verbose=True, coverage=True, parallel=True, workers=4):
 
     Note: Each test worker gets its own isolated database to prevent race conditions.
           Default of 4 workers provides good balance between speed and reliability.
+          Electron GUI tests require 'invoke gui-electron-package' to be run first.
     """
     import os
     pythonpath = f"{os.getcwd()}/src:{os.environ.get('PYTHONPATH', '')}"
@@ -335,11 +329,46 @@ def mongo_logs(c, name="mongodb", follow=False):
 
 
 # Server tasks
+# ============================================================================
+# Three ways to run the PutPlace server:
+#
+# 1. invoke serve (RECOMMENDED FOR DEVELOPMENT)
+#    - Runs in foreground with live output
+#    - Auto-reload on code changes
+#    - Easy to stop with Ctrl+C
+#    - Automatically starts MongoDB
+#
+# 2. invoke ppserver-start (FOR BACKGROUND TESTING)
+#    - Runs in background
+#    - No auto-reload (manual restart needed)
+#    - Logs to ppserver.log in current directory
+#    - Stop with: invoke ppserver-stop
+#
+# 3. ppserver start (FOR PRODUCTION/DAEMON)
+#    - CLI tool for production daemon management
+#    - Logs to ~/.putplace/ppserver.log
+#    - Has status, restart, logs commands
+#    - Stop with: ppserver stop
+# ============================================================================
+
 @task(pre=[mongo_start])
 def serve(c, host="127.0.0.1", port=8000, reload=True):
-    """Run the FastAPI development server.
+    """Run the FastAPI development server in foreground (recommended for development).
+
+    This task runs the server in the foreground with live output and auto-reload.
+    Press Ctrl+C to stop the server.
 
     Automatically starts MongoDB if not running.
+
+    Features:
+        - Runs in foreground with live console output
+        - Auto-reload enabled by default (picks up code changes)
+        - Easy to stop with Ctrl+C
+        - Best for active development
+
+    Compare with:
+        - invoke ppserver-start: Runs in background, no auto-reload, logs to file
+        - ppserver start: CLI tool for production daemon management
 
     Args:
         host: Host to bind to (default: 127.0.0.1)
@@ -646,19 +675,54 @@ def gui_electron_test_install(c, automated=False):
     print("\n✓ Test complete!")
 
 
+@task
+def configure(c, non_interactive=False, admin_username=None, admin_email=None,
+              storage_backend=None, config_file='ppserver.toml'):
+    """Run the server configuration wizard.
+
+    Args:
+        non_interactive: Run in non-interactive mode (requires other args)
+        admin_username: Admin username (for non-interactive mode)
+        admin_email: Admin email (for non-interactive mode)
+        storage_backend: Storage backend: "local" or "s3"
+        config_file: Path to configuration file (default: ppserver.toml)
+
+    Examples:
+        invoke configure                      # Interactive mode
+        invoke configure --non-interactive \
+          --admin-username=admin \
+          --admin-email=admin@example.com \
+          --storage-backend=local
+    """
+    cmd = "uv run putplace-configure"
+
+    if non_interactive:
+        cmd += " --non-interactive"
+        if admin_username:
+            cmd += f" --admin-username={admin_username}"
+        if admin_email:
+            cmd += f" --admin-email={admin_email}"
+        if storage_backend:
+            cmd += f" --storage-backend={storage_backend}"
+
+    if config_file != 'ppserver.toml':
+        cmd += f" --config-file={config_file}"
+
+    c.run(cmd)
+
+
 # Quick setup tasks
 @task(pre=[setup_venv])
 def setup(c):
-    """Complete project setup: venv, dependencies, and .env file."""
+    """Complete project setup: venv, dependencies, and configuration."""
     print("\nInstalling dependencies...")
     install(c)
-    print("\nSetting up environment file...")
-    setup_env(c)
     print("\n✓ Setup complete!")
     print("\nNext steps:")
     print("  1. Activate venv: source .venv/bin/activate")
-    print("  2. Start MongoDB: invoke mongo-start")
-    print("  3. Run server: invoke serve")
+    print("  2. Configure server: invoke configure (or putplace-configure)")
+    print("  3. Start MongoDB: invoke mongo-start")
+    print("  4. Run server: invoke serve")
 
 
 @task(pre=[mongo_start])
@@ -673,7 +737,22 @@ def quickstart(c):
 # PutPlace server management
 @task
 def ppserver_start(c, host="127.0.0.1", port=8000):
-    """Install package locally and start ppserver in background.
+    """Start server in background (for testing/background work).
+
+    This task runs the server as a background process with output logged to file.
+    Use invoke ppserver-stop to stop it.
+
+    Features:
+        - Runs in background (detached from terminal)
+        - No auto-reload (must restart manually for code changes)
+        - Logs to ppserver.log file
+        - Saves PID to .ppserver.pid
+        - Installs package before starting
+        - Good for running tests while server is up
+
+    Compare with:
+        - invoke serve: Runs in foreground with auto-reload (better for development)
+        - ppserver start: CLI tool for production daemon (uses ~/.putplace/ directory)
 
     Args:
         host: Host to bind to (default: 127.0.0.1)

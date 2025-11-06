@@ -387,3 +387,80 @@ input[readonly] {
 .controls .btn {
     min-width: 120px;
 }
+
+/* OAuth Styles */
+.oauth-separator {
+    position: relative;
+    text-align: center;
+    margin: 20px 0;
+}
+
+.oauth-separator::before,
+.oauth-separator::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 45%;
+    height: 1px;
+    background-color: #ddd;
+}
+
+.oauth-separator::before {
+    left: 0;
+}
+
+.oauth-separator::after {
+    right: 0;
+}
+
+.oauth-separator span {
+    background-color: white;
+    padding: 0 15px;
+    color: #999;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.oauth-controls {
+    display: flex;
+    justify-content: center;
+    margin: 20px 0;
+}
+
+.google-signin-button {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Custom Google button styling (for custom button approach) */
+.google-btn {
+    display: inline-flex;
+    align-items: center;
+    background-color: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 12px 24px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #444;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.google-btn:hover {
+    background-color: #f8f8f8;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.google-btn:active {
+    background-color: #eeeeee;
+}
+
+.google-btn img {
+    width: 20px;
+    height: 20px;
+    margin-right: 12px;
+}

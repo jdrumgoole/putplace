@@ -24,7 +24,6 @@ share/python-wheels/
 MANIFEST
 
 # Virtual environments
-.env
 .venv
 env/
 venv/
@@ -68,11 +67,7 @@ dmypy.json
 # Jupyter Notebook
 .ipynb_checkpoints
 
-# Environment variables
-.env.local
-.env.*.local
-
-# Configuration files (templates are tracked)
+# Configuration files (actual config files, not templates)
 ppserver.toml
 
 # Client configuration
