@@ -95,7 +95,36 @@ uvicorn putplace.main:app
 
 ## Verification
 
-Test that your credentials work:
+### Quick Test: Standalone S3/SES Configuration Tests (v0.5.2+)
+
+The fastest way to test your AWS credentials:
+
+```bash
+# Test S3 access
+putplace-configure S3
+# Or: uv run python -m putplace.scripts.configure S3
+
+# Test SES access
+putplace-configure SES
+# Or: uv run python -m putplace.scripts.configure SES
+
+# Test in specific region
+putplace-configure S3 --aws-region us-west-2
+
+# Via invoke task
+invoke configure --test-mode=S3
+invoke configure --test-mode=SES
+```
+
+These commands will:
+- ✅ Use your AWS credentials (IAM role, profile, or environment variables)
+- ✅ Test connectivity to AWS services
+- ✅ Show clear success/failure messages
+- ✅ Exit with status code 0 (success) or 1 (failure)
+
+### Full Integration Test
+
+Test that your credentials work with the running server:
 
 ```bash
 # Check if server can connect to S3
