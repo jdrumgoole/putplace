@@ -16,7 +16,7 @@ import asyncio
 import os
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Dict, Any
 import secrets
 import string
 
@@ -26,6 +26,15 @@ try:
     READLINE_AVAILABLE = True
 except ImportError:
     READLINE_AVAILABLE = False
+
+# TOML reading support
+try:
+    import tomllib  # Python 3.11+
+except ImportError:
+    try:
+        import tomli as tomllib  # Fallback for Python 3.10
+    except ImportError:
+        tomllib = None
 
 try:
     from rich.console import Console
@@ -56,6 +65,60 @@ def print_panel(message: str, title: str = "", style: str = ""):
         print(f"\n=== {title} ===")
         print(message)
         print("=" * (len(title) + 8))
+
+
+def load_existing_config() -> Dict[str, Any]:
+    """Load existing configuration from ppserver.toml if it exists.
+
+    Searches for ppserver.toml in standard locations:
+    1. ./ppserver.toml (current directory)
+    2. ~/.config/putplace/ppserver.toml (user config)
+    3. /etc/putplace/ppserver.toml (system config)
+
+    Returns a dictionary with defaults extracted from the file, or empty dict if not found.
+    """
+    if not tomllib:
+        return {}
+
+    search_paths = [
+        Path("./ppserver.toml"),
+        Path.home() / ".config" / "putplace" / "ppserver.toml",
+        Path("/etc/putplace/ppserver.toml")
+    ]
+
+    for config_path in search_paths:
+        if config_path.exists():
+            try:
+                with open(config_path, 'rb') as f:
+                    config = tomllib.load(f)
+
+                # Extract defaults
+                defaults = {}
+
+                # MongoDB settings
+                if 'database' in config:
+                    defaults['mongodb_url'] = config['database'].get('mongodb_url', 'mongodb://localhost:27017')
+                    defaults['mongodb_database'] = config['database'].get('mongodb_database', 'putplace')
+
+                # Storage settings
+                if 'storage' in config:
+                    defaults['storage_backend'] = config['storage'].get('backend', 'local')
+                    defaults['storage_path'] = config['storage'].get('path', './storage/files')
+                    defaults['s3_bucket'] = config['storage'].get('s3_bucket_name')
+                    defaults['s3_region'] = config['storage'].get('s3_region_name', 'us-east-1')
+
+                # AWS settings
+                if 'aws' in config:
+                    defaults['aws_region'] = config['aws'].get('region', defaults.get('s3_region', 'us-east-1'))
+
+                print_message(f"✓ Loaded defaults from {config_path}", "green")
+                return defaults
+
+            except Exception as e:
+                print_message(f"Warning: Could not load {config_path}: {e}", "yellow")
+                continue
+
+    return {}
 
 
 def input_with_prefill(prompt: str, prefill: str = '') -> str:
@@ -271,11 +334,14 @@ async def run_interactive_config() -> dict:
     else:
         print("\n=== PutPlace Configuration Wizard ===\n")
 
+    # Load existing configuration for defaults
+    existing_config = load_existing_config()
+
     # MongoDB Configuration
     print_panel("MongoDB Configuration", title="Step 1/5", style="cyan")
 
     # Use input_with_prefill for better editing experience
-    default_mongodb = "mongodb://localhost:27017"
+    default_mongodb = existing_config.get('mongodb_url', "mongodb://localhost:27017")
 
     if READLINE_AVAILABLE:
         print_message(f"MongoDB URL (pre-filled, edit as needed): {default_mongodb}", "cyan")
@@ -346,10 +412,11 @@ async def run_interactive_config() -> dict:
     config['has_ses_access'] = False
 
     if check_aws:
+        default_region = existing_config.get('aws_region', existing_config.get('s3_region', 'us-east-1'))
         if RICH_AVAILABLE:
-            aws_region = Prompt.ask("AWS Region", default="us-east-1")
+            aws_region = Prompt.ask("AWS Region", default=default_region)
         else:
-            aws_region = input("AWS Region [us-east-1]: ").strip() or "us-east-1"
+            aws_region = input(f"AWS Region [{default_region}]: ").strip() or default_region
 
         config['aws_region'] = aws_region
 
@@ -368,18 +435,25 @@ async def run_interactive_config() -> dict:
     # Storage Backend Selection
     print_panel("Storage Backend Selection", title="Step 4/5", style="cyan")
 
+    # Determine default storage backend from existing config
+    default_backend = existing_config.get('storage_backend', 'local')
+
     if config.get('has_s3_access'):
+        default_use_s3 = (default_backend == 's3')
         if RICH_AVAILABLE:
-            use_s3 = Confirm.ask("Use S3 for storage?", default=True)
+            use_s3 = Confirm.ask("Use S3 for storage?", default=default_use_s3)
         else:
-            use_s3_input = input("Use S3 for storage? [Y/n]: ").strip().lower()
-            use_s3 = use_s3_input != 'n'
+            prompt_default = "Y/n" if default_use_s3 else "y/N"
+            use_s3_input = input(f"Use S3 for storage? [{prompt_default}]: ").strip().lower()
+            use_s3 = use_s3_input == 'y' if not default_use_s3 else use_s3_input != 'n'
 
         if use_s3:
+            default_bucket = existing_config.get('s3_bucket', '')
             if RICH_AVAILABLE:
-                s3_bucket = Prompt.ask("S3 bucket name")
+                s3_bucket = Prompt.ask("S3 bucket name", default=default_bucket if default_bucket else None)
             else:
-                s3_bucket = input("S3 bucket name: ").strip()
+                bucket_prompt = f"S3 bucket name [{default_bucket}]: " if default_bucket else "S3 bucket name: "
+                s3_bucket = input(bucket_prompt).strip() or default_bucket
 
             config['storage_backend'] = 's3'
             config['s3_bucket'] = s3_bucket
@@ -390,10 +464,11 @@ async def run_interactive_config() -> dict:
         print_message("Using local storage (S3 not available)", "yellow")
 
     if config['storage_backend'] == 'local':
+        default_path = existing_config.get('storage_path', './storage/files')
         if RICH_AVAILABLE:
-            storage_path = Prompt.ask("Local storage path", default="./storage/files")
+            storage_path = Prompt.ask("Local storage path", default=default_path)
         else:
-            storage_path = input("Local storage path [./storage/files]: ").strip() or "./storage/files"
+            storage_path = input(f"Local storage path [{default_path}]: ").strip() or default_path
 
         config['storage_path'] = storage_path
 
