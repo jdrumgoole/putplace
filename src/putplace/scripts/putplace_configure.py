@@ -165,15 +165,15 @@ def generate_secure_password(length: int = 21) -> str:
 async def check_mongodb_connection(mongodb_url: str) -> tuple[bool, str]:
     """Check if MongoDB is accessible."""
     try:
-        from motor.motor_asyncio import AsyncIOMotorClient
+        from pymongo import AsyncMongoClient
 
-        client = AsyncIOMotorClient(mongodb_url, serverSelectionTimeoutMS=5000)
+        client = AsyncMongoClient(mongodb_url, serverSelectionTimeoutMS=5000)
         # Try to get server info
         await client.admin.command('ping')
         await client.close()
         return True, "MongoDB connection successful"
     except ImportError:
-        return False, "motor library not installed (PyMongo 4.10+ required)"
+        return False, "pymongo library not installed (PyMongo 4.10+ required)"
     except Exception as e:
         return False, f"MongoDB connection failed: {str(e)}"
 
@@ -236,11 +236,11 @@ async def create_admin_user(
 ) -> tuple[bool, str]:
     """Create an admin user in the database."""
     try:
-        from motor.motor_asyncio import AsyncIOMotorClient
+        from pymongo import AsyncMongoClient
         from putplace.user_auth import hash_password
         from datetime import datetime
 
-        client = AsyncIOMotorClient(mongodb_url)
+        client = AsyncMongoClient(mongodb_url)
         db = client.get_database("putplace")
         users_collection = db.users
 
