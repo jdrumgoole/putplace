@@ -677,7 +677,8 @@ def gui_electron_test_install(c, automated=False):
 
 @task
 def configure(c, non_interactive=False, admin_username=None, admin_email=None,
-              storage_backend=None, config_file='ppserver.toml'):
+              storage_backend=None, config_file='ppserver.toml', test_mode=None,
+              aws_region=None):
     """Run the server configuration wizard.
 
     Args:
@@ -686,6 +687,8 @@ def configure(c, non_interactive=False, admin_username=None, admin_email=None,
         admin_email: Admin email (for non-interactive mode)
         storage_backend: Storage backend: "local" or "s3"
         config_file: Path to configuration file (default: ppserver.toml)
+        test_mode: Run standalone test: "S3" or "SES"
+        aws_region: AWS region for tests (default: us-east-1)
 
     Examples:
         invoke configure                      # Interactive mode
@@ -693,8 +696,20 @@ def configure(c, non_interactive=False, admin_username=None, admin_email=None,
           --admin-username=admin \
           --admin-email=admin@example.com \
           --storage-backend=local
+        invoke configure --test-mode=S3       # Test S3 access
+        invoke configure --test-mode=SES      # Test SES access
+        invoke configure --test-mode=S3 --aws-region=us-west-2
     """
-    cmd = "uv run putplace-configure"
+    # Run script directly from source (no installation needed)
+    cmd = "uv run python -m putplace.scripts.configure"
+
+    # Handle standalone test mode
+    if test_mode:
+        cmd += f" {test_mode}"
+        if aws_region:
+            cmd += f" --aws-region={aws_region}"
+        c.run(cmd, pty=True)
+        return
 
     if non_interactive:
         cmd += " --non-interactive"
@@ -708,7 +723,8 @@ def configure(c, non_interactive=False, admin_username=None, admin_email=None,
     if config_file != 'ppserver.toml':
         cmd += f" --config-file={config_file}"
 
-    c.run(cmd)
+    # Use pty=True to properly inherit terminal settings for readline
+    c.run(cmd, pty=True)
 
 
 # Quick setup tasks

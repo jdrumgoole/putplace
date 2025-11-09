@@ -1,7 +1,7 @@
 [project]
 name = "putplace"
 # IMPORTANT: Keep this version in sync with src/putplace/version.py!
-version = "0.5.1"
+version = "0.5.2"
 description = "File and Metadata storage system"
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -67,6 +67,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/putplace"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/putplace/static" = "putplace/static"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

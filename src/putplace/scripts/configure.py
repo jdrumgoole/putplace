@@ -20,6 +20,13 @@ from typing import Optional
 import secrets
 import string
 
+# Enable readline for better input editing (if available)
+try:
+    import readline
+    READLINE_AVAILABLE = True
+except ImportError:
+    READLINE_AVAILABLE = False
+
 try:
     from rich.console import Console
     from rich.prompt import Prompt, Confirm
@@ -49,6 +56,41 @@ def print_panel(message: str, title: str = "", style: str = ""):
         print(f"\n=== {title} ===")
         print(message)
         print("=" * (len(title) + 8))
+
+
+def input_with_prefill(prompt: str, prefill: str = '') -> str:
+    """Get input with a pre-filled value that can be edited using backspace.
+
+    Uses readline if available to provide editable pre-filled text.
+    """
+    if not READLINE_AVAILABLE or not prefill:
+        # Fall back to regular input if readline not available
+        return input(prompt)
+
+    # Configure readline key bindings for proper editing behavior
+    # Emacs mode is standard and should have correct backspace behavior
+    readline.parse_and_bind('set editing-mode emacs')
+
+    # Explicitly bind backspace keys to backward-delete-char
+    # This ensures backspace deletes the character BEFORE the cursor
+    readline.parse_and_bind('"\\C-h": backward-delete-char')  # Ctrl+H (backspace)
+    readline.parse_and_bind('"\\C-?": backward-delete-char')  # DEL character (backspace)
+
+    # Bind Delete key to delete-char (forward delete)
+    readline.parse_and_bind('"\\e[3~": delete-char')  # Delete key
+
+    def hook():
+        readline.insert_text(prefill)
+        readline.redisplay()
+
+    readline.set_pre_input_hook(hook)
+
+    try:
+        result = input(prompt)
+    finally:
+        readline.set_pre_input_hook()
+
+    return result
 
 
 def generate_secure_password(length: int = 21) -> str:
@@ -232,13 +274,21 @@ async def run_interactive_config() -> dict:
     # MongoDB Configuration
     print_panel("MongoDB Configuration", title="Step 1/5", style="cyan")
 
-    if RICH_AVAILABLE:
-        mongodb_url = Prompt.ask(
-            "MongoDB URL",
-            default="mongodb://localhost:27017"
-        )
+    # Use input_with_prefill for better editing experience
+    default_mongodb = "mongodb://localhost:27017"
+
+    if READLINE_AVAILABLE:
+        print_message(f"MongoDB URL (pre-filled, edit as needed): {default_mongodb}", "cyan")
+        print_message("Press Enter to accept, or edit/backspace to change", "dim")
+        mongodb_url = input_with_prefill("> ", default_mongodb).strip()
     else:
-        mongodb_url = input("MongoDB URL [mongodb://localhost:27017]: ").strip() or "mongodb://localhost:27017"
+        # Fallback for systems without readline
+        print_message(f"MongoDB URL:", "cyan")
+        mongodb_url_input = input(f"[{default_mongodb}] > ").strip()
+        mongodb_url = mongodb_url_input if mongodb_url_input else default_mongodb
+
+    if not mongodb_url:
+        mongodb_url = default_mongodb
 
     config['mongodb_url'] = mongodb_url
 
@@ -485,7 +535,20 @@ Examples:
     --storage-backend s3 \\
     --s3-bucket my-putplace-bucket \\
     --aws-region us-west-2
+
+  # Standalone AWS tests
+  putplace-configure S3                # Test S3 access
+  putplace-configure SES               # Test SES access
+  putplace-configure S3 --aws-region us-west-2  # Test S3 in specific region
         """
+    )
+
+    # Positional argument for standalone tests
+    parser.add_argument(
+        'test_mode',
+        nargs='?',
+        choices=['S3', 'SES'],
+        help='Run standalone test for S3 or SES configuration'
     )
 
     # General options
@@ -563,6 +626,21 @@ Examples:
     )
 
     args = parser.parse_args()
+
+    # Handle standalone test modes
+    if args.test_mode == 'S3':
+        print_panel("Testing S3 Access", style="cyan")
+        print_message(f"Region: {args.aws_region}", "yellow")
+        success, message = await check_s3_access(args.aws_region)
+        print_message(f"{'✓' if success else '✗'} {message}", "green" if success else "red")
+        sys.exit(0 if success else 1)
+
+    if args.test_mode == 'SES':
+        print_panel("Testing SES Access", style="cyan")
+        print_message(f"Region: {args.aws_region}", "yellow")
+        success, message = await check_ses_access(args.aws_region)
+        print_message(f"{'✓' if success else '✗'} {message}", "green" if success else "red")
+        sys.exit(0 if success else 1)
 
     # Validate S3 options
     if args.non_interactive and args.storage_backend == 's3' and not args.s3_bucket:
