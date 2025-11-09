@@ -97,12 +97,22 @@ putplace-configure --non-interactive \
 
 # Skip validation checks (useful for testing)
 putplace-configure --skip-checks
+
+# Standalone AWS tests (new in v0.5.2)
+putplace-configure S3                        # Test S3 access
+putplace-configure SES                       # Test SES access
+putplace-configure S3 --aws-region us-west-2 # Test in specific region
+
+# Via invoke task
+invoke configure --test-mode=S3
+invoke configure --test-mode=SES
 ```
 
 **Features:**
 - ✅ **Creates admin user** with secure password generation
 - ✅ **Tests MongoDB connection** before configuration
 - ✅ **Checks AWS S3 and SES access** (optional)
+- ✅ **Standalone S3/SES tests** - Test AWS credentials independently
 - ✅ **Configures storage backend** (local or S3)
 - ✅ **Generates `ppserver.toml`** configuration file
 - ✅ **Non-interactive mode** for automation
@@ -334,8 +344,20 @@ Once the server is running:
 **Authentication:**
 - `POST /api/register` - Register new user
 - `POST /api/login` - Login and get JWT token
+- `POST /api/auth/google` - Google Sign-In authentication
+- `GET /api/oauth/config` - Get OAuth configuration
 - `POST /api_keys` - Create API key (requires JWT)
 - `GET /api_keys` - List API keys (requires JWT)
+
+**Google Sign-In Setup:**
+
+To enable Google Sign-In in the Electron client and web interface, see [GOOGLE_OAUTH_SETUP.md](GOOGLE_OAUTH_SETUP.md) for detailed configuration instructions.
+
+Quick summary:
+1. Create OAuth credentials in [Google Cloud Console](https://console.cloud.google.com/)
+2. Add Client ID to `ppserver.toml` or set `GOOGLE_CLIENT_ID` environment variable
+3. Restart the server
+4. Google Sign-In button will appear automatically in the Electron client
 
 See [API Reference](https://putplace.readthedocs.io/en/latest/api-reference.html) for complete endpoint documentation.
 

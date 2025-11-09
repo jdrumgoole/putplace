@@ -95,6 +95,40 @@ curl -X POST http://localhost:8000/api_keys \
   -d '{"name": "my-key"}'
 ```
 
+### Configuration Wizard
+
+Use the configuration wizard to set up PutPlace after installation:
+
+```bash
+# Interactive configuration
+invoke configure
+# Or: uv run python -m putplace.scripts.configure
+
+# Non-interactive (for automation)
+uv run python -m putplace.scripts.configure --non-interactive \
+  --admin-username admin \
+  --admin-email admin@example.com \
+  --storage-backend local
+
+# Standalone AWS tests (v0.5.2+)
+uv run python -m putplace.scripts.configure S3   # Test S3 access
+uv run python -m putplace.scripts.configure SES  # Test SES access
+invoke configure --test-mode=S3                  # Via invoke
+invoke configure --test-mode=SES                 # Via invoke
+
+# Test in specific region
+uv run python -m putplace.scripts.configure S3 --aws-region us-west-2
+```
+
+**What it does:**
+- Creates admin user with secure password
+- Tests MongoDB connection
+- Checks AWS S3/SES access (optional)
+- Configures storage backend (local or S3)
+- Generates `ppserver.toml` configuration file
+
+**Note:** The configure script uses `pty=True` in the invoke task to properly handle readline/terminal input for better backspace behavior.
+
 ## Common Commands
 
 All development tasks are managed through `invoke` (see tasks.py):
