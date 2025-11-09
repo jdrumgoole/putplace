@@ -102,22 +102,22 @@ Use the configuration wizard to set up PutPlace after installation:
 ```bash
 # Interactive configuration
 invoke configure
-# Or: uv run python -m putplace.scripts.configure
+# Or: uv run python -m putplace.scripts.putplace_configure
 
 # Non-interactive (for automation)
-uv run python -m putplace.scripts.configure --non-interactive \
+uv run python -m putplace.scripts.putplace_configure --non-interactive \
   --admin-username admin \
   --admin-email admin@example.com \
   --storage-backend local
 
 # Standalone AWS tests (v0.5.2+)
-uv run python -m putplace.scripts.configure S3   # Test S3 access
-uv run python -m putplace.scripts.configure SES  # Test SES access
+uv run python -m putplace.scripts.putplace_configure S3   # Test S3 access
+uv run python -m putplace.scripts.putplace_configure SES  # Test SES access
 invoke configure --test-mode=S3                  # Via invoke
 invoke configure --test-mode=SES                 # Via invoke
 
 # Test in specific region
-uv run python -m putplace.scripts.configure S3 --aws-region us-west-2
+uv run python -m putplace.scripts.putplace_configure S3 --aws-region us-west-2
 ```
 
 **What it does:**

@@ -65,7 +65,7 @@ invoke setup
 # Configure the server (create admin user, check AWS, set storage backend)
 source .venv/bin/activate
 invoke configure
-# Or directly: putplace-configure
+# Or directly: putplace_configure
 
 # Start MongoDB and server
 invoke quickstart
@@ -79,16 +79,16 @@ PutPlace includes a configuration wizard to set up your server after installatio
 
 ```bash
 # Interactive configuration (recommended for first-time setup)
-putplace-configure
+putplace_configure
 
 # Non-interactive configuration (for automation/CI/CD)
-putplace-configure --non-interactive \
+putplace_configure --non-interactive \
   --admin-username admin \
   --admin-email admin@example.com \
   --storage-backend local
 
 # With S3 storage
-putplace-configure --non-interactive \
+putplace_configure --non-interactive \
   --admin-username admin \
   --admin-email admin@example.com \
   --storage-backend s3 \
@@ -96,12 +96,12 @@ putplace-configure --non-interactive \
   --aws-region us-west-2
 
 # Skip validation checks (useful for testing)
-putplace-configure --skip-checks
+putplace_configure --skip-checks
 
 # Standalone AWS tests (new in v0.5.2)
-putplace-configure S3                        # Test S3 access
-putplace-configure SES                       # Test SES access
-putplace-configure S3 --aws-region us-west-2 # Test in specific region
+putplace_configure S3                        # Test S3 access
+putplace_configure SES                       # Test SES access
+putplace_configure S3 --aws-region us-west-2 # Test in specific region
 
 # Via invoke task
 invoke configure --test-mode=S3
@@ -321,7 +321,7 @@ The server looks for `ppserver.toml` in:
 2. `~/.config/putplace/ppserver.toml` (user config)
 3. `/etc/putplace/ppserver.toml` (system config)
 
-You can also use `invoke configure` or `putplace-configure` for guided setup. Environment variables can override TOML settings if needed. See [Configuration Guide](https://putplace.readthedocs.io/en/latest/configuration.html) for details.
+You can also use `invoke configure` or `putplace_configure` for guided setup. Environment variables can override TOML settings if needed. See [Configuration Guide](https://putplace.readthedocs.io/en/latest/configuration.html) for details.
 
 ## API Endpoints
 

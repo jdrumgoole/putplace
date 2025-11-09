@@ -701,7 +701,7 @@ def configure(c, non_interactive=False, admin_username=None, admin_email=None,
         invoke configure --test-mode=S3 --aws-region=us-west-2
     """
     # Run script directly from source (no installation needed)
-    cmd = "uv run python -m putplace.scripts.configure"
+    cmd = "uv run python -m putplace.scripts.putplace_configure"
 
     # Handle standalone test mode
     if test_mode:

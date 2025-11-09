@@ -44,7 +44,7 @@ dependencies = [
 [project.scripts]
 ppclient = "putplace.ppclient:main"
 ppserver = "putplace.ppserver:main"
-putplace-configure = "putplace.scripts.configure:main"
+putplace_configure = "putplace.scripts.putplace_configure:main"
 
 [project.optional-dependencies]
 dev = [
