@@ -292,11 +292,10 @@ async def test_api_login_endpoint(client: AsyncClient, test_db):
         full_name="Login Test User"
     )
 
-    # Try to log in (use form data, not JSON)
+    # Try to log in with JSON
     response = await client.post(
         "/api/login",
-        data={"username": username, "password": password},
-        headers={"Content-Type": "application/x-www-form-urlencoded"}
+        json={"username": username, "password": password}
     )
 
     assert response.status_code == 200
@@ -321,8 +320,7 @@ async def test_api_login_wrong_password(client: AsyncClient, test_db):
     # Try to log in with wrong password
     response = await client.post(
         "/api/login",
-        data={"username": "wrongpasstest", "password": "wrongpass"},
-        headers={"Content-Type": "application/x-www-form-urlencoded"}
+        json={"username": "wrongpasstest", "password": "wrongpass"}
     )
 
     assert response.status_code == 401

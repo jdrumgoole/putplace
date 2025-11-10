@@ -248,7 +248,7 @@ async def test_e2e_file_content_upload_and_deduplication(client, test_db, temp_t
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_e2e_real_server_and_client_with_upload():
+async def test_e2e_real_server_and_client_with_upload(worker_id):
     """Test complete workflow with real server and client subprocess.
 
     This test:
@@ -258,7 +258,11 @@ async def test_e2e_real_server_and_client_with_upload():
     4. Verifies metadata stored in database
     5. Verifies file content stored in storage backend
     6. Tests deduplication
+
+    Note: Uses worker_id to ensure unique database names in parallel execution.
     """
+    # Use worker_id to create unique database name for this test worker
+    worker_suffix = worker_id if worker_id != "master" else "serial"
     # Setup: Create temporary directories for storage and test files
     with tempfile.TemporaryDirectory() as tmpdir:
         temp_path = Path(tmpdir)
@@ -278,8 +282,8 @@ async def test_e2e_real_server_and_client_with_upload():
         sha256_file1 = ppclient.calculate_sha256(test_file1)
         sha256_file2 = ppclient.calculate_sha256(test_file2)
 
-        # Setup test database
-        test_db_name = "putplace_test_e2e_real"
+        # Setup test database with unique name based on worker_id to avoid parallel test conflicts
+        test_db_name = f"putplace_test_e2e_real_{worker_suffix}"
         test_collection = "file_metadata_test_e2e"
         mongo_client = AsyncMongoClient("mongodb://localhost:27017")
         test_db_instance = mongo_client[test_db_name]
@@ -310,7 +314,12 @@ async def test_e2e_real_server_and_client_with_upload():
         assert key_doc is not None, "API key not found in database after creation"
 
         # Start uvicorn server in subprocess
-        server_port = 18000  # Use non-standard port to avoid conflicts
+        # Find an available port dynamically to avoid conflicts in parallel testing
+        import socket
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(('', 0))
+            server_port = s.getsockname()[1]
+
         # Copy current environment and override with test settings
         env = os.environ.copy()
         env.update({
