@@ -204,48 +204,50 @@ async def test_api_cors_headers(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_app_lifespan(test_settings, monkeypatch):
-    """Test application lifespan manager handles startup/shutdown."""
-    import os
-    from putplace import database
+async def test_app_lifespan(test_settings, test_db, monkeypatch):
+    """Test application lifespan manager handles startup/shutdown.
+
+    Note: This test uses the test_db fixture to ensure dependency overrides
+    are in place, preventing global state pollution in serial test execution.
+    """
     from fastapi import FastAPI
+    from putplace.database import MongoDB
+    from putplace import database
 
-    # Set storage path via environment variable before importing
+    # Set storage path via environment variable
     monkeypatch.setenv("STORAGE_PATH", test_settings.storage_path)
-
-    # Force reload of config and main modules with new environment variable
-    import importlib
-    from putplace import config, main
-    importlib.reload(config)
-    importlib.reload(main)
-
-    app = FastAPI()
 
     # Save original mongodb instance
     original_mongodb = database.mongodb
 
-    # Create a new instance for testing
-    from putplace.database import MongoDB
-
+    # Create an isolated test instance (not connected yet)
     test_mongodb = MongoDB()
+
+    # Temporarily replace global instance for this test only
     database.mongodb = test_mongodb
 
+    app = FastAPI()
+
     try:
+        # Import lifespan after monkeypatch to get updated settings
+        from putplace import main
+
         # Test lifespan context manager
         async with main.lifespan(app):
             # Inside lifespan, database should be connected
-            assert database.mongodb.client is not None
-            assert database.mongodb.collection is not None
+            assert test_mongodb.client is not None
+            assert test_mongodb.collection is not None
 
         # After lifespan exits, connection should be closed (but client still exists)
-        assert database.mongodb.client is not None
+        assert test_mongodb.client is not None
 
     finally:
-        # Restore original
+        # Close test mongodb connection
+        if test_mongodb.client:
+            await test_mongodb.client.close()
+
+        # Restore original instance immediately
         database.mongodb = original_mongodb
-        # Reload modules again to restore original settings
-        importlib.reload(config)
-        importlib.reload(main)
 
 
 @pytest.mark.asyncio
