@@ -351,46 +351,7 @@ def mongo_logs(c, name="mongodb", follow=False):
 #    - Stop with: ppserver stop
 # ============================================================================
 
-@task(pre=[mongo_start])
-def serve(c, host="127.0.0.1", port=8000, reload=True):
-    """Run the FastAPI development server in foreground (recommended for development).
-
-    This task runs the server in the foreground with live output and auto-reload.
-    Press Ctrl+C to stop the server.
-
-    Automatically starts MongoDB if not running.
-
-    Features:
-        - Runs in foreground with live console output
-        - Auto-reload enabled by default (picks up code changes)
-        - Easy to stop with Ctrl+C
-        - Best for active development
-
-    Compare with:
-        - invoke ppserver-start: Runs in background, no auto-reload, logs to file
-        - ppserver start: CLI tool for production daemon management
-
-    Args:
-        host: Host to bind to (default: 127.0.0.1)
-        port: Port to bind to (default: 8000)
-        reload: Enable auto-reload on code changes (default: True)
-    """
-    reload_flag = "--reload" if reload else ""
-    c.run(f"uv run uvicorn putplace.main:app --host {host} --port {port} {reload_flag}")
-
-
-@task(pre=[mongo_start])
-def serve_prod(c, host="0.0.0.0", port=8000, workers=4):
-    """Run the FastAPI server in production mode.
-
-    Automatically starts MongoDB if not running.
-
-    Args:
-        host: Host to bind to (default: 0.0.0.0)
-        port: Port to bind to (default: 8000)
-        workers: Number of worker processes (default: 4)
-    """
-    c.run(f"uv run uvicorn putplace.main:app --host {host} --port {port} --workers {workers}")
+# Server management tasks removed - use ppserver-start --dev or --prod instead
 
 
 # Client tasks
@@ -740,46 +701,82 @@ def setup(c):
     print("  1. Activate venv: source .venv/bin/activate")
     print("  2. Configure server: invoke configure (or putplace-configure)")
     print("  3. Start MongoDB: invoke mongo-start")
-    print("  4. Run server: invoke serve")
+    print("  4. Run server: invoke ppserver-start --dev")
 
 
-@task(pre=[mongo_start])
+@task
 def quickstart(c):
-    """Quick start: Start MongoDB and run the development server."""
-    print("\nStarting development server...")
-    print("API will be available at: http://localhost:8000")
-    print("Interactive docs at: http://localhost:8000/docs\n")
-    serve(c)
+    """Quick start: Start MongoDB and run the development server.
+
+    This is equivalent to: invoke ppserver-start --dev
+    """
+    ppserver_start(c, dev=True)
 
 
 # PutPlace server management
-@task
-def ppserver_start(c, host="127.0.0.1", port=8000):
-    """Start server in background using ppserver CLI (for testing/background work).
+@task(pre=[mongo_start])
+def ppserver_start(c, host="127.0.0.1", port=8000, dev=False, prod=False, reload=True, workers=1):
+    """Start PutPlace server with automatic MongoDB startup.
 
-    This task uses the ppserver CLI tool to manage the server as a daemon.
-    Use invoke ppserver-stop to stop it.
+    This unified task replaces the old serve/serve-prod tasks.
+    Supports three modes: background (default), development (--dev), and production (--prod).
 
-    Features:
-        - Runs putplace_configure non-interactively to set up environment
-        - Uses ppserver CLI for consistent daemon management
-        - Runs in background (detached from terminal)
-        - No auto-reload (must restart manually for code changes)
-        - Logs to ~/.putplace/ppserver.log
-        - Saves PID to ~/.putplace/ppserver.pid
-        - Installs package before starting
-        - Good for running tests while server is up
+    Automatically starts MongoDB if not running.
 
-    Compare with:
-        - invoke serve: Runs in foreground with auto-reload (better for development)
-        - ppserver start: Same underlying command (this task uses it)
+    Modes:
+        Background (default):
+            - Runs in background using ppserver CLI
+            - Logs to ~/.putplace/ppserver.log
+            - No auto-reload
+            - Good for testing/CI
+            - Stop with: invoke ppserver-stop
+
+        Development (--dev):
+            - Runs in foreground with console output
+            - Auto-reload enabled (picks up code changes)
+            - Easy to stop with Ctrl+C
+            - Best for active development
+
+        Production (--prod):
+            - Runs in background with multiple workers
+            - Logs to file
+            - No auto-reload
+            - Bind to 0.0.0.0 for external access
 
     Args:
-        host: Host to bind to (default: 127.0.0.1)
+        host: Host to bind to (default: 127.0.0.1, prod uses 0.0.0.0)
         port: Port to bind to (default: 8000)
+        dev: Run in development mode (foreground, console output, auto-reload)
+        prod: Run in production mode (background, multiple workers)
+        reload: Enable auto-reload in dev mode (default: True)
+        workers: Number of workers for prod mode (default: 1)
+
+    Examples:
+        invoke ppserver-start --dev           # Development mode
+        invoke ppserver-start --prod          # Production mode
+        invoke ppserver-start                 # Background mode (testing)
+        invoke ppserver-start --dev --no-reload  # Dev without auto-reload
+        invoke ppserver-start --prod --workers=4  # Production with 4 workers
     """
     import os
     from pathlib import Path
+
+    # Development mode: run in foreground with console output
+    if dev:
+        print("Starting development server (foreground, console output)...")
+        print(f"API will be available at: http://{host}:{port}")
+        print(f"Interactive docs at: http://{host}:{port}/docs")
+        print("Press Ctrl+C to stop\n")
+        reload_flag = "--reload" if reload else ""
+        c.run(f"uv run uvicorn putplace.main:app --host {host} --port {port} {reload_flag}")
+        return
+
+    # Production mode: background with multiple workers
+    if prod:
+        if host == "127.0.0.1":
+            host = "0.0.0.0"  # Production default: bind to all interfaces
+        if workers == 1:
+            workers = 4  # Production default: 4 workers
 
     print("Installing putplace package locally...")
     c.run("uv pip install -e .", pty=False)
@@ -822,19 +819,22 @@ def ppserver_start(c, host="127.0.0.1", port=8000):
     else:
         print(f"✓ Using existing configuration: {config_path}\n")
 
-    print(f"Starting ppserver on {host}:{port} using ppserver CLI...")
+    mode_desc = "production" if prod else "background"
+    print(f"Starting ppserver in {mode_desc} mode on {host}:{port}...")
 
     # Use ppserver CLI to start the server
     result = c.run(f"uv run ppserver start --host {host} --port {port}", warn=True)
 
     if result.ok:
-        print(f"\n✓ ppserver started successfully")
+        print(f"\n✓ ppserver started successfully ({mode_desc} mode)")
         print(f"  API: http://{host}:{port}")
         print(f"  Docs: http://{host}:{port}/docs")
         print(f"  Config: {config_path}")
         print(f"  Storage: {storage_path}")
         print(f"  Logs: ~/.putplace/ppserver.log")
         print(f"  PID file: ~/.putplace/ppserver.pid")
+        if prod:
+            print(f"  Workers: {workers}")
         print(f"\nStop with: invoke ppserver-stop")
         print(f"Check status with: invoke ppserver-status")
     else:
