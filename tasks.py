@@ -715,27 +715,27 @@ def quickstart(c):
 
 # PutPlace server management
 @task(pre=[mongo_start])
-def ppserver_start(c, host="127.0.0.1", port=8000, dev=False, prod=False, reload=True, workers=1):
+def ppserver_start(c, host="127.0.0.1", port=8000, dev=True, prod=False, background=False, reload=True, workers=1):
     """Start PutPlace server with automatic MongoDB startup.
 
     This unified task replaces the old serve/serve-prod tasks.
-    Supports three modes: background (default), development (--dev), and production (--prod).
+    Supports three modes: development (default), background (--background), and production (--prod).
 
     Automatically starts MongoDB if not running.
 
     Modes:
-        Background (default):
+        Development (default):
+            - Runs in foreground with console output
+            - Auto-reload enabled (picks up code changes)
+            - Easy to stop with Ctrl+C
+            - Best for active development
+
+        Background (--background):
             - Runs in background using ppserver CLI
             - Logs to ~/.putplace/ppserver.log
             - No auto-reload
             - Good for testing/CI
             - Stop with: invoke ppserver-stop
-
-        Development (--dev):
-            - Runs in foreground with console output
-            - Auto-reload enabled (picks up code changes)
-            - Easy to stop with Ctrl+C
-            - Best for active development
 
         Production (--prod):
             - Runs in background with multiple workers
@@ -746,20 +746,25 @@ def ppserver_start(c, host="127.0.0.1", port=8000, dev=False, prod=False, reload
     Args:
         host: Host to bind to (default: 127.0.0.1, prod uses 0.0.0.0)
         port: Port to bind to (default: 8000)
-        dev: Run in development mode (foreground, console output, auto-reload)
+        dev: Run in development mode - default True (use --no-dev to disable)
         prod: Run in production mode (background, multiple workers)
+        background: Run in background mode (for testing/CI)
         reload: Enable auto-reload in dev mode (default: True)
         workers: Number of workers for prod mode (default: 1)
 
     Examples:
-        invoke ppserver-start --dev           # Development mode
-        invoke ppserver-start --prod          # Production mode
-        invoke ppserver-start                 # Background mode (testing)
-        invoke ppserver-start --dev --no-reload  # Dev without auto-reload
-        invoke ppserver-start --prod --workers=4  # Production with 4 workers
+        invoke ppserver-start                    # Development mode (default)
+        invoke ppserver-start --background       # Background mode (testing)
+        invoke ppserver-start --prod             # Production mode
+        invoke ppserver-start --no-reload        # Dev without auto-reload
+        invoke ppserver-start --prod --workers=4 # Production with 4 workers
     """
     import os
     from pathlib import Path
+
+    # Production or background mode disable dev
+    if prod or background:
+        dev = False
 
     # Development mode: run in foreground with console output
     if dev:
