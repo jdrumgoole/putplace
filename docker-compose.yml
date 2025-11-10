@@ -1,0 +1,127 @@
+# Docker Compose for PutPlace
+# For local development and testing
+
+version: '3.8'
+
+services:
+  # PutPlace FastAPI server
+  putplace:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: putplace-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      # Database
+      - MONGODB_URL=mongodb://mongo:27017
+      - MONGODB_DATABASE=putplace
+      - MONGODB_COLLECTION=file_metadata
+
+      # Storage (use local for testing, s3 for production)
+      - STORAGE_BACKEND=local
+      - STORAGE_PATH=/app/storage/files
+
+      # Optional: S3 configuration (uncomment for S3 testing)
+      # - STORAGE_BACKEND=s3
+      # - S3_BUCKET_NAME=putplace-files
+      # - AWS_REGION=us-east-1
+      # - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      # - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+
+      # Optional: Google OAuth
+      # - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+
+      # Admin user (created on first startup)
+      - PUTPLACE_ADMIN_USERNAME=admin
+      - PUTPLACE_ADMIN_PASSWORD=admin123
+      - PUTPLACE_ADMIN_EMAIL=admin@putplace.local
+
+      # API settings
+      - API_TITLE=PutPlace API
+      - API_VERSION=0.5.1
+    volumes:
+      - putplace-storage:/app/storage
+    depends_on:
+      mongo:
+        condition: service_healthy
+    networks:
+      - putplace-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # MongoDB
+  mongo:
+    image: mongo:7
+    container_name: putplace-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=admin123
+      - MONGO_INITDB_DATABASE=putplace
+    volumes:
+      - mongo-data:/data/db
+      - mongo-config:/data/configdb
+    networks:
+      - putplace-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Optional: Nginx reverse proxy with SSL
+  # Uncomment to enable
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: putplace-nginx
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  #     - ./ssl:/etc/nginx/ssl:ro
+  #   depends_on:
+  #     - putplace
+  #   networks:
+  #     - putplace-network
+
+  # Optional: MongoDB Express (web UI for MongoDB)
+  # Uncomment to enable
+  # mongo-express:
+  #   image: mongo-express:latest
+  #   container_name: putplace-mongo-express
+  #   restart: unless-stopped
+  #   ports:
+  #     - "8081:8081"
+  #   environment:
+  #     - ME_CONFIG_MONGODB_ADMINUSERNAME=admin
+  #     - ME_CONFIG_MONGODB_ADMINPASSWORD=admin123
+  #     - ME_CONFIG_MONGODB_URL=mongodb://admin:admin123@mongo:27017/
+  #     - ME_CONFIG_BASICAUTH_USERNAME=admin
+  #     - ME_CONFIG_BASICAUTH_PASSWORD=admin123
+  #   depends_on:
+  #     - mongo
+  #   networks:
+  #     - putplace-network
+
+volumes:
+  mongo-data:
+    driver: local
+  mongo-config:
+    driver: local
+  putplace-storage:
+    driver: local
+
+networks:
+  putplace-network:
+    driver: bridge

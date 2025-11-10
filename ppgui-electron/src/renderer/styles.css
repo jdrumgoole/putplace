@@ -421,8 +421,40 @@ input[readonly] {
     font-weight: 500;
 }
 
+.oauth-separator {
+    display: none; /* Hidden by default, shown when Google OAuth is configured */
+    text-align: center;
+    margin: 20px 0;
+    position: relative;
+}
+
+.oauth-separator::before,
+.oauth-separator::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    width: 40%;
+    height: 1px;
+    background: #e2e8f0;
+}
+
+.oauth-separator::before {
+    left: 0;
+}
+
+.oauth-separator::after {
+    right: 0;
+}
+
+.oauth-separator span {
+    background: #f7fafc;
+    padding: 0 10px;
+    color: #718096;
+    font-size: 14px;
+}
+
 .oauth-controls {
-    display: flex;
+    display: none; /* Hidden by default, shown when Google OAuth is configured */
     justify-content: center;
     margin: 20px 0;
 }

@@ -503,6 +503,8 @@ declare const google: any;  // Google Sign-In library
 // Google Sign-In configuration
 const GOOGLE_CLIENT_ID = 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com';  // Will be set from server config
 
+let googleSignInInitialized = false;
+
 async function initializeGoogleSignIn() {
   // Wait for Google library to load
   if (typeof google === 'undefined') {
@@ -511,14 +513,31 @@ async function initializeGoogleSignIn() {
     return;
   }
 
+  // Don't reinitialize if already done
+  if (googleSignInInitialized) {
+    return;
+  }
+
   // Fetch Google Client ID from server
   try {
     const response = await fetch(`${serverUrl}/api/oauth/config`);
+
+    if (!response.ok) {
+      throw new Error(`Server returned ${response.status}`);
+    }
+
     const config = await response.json();
 
-    if (!config.google_client_id) {
+    if (!config.google_client_id || config.google_client_id === '') {
       console.log('Google OAuth not configured on server');
+      hideGoogleSignIn();
       return;
+    }
+
+    // Clear any previous content
+    const googleButton = document.getElementById('google-signin-button');
+    if (googleButton) {
+      googleButton.innerHTML = '';
     }
 
     // Initialize Google Sign-In button
@@ -528,7 +547,7 @@ async function initializeGoogleSignIn() {
     });
 
     google.accounts.id.renderButton(
-      document.getElementById('google-signin-button'),
+      googleButton,
       {
         theme: 'outline',
         size: 'large',
@@ -537,19 +556,30 @@ async function initializeGoogleSignIn() {
       }
     );
 
-    console.log('Google Sign-In initialized');
+    // Show the OAuth controls
+    showGoogleSignIn();
+    googleSignInInitialized = true;
+    console.log('Google Sign-In initialized successfully');
   } catch (error) {
     console.log('Could not initialize Google Sign-In:', error);
-    // Hide Google Sign-In button if not configured
-    const googleButton = document.getElementById('google-signin-button');
-    if (googleButton && googleButton.parentElement) {
-      googleButton.parentElement.style.display = 'none';
-      const separator = document.querySelector('.oauth-separator');
-      if (separator) {
-        (separator as HTMLElement).style.display = 'none';
-      }
-    }
+    hideGoogleSignIn();
   }
+}
+
+function showGoogleSignIn() {
+  const oauthControls = document.querySelector('.oauth-controls') as HTMLElement;
+  const separator = document.querySelector('.oauth-separator') as HTMLElement;
+
+  if (oauthControls) oauthControls.style.display = 'flex';
+  if (separator) separator.style.display = 'flex';
+}
+
+function hideGoogleSignIn() {
+  const oauthControls = document.querySelector('.oauth-controls') as HTMLElement;
+  const separator = document.querySelector('.oauth-separator') as HTMLElement;
+
+  if (oauthControls) oauthControls.style.display = 'none';
+  if (separator) separator.style.display = 'none';
 }
 
 async function handleGoogleCallback(response: any) {
