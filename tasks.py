@@ -796,6 +796,8 @@ def ppserver_start(c, host="127.0.0.1", port=8000):
     # Only run configure if config doesn't exist
     if not config_path.exists():
         print("Setting up PutPlace configuration...")
+        log_file = Path.home() / ".putplace" / "ppserver.log"
+        pid_file = Path.home() / ".putplace" / "ppserver.pid"
         configure_cmd = [
             "uv", "run", "putplace_configure",
             "--non-interactive",
@@ -808,6 +810,8 @@ def ppserver_start(c, host="127.0.0.1", port=8000):
             "--storage-backend", "local",
             "--storage-path", str(storage_path),
             "--config-file", str(config_path),
+            "--log-file", str(log_file),
+            "--pid-file", str(pid_file),
         ]
         result = c.run(" ".join(configure_cmd), warn=True)
         if result.ok:

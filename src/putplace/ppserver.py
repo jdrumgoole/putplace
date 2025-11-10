@@ -9,19 +9,70 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Dict, Any
 
 from rich.console import Console
 
 console = Console()
 
+# TOML reading support
+try:
+    import tomllib  # Python 3.11+
+except ImportError:
+    try:
+        import tomli as tomllib  # Fallback for Python 3.10
+    except ImportError:
+        tomllib = None
+
+
+def load_config() -> Dict[str, Any]:
+    """Load configuration from ppserver.toml.
+
+    Searches for ppserver.toml in standard locations:
+    1. ./ppserver.toml (current directory)
+    2. ~/.config/putplace/ppserver.toml (user config)
+    3. /etc/putplace/ppserver.toml (system config)
+
+    Returns a dictionary with server configuration, or empty dict if not found.
+    """
+    if not tomllib:
+        return {}
+
+    search_paths = [
+        Path("./ppserver.toml"),
+        Path.home() / ".config" / "putplace" / "ppserver.toml",
+        Path("/etc/putplace/ppserver.toml")
+    ]
+
+    for config_path in search_paths:
+        if config_path.exists():
+            try:
+                with open(config_path, 'rb') as f:
+                    config = tomllib.load(f)
+                console.print(f"[dim]Using config from {config_path}[/dim]")
+                return config
+            except Exception as e:
+                console.print(f"[yellow]Warning: Could not load {config_path}: {e}[/yellow]")
+                continue
+
+    return {}
+
 
 def get_pid_file() -> Path:
-    """Get the PID file path.
+    """Get the PID file path from config or use default.
 
     Returns:
         Path to PID file
     """
-    # Use ~/.putplace/ppserver.pid for user-level installation
+    # Try to get from config first
+    config = load_config()
+    if config and 'logging' in config and 'pid_file' in config['logging']:
+        pid_path = Path(config['logging']['pid_file'])
+        # Ensure parent directory exists
+        pid_path.parent.mkdir(parents=True, exist_ok=True)
+        return pid_path
+
+    # Default: Use ~/.putplace/ppserver.pid for user-level installation
     pid_dir = Path.home() / ".putplace"
     pid_dir.mkdir(exist_ok=True)
     return pid_dir / "ppserver.pid"
@@ -133,8 +184,15 @@ def start_server(host: str = "127.0.0.1", port: int = 8000, reload: bool = False
     if reload:
         cmd.append("--reload")
 
-    # Get log file path
-    log_file = get_log_file()
+    # Get log file path from config, fallback to default
+    config = load_config()
+    log_file = None
+    if config and 'logging' in config and 'log_file' in config['logging']:
+        log_file = config['logging']['log_file']
+
+    # If no log file configured, use default
+    if not log_file:
+        log_file = get_log_file()
 
     try:
         # Start server in background
@@ -324,6 +382,14 @@ def logs_server(follow: bool = False, lines: int = 50) -> int:
 
 def main() -> int:
     """Main entry point."""
+    # Load configuration from ppserver.toml
+    config = load_config()
+
+    # Extract server settings from config with defaults
+    server_config = config.get('server', {})
+    default_host = server_config.get('host', '127.0.0.1')
+    default_port = server_config.get('port', 8000)
+
     parser = argparse.ArgumentParser(
         prog="ppserver",
         description="Manage the PutPlace API server",
@@ -337,10 +403,10 @@ Commands:
   logs      Show server logs
 
 Examples:
-  # Start server on default port (8000)
+  # Start server (uses ppserver.toml if present)
   ppserver start
 
-  # Start server on custom port
+  # Start server on custom port (overrides config)
   ppserver start --port 8080
 
   # Start server on all interfaces
@@ -372,14 +438,14 @@ Examples:
     start_parser = subparsers.add_parser("start", help="Start the server")
     start_parser.add_argument(
         "--host",
-        default="127.0.0.1",
-        help="Host to bind to (default: 127.0.0.1)",
+        default=default_host,
+        help=f"Host to bind to (default: {default_host})",
     )
     start_parser.add_argument(
         "--port",
         type=int,
-        default=8000,
-        help="Port to bind to (default: 8000)",
+        default=default_port,
+        help=f"Port to bind to (default: {default_port})",
     )
     start_parser.add_argument(
         "--reload",
@@ -394,14 +460,14 @@ Examples:
     restart_parser = subparsers.add_parser("restart", help="Restart the server")
     restart_parser.add_argument(
         "--host",
-        default="127.0.0.1",
-        help="Host to bind to (default: 127.0.0.1)",
+        default=default_host,
+        help=f"Host to bind to (default: {default_host})",
     )
     restart_parser.add_argument(
         "--port",
         type=int,
-        default=8000,
-        help="Port to bind to (default: 8000)",
+        default=default_port,
+        help=f"Port to bind to (default: {default_port})",
     )
     restart_parser.add_argument(
         "--reload",

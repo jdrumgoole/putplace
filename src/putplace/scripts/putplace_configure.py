@@ -312,6 +312,8 @@ def write_toml_file(config: dict, toml_path: Path) -> tuple[bool, str]:
         import tomli_w
 
         # Build TOML configuration
+        from pathlib import Path as PathLib
+
         toml_config = {
             "server": {
                 # Secure defaults: bind to localhost only for initial setup
@@ -329,6 +331,12 @@ def write_toml_file(config: dict, toml_path: Path) -> tuple[bool, str]:
             "api": {
                 "title": "PutPlace API",
                 "description": "File metadata storage API"
+            },
+            "logging": {
+                # Development defaults: logs to console for interactive use
+                # Production: set log_file to a path for persistent logging
+                "log_file": config.get('log_file', None),  # None = console only
+                "pid_file": config.get('pid_file', str(PathLib.home() / ".putplace" / "ppserver.pid")),
             },
             "storage": {}
         }
@@ -543,6 +551,8 @@ async def run_noninteractive_config(args) -> dict:
         'admin_email': args.admin_email,
         'storage_backend': args.storage_backend,
         'config_path': Path(args.config_file),
+        'log_file': args.log_file,  # None for console, path for file logging
+        'pid_file': args.pid_file,  # Custom PID file location
     }
 
     # Generate or use provided password
@@ -747,6 +757,16 @@ Examples:
         '--config-file',
         default='ppserver.toml',
         help='Path to configuration file (default: ppserver.toml)'
+    )
+
+    # Logging options
+    parser.add_argument(
+        '--log-file',
+        help='Path to log file (default: console only for development)'
+    )
+    parser.add_argument(
+        '--pid-file',
+        help='Path to PID file (default: ~/.putplace/ppserver.pid)'
     )
 
     args = parser.parse_args()
