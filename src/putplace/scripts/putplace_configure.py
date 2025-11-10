@@ -333,13 +333,15 @@ def write_toml_file(config: dict, toml_path: Path) -> tuple[bool, str]:
                 "description": "File metadata storage API"
             },
             "logging": {
-                # Development defaults: logs to console for interactive use
-                # Production: set log_file to a path for persistent logging
-                "log_file": config.get('log_file', None),  # None = console only
                 "pid_file": config.get('pid_file', str(PathLib.home() / ".putplace" / "ppserver.pid")),
             },
             "storage": {}
         }
+
+        # Add log_file to logging section only if specified (TOML doesn't support None)
+        log_file = config.get('log_file')
+        if log_file:
+            toml_config["logging"]["log_file"] = log_file
 
         # Storage configuration
         storage_backend = config.get('storage_backend', 'local')
@@ -551,9 +553,13 @@ async def run_noninteractive_config(args) -> dict:
         'admin_email': args.admin_email,
         'storage_backend': args.storage_backend,
         'config_path': Path(args.config_file),
-        'log_file': args.log_file,  # None for console, path for file logging
-        'pid_file': args.pid_file,  # Custom PID file location
     }
+
+    # Only add log_file and pid_file if specified (avoid None values)
+    if args.log_file:
+        config['log_file'] = args.log_file
+    if args.pid_file:
+        config['pid_file'] = args.pid_file
 
     # Generate or use provided password
     if args.admin_password:
