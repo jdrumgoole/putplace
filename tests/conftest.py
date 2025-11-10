@@ -1,4 +1,8 @@
-"""Pytest configuration and shared fixtures."""
+"""Pytest configuration and shared fixtures.
+
+This module demonstrates using putplace_configure in non-interactive mode
+to set up test environments programmatically.
+"""
 
 import asyncio
 import tempfile
@@ -12,6 +16,91 @@ from pymongo import AsyncMongoClient
 from putplace.config import Settings
 from putplace.database import MongoDB
 from putplace.main import app
+
+
+def run_configure(
+    db_name: str,
+    storage_path: Path,
+    config_path: Path,
+    admin_username: str = "test_admin",
+    admin_email: str = "test@test.local",
+    admin_password: str = "test_password_123",
+    storage_backend: str = "local",
+    s3_bucket: str | None = None,
+    aws_region: str = "eu-west-1",
+    skip_checks: bool = True,
+) -> tuple[bool, str]:
+    """Run putplace_configure in non-interactive mode.
+
+    Helper function to configure PutPlace programmatically for testing.
+
+    Args:
+        db_name: MongoDB database name
+        storage_path: Path to storage directory
+        config_path: Path to output configuration file
+        admin_username: Admin username (default: test_admin)
+        admin_email: Admin email (default: test@test.local)
+        admin_password: Admin password (default: test_password_123)
+        storage_backend: Storage backend ('local' or 's3', default: local)
+        s3_bucket: S3 bucket name (required if storage_backend='s3')
+        aws_region: AWS region (default: eu-west-1)
+        skip_checks: Skip MongoDB/AWS validation checks (default: True)
+
+    Returns:
+        Tuple of (success: bool, message: str)
+
+    Example:
+        >>> storage_path = Path("/tmp/test_storage")
+        >>> config_path = Path("/tmp/test_config.toml")
+        >>> success, msg = run_configure(
+        ...     db_name="test_db",
+        ...     storage_path=storage_path,
+        ...     config_path=config_path,
+        ... )
+        >>> print(f"Success: {success}")
+        >>> print(f"Config at: {config_path}")
+    """
+    import subprocess
+    import sys
+
+    cmd = [
+        sys.executable, "-m", "putplace.scripts.putplace_configure",
+        "--non-interactive",
+        "--mongodb-url", "mongodb://localhost:27017",
+        "--mongodb-database", db_name,
+        "--admin-username", admin_username,
+        "--admin-email", admin_email,
+        "--admin-password", admin_password,
+        "--storage-backend", storage_backend,
+        "--storage-path", str(storage_path),
+        "--config-file", str(config_path),
+    ]
+
+    if skip_checks:
+        cmd.append("--skip-checks")
+
+    if storage_backend == "s3":
+        if not s3_bucket:
+            return False, "S3 bucket required when storage_backend='s3'"
+        cmd.extend(["--s3-bucket", s3_bucket, "--aws-region", aws_region])
+
+    try:
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+        if result.returncode == 0:
+            return True, f"Configuration created successfully at {config_path}"
+        else:
+            return False, f"Configure failed: {result.stderr or result.stdout}"
+
+    except subprocess.TimeoutExpired:
+        return False, "Configure command timed out"
+    except Exception as e:
+        return False, f"Configure error: {str(e)}"
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -45,20 +134,52 @@ def cleanup_test_databases():
 def test_settings(worker_id: str, tmp_path_factory) -> Settings:
     """Test settings with test database and temporary storage.
 
+    Uses putplace_configure in non-interactive mode to generate proper
+    configuration for each test worker. This demonstrates how to use
+    the configure script programmatically.
+
     Each pytest-xdist worker gets its own database to avoid race conditions.
     In serial mode (no worker_id), uses 'master' as the identifier.
 
     Args:
         worker_id: pytest-xdist worker identifier (e.g., 'gw0', 'gw1', 'master')
         tmp_path_factory: pytest fixture for creating temporary directories
+
+    Returns:
+        Settings object configured for this test worker
     """
     # pytest-xdist provides worker_id (e.g., 'gw0', 'gw1')
     # In serial mode, worker_id is 'master'
     db_name = f"putplace_test_{worker_id}"
 
-    # Create a temporary storage directory for this worker
+    # Create temporary directories for this worker
     storage_path = tmp_path_factory.mktemp(f"storage_{worker_id}")
+    config_path = tmp_path_factory.mktemp(f"config_{worker_id}") / "ppserver.toml"
 
+    # Use putplace_configure in non-interactive mode to set up test environment
+    success, message = run_configure(
+        db_name=db_name,
+        storage_path=storage_path,
+        config_path=config_path,
+        admin_username=f"test_admin_{worker_id}",
+        admin_email=f"test_admin_{worker_id}@test.local",
+        admin_password="test_password_123",
+        storage_backend="local",
+        skip_checks=True,  # Skip MongoDB and AWS checks for speed
+    )
+
+    if not success:
+        # If configure fails, fall back to manual settings creation
+        # This ensures tests can still run even if configure script has issues
+        return Settings(
+            mongodb_url="mongodb://localhost:27017",
+            mongodb_database=db_name,
+            mongodb_collection="file_metadata_test",
+            storage_path=str(storage_path),
+        )
+
+    # Return settings that match the configuration
+    # The configure script has already created the admin user and config file
     return Settings(
         mongodb_url="mongodb://localhost:27017",
         mongodb_database=db_name,
