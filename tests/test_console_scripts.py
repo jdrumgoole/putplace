@@ -121,13 +121,20 @@ def test_ppserver_version_exists(install_package):
     assert "ppserver" in result.stdout
 
 
-def test_ppserver_start_stop(install_package):
+def test_ppserver_start_stop(install_package, tmp_path):
     """Test that ppserver can start and stop successfully."""
+    import os
+
+    # Create test environment with temporary storage directory
+    test_env = os.environ.copy()
+    test_env["STORAGE_PATH"] = str(tmp_path / "storage")
+
     # Make sure server is not already running
     subprocess.run(
         ["ppserver", "stop"],
         capture_output=True,
         timeout=10,
+        env=test_env,
     )
     time.sleep(1)
 
@@ -138,6 +145,7 @@ def test_ppserver_start_stop(install_package):
             capture_output=True,
             text=True,
             timeout=30,
+            env=test_env,
         )
 
         assert result.returncode == 0, f"ppserver start failed:\n{result.stderr}\n{result.stdout}"
@@ -152,6 +160,7 @@ def test_ppserver_start_stop(install_package):
             capture_output=True,
             text=True,
             timeout=10,
+            env=test_env,
         )
 
         assert result.returncode == 0, f"ppserver status failed:\n{result.stderr}"
@@ -164,6 +173,7 @@ def test_ppserver_start_stop(install_package):
             capture_output=True,
             text=True,
             timeout=10,
+            env=test_env,
         )
 
         # Verify stop succeeded
@@ -253,13 +263,20 @@ def test_ppclient_with_exclude_patterns(install_package):
         assert ".git" in result.stdout
 
 
-def test_ppserver_restart(install_package):
+def test_ppserver_restart(install_package, tmp_path):
     """Test that ppserver restart command works."""
+    import os
+
+    # Create test environment with temporary storage directory
+    test_env = os.environ.copy()
+    test_env["STORAGE_PATH"] = str(tmp_path / "storage")
+
     # Make sure server is not running
     subprocess.run(
         ["ppserver", "stop"],
         capture_output=True,
         timeout=10,
+        env=test_env,
     )
     time.sleep(1)
 
@@ -269,6 +286,7 @@ def test_ppserver_restart(install_package):
             ["ppserver", "start", "--port", "8766"],
             capture_output=True,
             timeout=30,
+            env=test_env,
         )
         time.sleep(2)
 
@@ -278,6 +296,7 @@ def test_ppserver_restart(install_package):
             capture_output=True,
             text=True,
             timeout=30,
+            env=test_env,
         )
 
         assert result.returncode == 0, f"ppserver restart failed:\n{result.stderr}\n{result.stdout}"
@@ -291,6 +310,7 @@ def test_ppserver_restart(install_package):
             capture_output=True,
             text=True,
             timeout=10,
+            env=test_env,
         )
 
         assert "running" in status_result.stdout.lower()
@@ -301,6 +321,7 @@ def test_ppserver_restart(install_package):
             ["ppserver", "stop"],
             capture_output=True,
             timeout=10,
+            env=test_env,
         )
 
 

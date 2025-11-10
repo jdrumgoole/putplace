@@ -204,11 +204,20 @@ async def test_api_cors_headers(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_app_lifespan():
+async def test_app_lifespan(test_settings, monkeypatch):
     """Test application lifespan manager handles startup/shutdown."""
-    from putplace.main import lifespan
+    import os
     from putplace import database
     from fastapi import FastAPI
+
+    # Set storage path via environment variable before importing
+    monkeypatch.setenv("STORAGE_PATH", test_settings.storage_path)
+
+    # Force reload of config and main modules with new environment variable
+    import importlib
+    from putplace import config, main
+    importlib.reload(config)
+    importlib.reload(main)
 
     app = FastAPI()
 
@@ -223,7 +232,7 @@ async def test_app_lifespan():
 
     try:
         # Test lifespan context manager
-        async with lifespan(app):
+        async with main.lifespan(app):
             # Inside lifespan, database should be connected
             assert database.mongodb.client is not None
             assert database.mongodb.collection is not None
@@ -234,6 +243,9 @@ async def test_app_lifespan():
     finally:
         # Restore original
         database.mongodb = original_mongodb
+        # Reload modules again to restore original settings
+        importlib.reload(config)
+        importlib.reload(main)
 
 
 @pytest.mark.asyncio

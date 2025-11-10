@@ -3,11 +3,13 @@
 import logging
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 
 from fastapi import Depends, FastAPI, File, HTTPException, UploadFile, status
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.staticfiles import StaticFiles
 from pymongo.errors import ConnectionFailure
 
 from .config import settings
@@ -242,12 +244,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             from pathlib import Path
             storage_path = Path(settings.storage_path).resolve()
 
-            # Check if directory exists and is writable
+            # Create directory if it doesn't exist
             if not storage_path.exists():
-                raise RuntimeError(
-                    f"Storage directory does not exist: {storage_path}\n"
-                    f"Please create this directory or update STORAGE_PATH in your .env file."
-                )
+                try:
+                    storage_path.mkdir(parents=True, exist_ok=True)
+                    logger.info(f"Created storage directory: {storage_path}")
+                except Exception as e:
+                    raise RuntimeError(
+                        f"Failed to create storage directory: {storage_path}\n"
+                        f"Error: {e}\n"
+                        f"Please ensure the parent directory is writable or create it manually."
+                    )
 
             if not storage_path.is_dir():
                 raise RuntimeError(
@@ -331,6 +338,12 @@ app = FastAPI(
     description=settings.api_description,
     lifespan=lifespan,
 )
+
+# Mount static files directory
+STATIC_DIR = Path(__file__).parent / "static"
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+    logger.info(f"Static files mounted at /static from {STATIC_DIR}")
 
 
 @app.get("/", response_class=HTMLResponse, tags=["health"])

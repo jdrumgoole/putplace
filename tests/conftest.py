@@ -42,23 +42,28 @@ def cleanup_test_databases():
 
 
 @pytest.fixture
-def test_settings(worker_id: str) -> Settings:
-    """Test settings with test database.
+def test_settings(worker_id: str, tmp_path_factory) -> Settings:
+    """Test settings with test database and temporary storage.
 
     Each pytest-xdist worker gets its own database to avoid race conditions.
     In serial mode (no worker_id), uses 'master' as the identifier.
 
     Args:
         worker_id: pytest-xdist worker identifier (e.g., 'gw0', 'gw1', 'master')
+        tmp_path_factory: pytest fixture for creating temporary directories
     """
     # pytest-xdist provides worker_id (e.g., 'gw0', 'gw1')
     # In serial mode, worker_id is 'master'
     db_name = f"putplace_test_{worker_id}"
 
+    # Create a temporary storage directory for this worker
+    storage_path = tmp_path_factory.mktemp(f"storage_{worker_id}")
+
     return Settings(
         mongodb_url="mongodb://localhost:27017",
         mongodb_database=db_name,
         mongodb_collection="file_metadata_test",
+        storage_path=str(storage_path),
     )
 
 
