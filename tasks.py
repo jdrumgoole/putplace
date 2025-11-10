@@ -675,11 +675,13 @@ def gui_electron_test_install(c, automated=False):
     print("\n✓ Test complete!")
 
 
-@task
+@task(pre=[mongo_start])
 def configure(c, non_interactive=False, admin_username=None, admin_email=None,
               storage_backend=None, config_file='ppserver.toml', test_mode=None,
               aws_region=None):
     """Run the server configuration wizard.
+
+    Automatically starts MongoDB if not running (required for admin user creation).
 
     Args:
         non_interactive: Run in non-interactive mode (requires other args)
@@ -753,128 +755,101 @@ def quickstart(c):
 # PutPlace server management
 @task
 def ppserver_start(c, host="127.0.0.1", port=8000):
-    """Start server in background (for testing/background work).
+    """Start server in background using ppserver CLI (for testing/background work).
 
-    This task runs the server as a background process with output logged to file.
+    This task uses the ppserver CLI tool to manage the server as a daemon.
     Use invoke ppserver-stop to stop it.
 
     Features:
+        - Runs putplace_configure non-interactively to set up environment
+        - Uses ppserver CLI for consistent daemon management
         - Runs in background (detached from terminal)
         - No auto-reload (must restart manually for code changes)
-        - Logs to ppserver.log file
-        - Saves PID to .ppserver.pid
+        - Logs to ~/.putplace/ppserver.log
+        - Saves PID to ~/.putplace/ppserver.pid
         - Installs package before starting
         - Good for running tests while server is up
 
     Compare with:
         - invoke serve: Runs in foreground with auto-reload (better for development)
-        - ppserver start: CLI tool for production daemon (uses ~/.putplace/ directory)
+        - ppserver start: Same underlying command (this task uses it)
 
     Args:
         host: Host to bind to (default: 127.0.0.1)
         port: Port to bind to (default: 8000)
     """
     import os
-    import signal
-
-    pid_file = ".ppserver.pid"
-
-    # Check if server is already running
-    if os.path.exists(pid_file):
-        with open(pid_file, 'r') as f:
-            old_pid = f.read().strip()
-
-        # Check if process is still running
-        try:
-            os.kill(int(old_pid), 0)
-            print(f"✗ ppserver is already running (PID: {old_pid})")
-            print("  Stop it first with: invoke ppserver-stop")
-            return
-        except (OSError, ValueError):
-            # Process not running, remove stale PID file
-            os.remove(pid_file)
+    from pathlib import Path
 
     print("Installing putplace package locally...")
     c.run("uv pip install -e .", pty=False)
     print("✓ Package installed\n")
 
-    print(f"Starting ppserver on {host}:{port}...")
+    # Set up configuration using putplace_configure non-interactively
+    config_dir = Path.home() / ".config" / "putplace"
+    config_path = config_dir / "ppserver.toml"
+    storage_path = Path.home() / ".putplace" / "storage"
 
-    # Start uvicorn in background and save PID
-    cmd = f"uv run uvicorn putplace.main:app --host {host} --port {port}"
-    result = c.run(f"{cmd} > ppserver.log 2>&1 & echo $!", hide=True, pty=False)
-    pid = result.stdout.strip()
+    # Ensure config directory exists
+    config_dir.mkdir(parents=True, exist_ok=True)
 
-    # Save PID to file
-    with open(pid_file, 'w') as f:
-        f.write(pid)
+    # Only run configure if config doesn't exist
+    if not config_path.exists():
+        print("Setting up PutPlace configuration...")
+        configure_cmd = [
+            "uv", "run", "putplace_configure",
+            "--non-interactive",
+            "--skip-checks",
+            "--mongodb-url", "mongodb://localhost:27017",
+            "--mongodb-database", "putplace",
+            "--admin-username", "admin",
+            "--admin-email", "admin@localhost",
+            "--admin-password", "admin_password_123",
+            "--storage-backend", "local",
+            "--storage-path", str(storage_path),
+            "--config-file", str(config_path),
+        ]
+        result = c.run(" ".join(configure_cmd), warn=True)
+        if result.ok:
+            print("✓ Configuration created\n")
+        else:
+            print("✗ Failed to create configuration")
+            return
+    else:
+        print(f"✓ Using existing configuration: {config_path}\n")
 
-    print(f"✓ ppserver started (PID: {pid})")
-    print(f"  API: http://{host}:{port}")
-    print(f"  Docs: http://{host}:{port}/docs")
-    print(f"  Logs: ppserver.log")
-    print(f"\nStop with: invoke ppserver-stop")
+    print(f"Starting ppserver on {host}:{port} using ppserver CLI...")
+
+    # Use ppserver CLI to start the server
+    result = c.run(f"uv run ppserver start --host {host} --port {port}", warn=True)
+
+    if result.ok:
+        print(f"\n✓ ppserver started successfully")
+        print(f"  API: http://{host}:{port}")
+        print(f"  Docs: http://{host}:{port}/docs")
+        print(f"  Config: {config_path}")
+        print(f"  Storage: {storage_path}")
+        print(f"  Logs: ~/.putplace/ppserver.log")
+        print(f"  PID file: ~/.putplace/ppserver.pid")
+        print(f"\nStop with: invoke ppserver-stop")
+        print(f"Check status with: invoke ppserver-status")
+    else:
+        print("\n✗ Failed to start ppserver")
+        print("Check logs with: ppserver logs")
 
 
 @task
 def ppserver_stop(c):
-    """Stop ppserver and uninstall local package."""
-    import os
-    import signal
-    import time
+    """Stop ppserver using ppserver CLI and uninstall local package."""
+    print("Stopping ppserver using ppserver CLI...")
 
-    pid_file = ".ppserver.pid"
+    # Use ppserver CLI to stop the server
+    result = c.run("uv run ppserver stop", warn=True)
 
-    # Check if PID file exists
-    if not os.path.exists(pid_file):
-        print("✗ ppserver PID file not found")
-        print("  Server may not be running or was started manually")
-
-        # Try to find and kill any running uvicorn processes
-        result = c.run("pgrep -f 'uvicorn putplace.main:app'", warn=True, hide=True)
-        if result.ok and result.stdout.strip():
-            pids = result.stdout.strip().split('\n')
-            print(f"\nFound {len(pids)} uvicorn process(es) for putplace:")
-            for pid in pids:
-                print(f"  Killing PID {pid}...")
-                c.run(f"kill {pid}", warn=True)
-            time.sleep(1)
-            print("✓ Processes killed")
-        else:
-            print("  No running ppserver processes found")
+    if result.ok:
+        print("\n✓ ppserver stopped successfully")
     else:
-        # Read PID and kill the process
-        with open(pid_file, 'r') as f:
-            pid = f.read().strip()
-
-        print(f"Stopping ppserver (PID: {pid})...")
-
-        try:
-            # Try graceful shutdown first (SIGTERM)
-            os.kill(int(pid), signal.SIGTERM)
-            time.sleep(2)
-
-            # Check if still running
-            try:
-                os.kill(int(pid), 0)
-                # Still running, force kill
-                print("  Process still running, forcing shutdown...")
-                os.kill(int(pid), signal.SIGKILL)
-                time.sleep(1)
-            except OSError:
-                pass  # Process already terminated
-
-            print("✓ ppserver stopped")
-        except (OSError, ValueError) as e:
-            print(f"✗ Could not kill process {pid}: {e}")
-            print("  Process may have already terminated")
-
-        # Remove PID file
-        try:
-            os.remove(pid_file)
-            print("✓ PID file removed")
-        except OSError:
-            pass
+        print("\n✗ ppserver may not be running or already stopped")
 
     # Uninstall the package
     print("\nUninstalling putplace package...")
@@ -889,64 +864,19 @@ def ppserver_stop(c):
 
 @task
 def ppserver_status(c):
-    """Check ppserver status."""
-    import os
-
-    pid_file = ".ppserver.pid"
-
-    if not os.path.exists(pid_file):
-        print("✗ ppserver is not running (no PID file)")
-
-        # Check for any uvicorn processes anyway
-        result = c.run("pgrep -f 'uvicorn putplace.main:app'", warn=True, hide=True)
-        if result.ok and result.stdout.strip():
-            pids = result.stdout.strip().split('\n')
-            print(f"\nWarning: Found {len(pids)} uvicorn process(es) without PID file:")
-            for pid in pids:
-                print(f"  PID {pid}")
-            print("\nUse 'invoke ppserver-stop' to clean up")
-        return
-
-    with open(pid_file, 'r') as f:
-        pid = f.read().strip()
-
-    try:
-        os.kill(int(pid), 0)
-        print(f"✓ ppserver is running (PID: {pid})")
-
-        # Try to get process info
-        result = c.run(f"ps -p {pid} -o pid,ppid,etime,command", warn=True)
-
-        # Check if log file exists
-        if os.path.exists("ppserver.log"):
-            print("\nRecent logs (last 10 lines):")
-            c.run("tail -n 10 ppserver.log")
-    except (OSError, ValueError):
-        print(f"✗ ppserver PID file exists but process {pid} is not running")
-        print("  Stale PID file detected")
-        print("\nClean up with: invoke ppserver-stop")
+    """Check ppserver status using ppserver CLI."""
+    c.run("uv run ppserver status", warn=True)
 
 
 @task
 def ppserver_logs(c, lines=50, follow=False):
-    """Show ppserver logs.
+    """Show ppserver logs using ppserver CLI.
 
     Args:
         lines: Number of lines to show (default: 50)
         follow: Follow log output (default: False)
     """
-    import os
-
-    log_file = "ppserver.log"
-
-    if not os.path.exists(log_file):
-        print("✗ Log file not found: ppserver.log")
-        print("  Server may not have been started or logs were deleted")
-        return
-
+    cmd = f"uv run ppserver logs --lines {lines}"
     if follow:
-        print(f"Following ppserver logs (Ctrl+C to stop)...\n")
-        c.run(f"tail -f {log_file}")
-    else:
-        print(f"Last {lines} lines from ppserver.log:\n")
-        c.run(f"tail -n {lines} {log_file}")
+        cmd += " --follow"
+    c.run(cmd, warn=True)
