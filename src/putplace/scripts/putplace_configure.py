@@ -105,11 +105,11 @@ def load_existing_config() -> Dict[str, Any]:
                     defaults['storage_backend'] = config['storage'].get('backend', 'local')
                     defaults['storage_path'] = config['storage'].get('path', './storage/files')
                     defaults['s3_bucket'] = config['storage'].get('s3_bucket_name')
-                    defaults['s3_region'] = config['storage'].get('s3_region_name', 'us-east-1')
+                    defaults['s3_region'] = config['storage'].get('s3_region_name', 'eu-west-1')
 
                 # AWS settings
                 if 'aws' in config:
-                    defaults['aws_region'] = config['aws'].get('region', defaults.get('s3_region', 'us-east-1'))
+                    defaults['aws_region'] = config['aws'].get('region', defaults.get('s3_region', 'eu-west-1'))
 
                 print_message(f"✓ Loaded defaults from {config_path}", "green")
                 return defaults
@@ -166,13 +166,35 @@ async def check_mongodb_connection(mongodb_url: str) -> tuple[bool, str]:
     """Check if MongoDB is accessible."""
     try:
         from pymongo import AsyncMongoClient
+        import certifi
 
-        client = AsyncMongoClient(mongodb_url, serverSelectionTimeoutMS=5000)
+        # Determine if TLS/SSL should be used based on the connection string
+        # MongoDB Atlas (mongodb+srv://) and remote TLS connections need certificate validation
+        # Local connections (mongodb://localhost) typically don't use TLS
+        use_tls = 'mongodb+srv://' in mongodb_url or 'mongodb.net' in mongodb_url
+
+        if use_tls:
+            # For MongoDB Atlas and remote TLS connections, use certifi
+            client = AsyncMongoClient(
+                mongodb_url,
+                serverSelectionTimeoutMS=5000,
+                tlsCAFile=certifi.where()  # Use certifi's CA bundle for certificate validation
+            )
+        else:
+            # For local MongoDB, don't use TLS
+            client = AsyncMongoClient(
+                mongodb_url,
+                serverSelectionTimeoutMS=5000
+            )
+
         # Try to get server info
         await client.admin.command('ping')
         await client.close()
         return True, "MongoDB connection successful"
-    except ImportError:
+    except ImportError as e:
+        # Check which library is missing
+        if 'certifi' in str(e):
+            return False, "certifi library not installed (pip install certifi)"
         return False, "pymongo library not installed (PyMongo 4.10+ required)"
     except Exception as e:
         return False, f"MongoDB connection failed: {str(e)}"
@@ -237,10 +259,23 @@ async def create_admin_user(
     """Create an admin user in the database."""
     try:
         from pymongo import AsyncMongoClient
-        from putplace.user_auth import hash_password
+        from putplace.user_auth import get_password_hash
         from datetime import datetime
+        import certifi
 
-        client = AsyncMongoClient(mongodb_url)
+        # Use same TLS detection logic as check_mongodb_connection
+        use_tls = 'mongodb+srv://' in mongodb_url or 'mongodb.net' in mongodb_url
+
+        if use_tls:
+            # For MongoDB Atlas and remote TLS connections
+            client = AsyncMongoClient(
+                mongodb_url,
+                tlsCAFile=certifi.where()
+            )
+        else:
+            # For local MongoDB without TLS
+            client = AsyncMongoClient(mongodb_url)
+
         db = client.get_database("putplace")
         users_collection = db.users
 
@@ -254,7 +289,7 @@ async def create_admin_user(
         user_doc = {
             "username": username,
             "email": email,
-            "password_hash": hash_password(password),
+            "password_hash": get_password_hash(password),
             "full_name": "Administrator",
             "is_admin": True,
             "created_at": datetime.utcnow()
@@ -278,6 +313,14 @@ def write_toml_file(config: dict, toml_path: Path) -> tuple[bool, str]:
 
         # Build TOML configuration
         toml_config = {
+            "server": {
+                # Secure defaults: bind to localhost only for initial setup
+                # Users must explicitly change to 0.0.0.0 to expose externally
+                "host": config.get('server_host', '127.0.0.1'),
+                "port": config.get('server_port', 8000),
+                # Workers: 1 for development, should be increased for production
+                "workers": config.get('server_workers', 1),
+            },
             "database": {
                 "mongodb_url": config.get('mongodb_url', 'mongodb://localhost:27017'),
                 "mongodb_database": config.get('mongodb_database', 'putplace'),
@@ -304,7 +347,13 @@ def write_toml_file(config: dict, toml_path: Path) -> tuple[bool, str]:
 
         # Write TOML file with header comment
         header = "# PutPlace Server Configuration\n"
-        header += "# Generated by putplace-configure\n\n"
+        header += "# Generated by putplace_configure\n"
+        header += "#\n"
+        header += "# Security Notes:\n"
+        header += "#   - Server binds to 127.0.0.1 (localhost) by default for security\n"
+        header += "#   - To expose externally, change host to 0.0.0.0 and use reverse proxy\n"
+        header += "#   - Increase workers for production (recommended: 2-4 per CPU core)\n"
+        header += "#   - Always use HTTPS in production (configure reverse proxy)\n\n"
 
         toml_content = tomli_w.dumps(toml_config)
 
@@ -412,7 +461,7 @@ async def run_interactive_config() -> dict:
     config['has_ses_access'] = False
 
     if check_aws:
-        default_region = existing_config.get('aws_region', existing_config.get('s3_region', 'us-east-1'))
+        default_region = existing_config.get('aws_region', existing_config.get('s3_region', 'eu-west-1'))
         if RICH_AVAILABLE:
             aws_region = Prompt.ask("AWS Region", default=default_region)
         else:
@@ -689,8 +738,8 @@ Examples:
     )
     parser.add_argument(
         '--aws-region',
-        default='us-east-1',
-        help='AWS region (default: us-east-1)'
+        default='eu-west-1',
+        help='AWS region (default: eu-west-1)'
     )
 
     # Configuration file options

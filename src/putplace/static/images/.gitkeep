@@ -1,0 +1,5 @@
+# This file ensures the images directory is tracked by git
+# Place your logo files here:
+# - putplace-logo.png
+# - putplace-logo.svg
+# - favicon.ico
