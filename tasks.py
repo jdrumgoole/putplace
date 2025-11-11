@@ -1371,7 +1371,7 @@ def deploy_apprunner(
                 "CodeConfigurationValues": {
                     "Runtime": "PYTHON_311",
                     "RuntimeEnvironmentSecrets": runtime_env_secrets,
-                    "BuildCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh && $HOME/.local/bin/uv pip install --system -e . && $HOME/.local/bin/uv pip install --system -e '.[s3]'",
+                    "BuildCommand": "pip install -e . && pip install -e '.[s3]'",
                     "StartCommand": "python3.11 -m uvicorn putplace.main:app --host 0.0.0.0 --port 8000 --workers 2",
                     "Port": "8000"
                 }
