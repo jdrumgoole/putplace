@@ -1337,18 +1337,26 @@ def deploy_apprunner(
     print("\nCreating App Runner service...")
 
     # Build code configuration values with secrets
-    # Format: {"ENV_VAR_NAME": "arn:aws:secretsmanager:region:account:secret:name:json_key::"}
+    # First, get the actual secret ARNs with their random suffixes
+    secrets_arns = {}
+    for secret_name in ['putplace/mongodb', 'putplace/admin', 'putplace/aws-config']:
+        describe_cmd = f"aws secretsmanager describe-secret --secret-id {secret_name} --region {region}"
+        result = c.run(describe_cmd, hide=True, warn=True)
+        if result.ok:
+            secret_info = json.loads(result.stdout)
+            secrets_arns[secret_name] = secret_info['ARN']
+
+    # Format: {"ENV_VAR_NAME": "arn:aws:secretsmanager:region:account:secret:name-SUFFIX:json_key::"}
     runtime_env_secrets = {}
-    aws_account_id = "230950121080"
     # MongoDB secrets
     for key in ['MONGODB_URL', 'MONGODB_DATABASE', 'MONGODB_COLLECTION']:
-        runtime_env_secrets[key] = f"arn:aws:secretsmanager:{region}:{aws_account_id}:secret:putplace/mongodb:{key}::"
+        runtime_env_secrets[key] = f"{secrets_arns['putplace/mongodb']}:{key}::"
     # Admin secrets
     for key in ['PUTPLACE_ADMIN_USERNAME', 'PUTPLACE_ADMIN_EMAIL', 'PUTPLACE_ADMIN_PASSWORD']:
-        runtime_env_secrets[key] = f"arn:aws:secretsmanager:{region}:{aws_account_id}:secret:putplace/admin:{key}::"
+        runtime_env_secrets[key] = f"{secrets_arns['putplace/admin']}:{key}::"
     # AWS/API secrets
     for key in ['AWS_DEFAULT_REGION', 'API_TITLE', 'API_VERSION', 'PYTHONUNBUFFERED', 'PYTHONDONTWRITEBYTECODE']:
-        runtime_env_secrets[key] = f"arn:aws:secretsmanager:{region}:{aws_account_id}:secret:putplace/aws-config:{key}::"
+        runtime_env_secrets[key] = f"{secrets_arns['putplace/aws-config']}:{key}::"
 
     # Build source configuration with API-based configuration
     source_config = {
