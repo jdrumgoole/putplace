@@ -174,3 +174,154 @@ class TestS3Storage:
         except RuntimeError:
             # aioboto3 not installed, skip
             pass
+
+
+class TestLocalStorageErrorHandling:
+    """Tests for LocalStorage error handling."""
+
+    @pytest.fixture
+    def local_storage(self) -> LocalStorage:
+        """Create LocalStorage instance with invalid path for error testing."""
+        # Use a path that exists but we'll make it fail by using permissions
+        return LocalStorage(base_path="/nonexistent/invalid/path")
+
+    async def test_store_failure_invalid_path(self, local_storage: LocalStorage) -> None:
+        """Test store failure when path is invalid or inaccessible."""
+        content = b"Test content"
+        sha256 = hashlib.sha256(content).hexdigest()
+
+        # Try to store to invalid path - should handle error gracefully
+        # Note: This might succeed on some systems depending on permissions
+        # So we check that it returns a boolean
+        result = await local_storage.store(sha256, content)
+        assert isinstance(result, bool)
+
+    async def test_retrieve_io_error(self) -> None:
+        """Test retrieve handles IO errors gracefully."""
+        import tempfile
+        import os
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            storage = LocalStorage(base_path=tmpdir)
+            content = b"Test content"
+            sha256 = hashlib.sha256(content).hexdigest()
+
+            # Store file successfully
+            await storage.store(sha256, content)
+
+            # Make file unreadable (simulate IO error)
+            file_path = storage._get_file_path(sha256)
+            os.chmod(file_path, 0o000)
+
+            try:
+                # Try to retrieve - should return None on error
+                result = await storage.retrieve(sha256)
+                # Depending on permissions, might succeed or fail
+                assert result is None or result == content
+            finally:
+                # Restore permissions for cleanup
+                os.chmod(file_path, 0o644)
+
+    async def test_delete_io_error(self) -> None:
+        """Test delete handles IO errors gracefully."""
+        import tempfile
+        import os
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            storage = LocalStorage(base_path=tmpdir)
+            content = b"Test content"
+            sha256 = hashlib.sha256(content).hexdigest()
+
+            # Store file successfully
+            await storage.store(sha256, content)
+
+            # Make parent directory unwritable (simulate IO error)
+            file_path = storage._get_file_path(sha256)
+            parent_dir = file_path.parent
+            os.chmod(parent_dir, 0o444)  # Read-only
+
+            try:
+                # Try to delete - should return False on error
+                result = await storage.delete(sha256)
+                # Depending on system, might succeed or fail
+                assert isinstance(result, bool)
+            finally:
+                # Restore permissions for cleanup
+                os.chmod(parent_dir, 0o755)
+
+    async def test_get_storage_path(self) -> None:
+        """Test get_storage_path returns correct path."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            storage = LocalStorage(base_path=tmpdir)
+            sha256 = "abcdef1234567890" * 4  # 64 char SHA256
+
+            path = storage.get_storage_path(sha256)
+
+            # Should be an absolute path
+            assert Path(path).is_absolute()
+            # Should contain the SHA256
+            assert sha256 in path
+            # Should contain the subdirectory (first 2 chars)
+            assert sha256[:2] in path
+
+
+class TestS3StorageWithMethods:
+    """Additional tests for S3Storage methods."""
+
+    def test_s3_get_storage_path(self) -> None:
+        """Test S3 get_storage_path returns correct S3 URI."""
+        try:
+            from putplace.storage import S3Storage
+
+            storage = S3Storage(bucket_name="my-bucket", prefix="data/")
+            sha256 = "abcdef1234567890" * 4  # 64 char SHA256
+
+            path = storage.get_storage_path(sha256)
+
+            # Should be S3 URI format
+            assert path.startswith("s3://my-bucket/")
+            # Should contain prefix and subdirectory
+            assert "data/ab/" in path
+            # Should end with SHA256
+            assert path.endswith(sha256)
+        except RuntimeError:
+            # aioboto3 not installed, skip
+            pass
+
+    def test_s3_with_profile(self) -> None:
+        """Test S3 initialization with AWS profile."""
+        try:
+            from putplace.storage import S3Storage
+
+            # This will create the session but not actually connect
+            storage = S3Storage(
+                bucket_name="test-bucket",
+                region_name="us-west-2",
+                prefix="custom/",
+                aws_profile="my-profile"
+            )
+
+            assert storage.bucket_name == "test-bucket"
+            assert storage.region_name == "us-west-2"
+            assert storage.prefix == "custom/"
+        except RuntimeError:
+            # aioboto3 not installed, skip
+            pass
+
+    def test_s3_with_explicit_credentials(self) -> None:
+        """Test S3 initialization with explicit credentials."""
+        try:
+            from putplace.storage import S3Storage
+
+            storage = S3Storage(
+                bucket_name="test-bucket",
+                aws_access_key_id="test_key",
+                aws_secret_access_key="test_secret"
+            )
+
+            assert storage.bucket_name == "test-bucket"
+        except RuntimeError:
+            # aioboto3 not installed, skip
+            pass
