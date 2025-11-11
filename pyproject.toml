@@ -1,7 +1,7 @@
 [project]
 name = "putplace"
 # IMPORTANT: Keep this version in sync with src/putplace/version.py!
-version = "0.5.7"
+version = "0.5.8"
 description = "File and Metadata storage system"
 readme = "README.md"
 license = {text = "Apache-2.0"}
