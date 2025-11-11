@@ -1335,25 +1335,73 @@ def deploy_apprunner(
         print(create_cmd)
         print()
 
-        result = c.run(create_cmd, warn=True)
+        result = c.run(create_cmd, warn=True, hide=False)
 
         if result.ok:
+            # Parse service ARN from response
+            response = json.loads(result.stdout)
+            service_arn = response['Service']['ServiceArn']
+            service_url = response['Service'].get('ServiceUrl', 'Pending...')
+
             print(f"\n✓ App Runner service created successfully!")
             print(f"\nService: {service_name}")
             print(f"Region: {region}")
-            print(f"\nNext steps:")
-            print(f"  1. Check deployment status:")
-            print(f"     aws apprunner list-services --region {region}")
-            print(f"  2. View service in console:")
-            print(f"     https://console.aws.amazon.com/apprunner/")
-            print(f"  3. Grant IAM role access to secrets:")
-            print(f"     Action: secretsmanager:GetSecretValue")
-            print(f"     Resource: arn:aws:secretsmanager:{region}:*:secret:putplace/*")
+            print(f"Service ARN: {service_arn}")
+            print(f"Service URL: https://{service_url}" if service_url != 'Pending...' else "Service URL: Pending...")
 
-            if not auto_deploy:
-                print(f"\n  Manual deployment mode enabled.")
-                print(f"  Trigger deployments with:")
-                print(f"     invoke trigger-apprunner-deploy --service-name={service_name}")
+            # Monitor deployment status
+            print(f"\nMonitoring deployment status...")
+            print("This may take 5-10 minutes. Press Ctrl+C to stop monitoring (deployment will continue).\n")
+
+            import time
+            max_attempts = 60  # 10 minutes max
+            attempt = 0
+
+            while attempt < max_attempts:
+                describe_cmd = f"aws apprunner describe-service --service-arn {service_arn} --region {region}"
+                describe_result = c.run(describe_cmd, warn=True, hide=True)
+
+                if describe_result.ok:
+                    service_data = json.loads(describe_result.stdout)
+                    status = service_data['Service']['Status']
+
+                    if status == 'RUNNING':
+                        service_url = service_data['Service']['ServiceUrl']
+                        print(f"\n{'='*60}")
+                        print(f"✓ Deployment successful!")
+                        print(f"{'='*60}")
+                        print(f"\nService Status: RUNNING")
+                        print(f"Service URL: https://{service_url}")
+                        print(f"\nTest endpoints:")
+                        print(f"  Health: https://{service_url}/health")
+                        print(f"  API Docs: https://{service_url}/docs")
+                        print(f"\nNext steps:")
+                        print(f"  1. Grant IAM role access to secrets:")
+                        print(f"     Action: secretsmanager:GetSecretValue")
+                        print(f"     Resource: arn:aws:secretsmanager:{region}:*:secret:putplace/*")
+                        if not auto_deploy:
+                            print(f"\n  2. Manual deployment mode enabled.")
+                            print(f"     Trigger deployments with:")
+                            print(f"     invoke trigger-apprunner-deploy --service-name={service_name}")
+                        break
+                    elif status in ['CREATE_FAILED', 'DELETE_FAILED']:
+                        print(f"\n✗ Deployment failed with status: {status}")
+                        print(f"\nCheck logs:")
+                        print(f"  aws logs tail /aws/apprunner/{service_name}/service --follow --region {region}")
+                        break
+                    else:
+                        # Show progress
+                        print(f"[{attempt+1}/{max_attempts}] Status: {status}...", end='\r')
+                        time.sleep(10)
+                        attempt += 1
+                else:
+                    print(f"\n⚠️  Failed to check service status")
+                    break
+
+            if attempt >= max_attempts:
+                print(f"\n⚠️  Deployment monitoring timed out after 10 minutes")
+                print(f"The deployment is still in progress. Check status with:")
+                print(f"  aws apprunner describe-service --service-arn {service_arn} --region {region}")
         else:
             print(f"\n✗ Failed to create service")
             print("\nCommon issues:")
@@ -1409,12 +1457,57 @@ def trigger_apprunner_deploy(c, service_name="putplace-api", region="eu-west-1")
 
     # Start deployment
     deploy_cmd = f"aws apprunner start-deployment --service-arn {service_arn} --region {region}"
-    result = c.run(deploy_cmd, warn=True)
+    result = c.run(deploy_cmd, warn=True, hide=True)
 
     if result.ok:
         print(f"\n✓ Deployment triggered successfully")
-        print(f"\nMonitor deployment:")
-        print(f"  aws apprunner describe-service --service-arn {service_arn} --region {region}")
+
+        # Monitor deployment status
+        print(f"\nMonitoring deployment status...")
+        print("This may take 3-5 minutes. Press Ctrl+C to stop monitoring (deployment will continue).\n")
+
+        import time
+        import json
+        max_attempts = 30  # 5 minutes max
+        attempt = 0
+
+        while attempt < max_attempts:
+            describe_cmd = f"aws apprunner describe-service --service-arn {service_arn} --region {region}"
+            describe_result = c.run(describe_cmd, warn=True, hide=True)
+
+            if describe_result.ok:
+                service_data = json.loads(describe_result.stdout)
+                status = service_data['Service']['Status']
+
+                if status == 'RUNNING':
+                    service_url = service_data['Service']['ServiceUrl']
+                    print(f"\n{'='*60}")
+                    print(f"✓ Deployment successful!")
+                    print(f"{'='*60}")
+                    print(f"\nService Status: RUNNING")
+                    print(f"Service URL: https://{service_url}")
+                    print(f"\nTest endpoints:")
+                    print(f"  Health: https://{service_url}/health")
+                    print(f"  API Docs: https://{service_url}/docs")
+                    break
+                elif status in ['CREATE_FAILED', 'DELETE_FAILED', 'OPERATION_FAILED']:
+                    print(f"\n✗ Deployment failed with status: {status}")
+                    print(f"\nCheck logs:")
+                    print(f"  aws logs tail /aws/apprunner/{service_name}/application --follow --region {region}")
+                    break
+                else:
+                    # Show progress
+                    print(f"[{attempt+1}/{max_attempts}] Status: {status}...", end='\r')
+                    time.sleep(10)
+                    attempt += 1
+            else:
+                print(f"\n⚠️  Failed to check service status")
+                break
+
+        if attempt >= max_attempts:
+            print(f"\n⚠️  Deployment monitoring timed out after 5 minutes")
+            print(f"The deployment is still in progress. Check status with:")
+            print(f"  aws apprunner describe-service --service-arn {service_arn} --region {region}")
     else:
         print(f"\n✗ Failed to trigger deployment")
 
