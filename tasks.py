@@ -889,3 +889,56 @@ def ppserver_logs(c, lines=50, follow=False):
     if follow:
         cmd += " --follow"
     c.run(cmd, warn=True)
+
+
+@task
+def send_test_email(c, to=None, verbose=False):
+    """Send a test email via Amazon SES.
+
+    This is a convenience task that sends a test email to verify SES configuration.
+    By default, sends to Joe.Drumgoole@putplace.org.
+
+    Requirements:
+        - AWS credentials configured (environment, ~/.aws/credentials, or IAM role)
+        - Sender email verified in SES (Joe.Drumgoole@putplace.org)
+        - If in SES sandbox, recipient email must also be verified
+
+    Args:
+        to: Recipient email address (default: Joe.Drumgoole@putplace.org)
+        verbose: Show detailed output (default: False)
+
+    Examples:
+        invoke send-test-email                           # Send to Joe.Drumgoole@putplace.org
+        invoke send-test-email --to=user@example.com     # Send to specific address
+        invoke send-test-email --verbose                 # Show detailed output
+    """
+    # Default recipient
+    if not to:
+        to = "Joe.Drumgoole@putplace.org"
+
+    # Build command
+    cmd = [
+        "uv", "run", "python",
+        "src/putplace/scripts/send_ses_email.py",
+        "--from", "Joe.Drumgoole@putplace.org",
+        "--to", to,
+        "--subject", "TestSES",
+        "--body", "Hello Joe"
+    ]
+
+    if verbose:
+        cmd.append("--verbose")
+
+    print(f"Sending test email to {to}...")
+    result = c.run(" ".join(cmd), warn=True)
+
+    if result.ok:
+        print(f"\n✓ Test email sent successfully to {to}")
+    else:
+        print(f"\n✗ Failed to send test email")
+        print("\nCommon issues:")
+        print("  - AWS credentials not configured")
+        print("  - Sender email not verified in SES")
+        print("  - Recipient email not verified (if in SES sandbox)")
+        print("  - Wrong AWS region")
+        print("\nSee: src/putplace/scripts/README_send_ses_email.md")
