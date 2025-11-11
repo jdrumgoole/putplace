@@ -942,3 +942,117 @@ def send_test_email(c, to="joe@joedrumgoole.com", verbose=False):
         print("  - Recipient email not verified (if in SES sandbox)")
         print("  - Wrong AWS region")
         print("\nSee: src/putplace/scripts/README_send_ses_email.md")
+
+
+@task
+def verify_ses_email(c, email=None, region="eu-west-1"):
+    """Verify an email address in Amazon SES.
+
+    Sends a verification email to the specified address. You must click the
+    verification link in the email to complete the process.
+
+    Requirements:
+        - AWS CLI installed (aws command available)
+        - AWS credentials configured (environment, ~/.aws/credentials, or IAM role)
+
+    Args:
+        email: Email address to verify (required)
+        region: AWS region for SES (default: eu-west-1)
+
+    Examples:
+        invoke verify-ses-email --email=user@example.com
+        invoke verify-ses-email --email=user@example.com --region=us-east-1
+
+    After running:
+        1. Check the email inbox for verification link
+        2. Click the link to complete verification
+        3. Check status with: invoke check-ses-email --email=user@example.com
+    """
+
+    if not email:
+        print("Error: --email argument is required")
+        return 1
+
+    print(f"Requesting verification for {email} in {region}...")
+    result = c.run(
+        f"aws ses verify-email-identity --email-address {email} --region {region}",
+        warn=True
+    )
+
+    if result.ok:
+        print(f"\n✓ Verification email sent to {email}")
+        print(f"\nNext steps:")
+        print(f"  1. Check inbox for {email}")
+        print(f"  2. Click the verification link in the email")
+        print(f"  3. Check status: invoke check-ses-email --email={email}")
+    else:
+        print(f"\n✗ Failed to request verification")
+        print("\nCommon issues:")
+        print("  - AWS CLI not installed")
+        print("  - AWS credentials not configured")
+        print("  - Invalid email address format")
+        print("  - Insufficient IAM permissions (need ses:VerifyEmailIdentity)")
+
+
+@task
+def check_ses_email(c, email=None, region="eu-west-1"):
+    """Check verification status of an email address in Amazon SES.
+
+    Requirements:
+        - AWS CLI installed (aws command available)
+        - AWS credentials configured
+
+    Args:
+        email: Email address to check (required)
+        region: AWS region for SES (default: eu-west-1)
+
+    Examples:
+        invoke check-ses-email --email=user@example.com
+        invoke check-ses-email --email=user@example.com --region=us-east-1
+    """
+
+    if not email:
+        print("Error: --email argument is required")
+        return 1
+
+    print(f"Checking verification status for {email} in {region}...")
+    result = c.run(
+        f"aws ses get-identity-verification-attributes --identities {email} --region {region}",
+        warn=True
+    )
+
+    if not result.ok:
+        print(f"\n✗ Failed to check verification status")
+        print("\nCommon issues:")
+        print("  - AWS CLI not installed")
+        print("  - AWS credentials not configured")
+        print("  - Insufficient IAM permissions")
+
+
+@task
+def list_ses_emails(c, region="eu-west-1"):
+    """List all verified email identities in Amazon SES.
+
+    Requirements:
+        - AWS CLI installed (aws command available)
+        - AWS credentials configured
+
+    Args:
+        region: AWS region for SES (default: eu-west-1)
+
+    Examples:
+        invoke list-ses-emails
+        invoke list-ses-emails --region=us-east-1
+    """
+
+    print(f"Listing verified identities in {region}...")
+    result = c.run(
+        f"aws ses list-verified-email-addresses --region {region}",
+        warn=True
+    )
+
+    if not result.ok:
+        print(f"\n✗ Failed to list identities")
+        print("\nCommon issues:")
+        print("  - AWS CLI not installed")
+        print("  - AWS credentials not configured")
