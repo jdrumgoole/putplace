@@ -25,7 +25,7 @@ A distributed file metadata storage and content deduplication system with SHA256
 - 🔄 **Content Deduplication** - Upload files only once, deduplicated by SHA256
 - 👥 **Clone Detection** - Track duplicate files across all users with epoch file identification
 - 💾 **Multiple Storage Backends** - Local filesystem or AWS S3 for file content
-- 🔐 **Flexible Authentication** - API key (for clients), JWT (for web UI), and Google OAuth
+- 🔐 **Flexible Authentication** - Username/password login with JWT tokens and Google OAuth
 - 🌐 **Google Sign-In Integration** - One-click authentication with Google accounts
 - 🌐 **Interactive Web UI** - Tree-based file browser with clone visualization
 - 🚀 **Production Ready** - Comprehensive tests, TOML configuration, graceful interrupt handling
@@ -141,8 +141,8 @@ ppclient --path /var/log
 # Dry run (no upload)
 ppclient --path /var/log --dry-run
 
-# With API key
-ppclient --path /var/log --api-key your-api-key-here
+# With authentication
+ppclient --path /var/log --username admin --password your-password
 ```
 
 #### Graphical User Interface (GUI)
@@ -199,7 +199,7 @@ putplace/
 │   ├── models.py        # Pydantic models
 │   ├── database.py      # MongoDB operations
 │   ├── storage.py       # Storage backends (local/S3)
-│   ├── auth.py          # API key authentication
+│   ├── auth.py          # Authentication (JWT & API keys)
 │   ├── ppclient.py      # Client tool
 │   └── ppserver.py      # Server manager
 ├── tests/               # Test suite (125+ tests, parallel execution)
@@ -335,9 +335,9 @@ Once the server is running:
 ### Key Endpoints
 
 **File Operations:**
-- `POST /put_file` - Store file metadata (requires API key)
-- `GET /get_file/{sha256}` - Retrieve file by SHA256 (requires API key)
-- `POST /upload_file/{sha256}` - Upload file content (requires API key)
+- `POST /put_file` - Store file metadata (requires JWT or API key)
+- `GET /get_file/{sha256}` - Retrieve file by SHA256 (requires JWT or API key)
+- `POST /upload_file/{sha256}` - Upload file content (requires JWT or API key)
 - `GET /api/clones/{sha256}` - Get all file clones (requires JWT)
 - `GET /api/my_files` - Get user's files (requires JWT)
 
@@ -368,7 +368,7 @@ See [API Reference](https://putplace.readthedocs.io/en/latest/api-reference.html
 │   Client    │         │   Client    │         │   Client    │
 │  (Server A) │         │  (Server B) │         │  (Server C) │
 └──────┬──────┘         └──────┬──────┘         └──────┬──────┘
-       │    X-API-Key Auth     │                        │
+       │    JWT Bearer Auth    │                        │
        └───────────┬───────────┴────────────────────────┘
                    │
                    ▼

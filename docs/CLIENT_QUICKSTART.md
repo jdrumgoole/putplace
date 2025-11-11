@@ -5,49 +5,55 @@ This guide shows you how to quickly start using the PutPlace client to scan and 
 ## Prerequisites
 
 1. **PutPlace server running** (see main README.md for setup)
-2. **API key** (get from server administrator or create your own)
+2. **User account** (get credentials from server administrator)
 
-## Getting an API Key
+## Getting Account Credentials
 
 ### Option 1: Ask Server Administrator
 
-Request an API key from your PutPlace server administrator.
+Request a username and password from your PutPlace server administrator.
 
-### Option 2: Create Your Own (if you have server access)
+### Option 2: Use Admin Account (if you have server access)
+
+The admin account is automatically created on first server startup. Check the server logs or `/tmp/putplace_initial_creds.txt` for the auto-generated credentials.
+
+### Option 3: Register New User (if registration is enabled)
 
 ```bash
-# On the server
-python -m putplace.scripts.create_api_key --name "my-client-$(hostname)"
-
-# Save the API key that's displayed (it's shown only once!)
+# Register via API
+curl -X POST http://localhost:8000/api/register \
+  -H "Content-Type: application/json" \
+  -d '{"username": "myuser", "email": "user@example.com", "password": "secure-password"}'
 ```
 
 ## Using the Client
 
-The client supports **three ways** to provide your API key:
+The client supports **three ways** to provide your credentials:
 
 ### Method 1: Command Line (Quick Testing)
 
 ```bash
-python ppclient.py /path/to/scan --api-key "YOUR_API_KEY_HERE"
+python ppclient.py /path/to/scan --username "admin" --password "your-password"
 ```
 
 **Pros:** Quick and easy for testing
-**Cons:** API key visible in shell history and process list
+**Cons:** Credentials visible in shell history and process list
 
 ### Method 2: Environment Variable (Recommended for Scripts)
 
 ```bash
-# Set environment variable
-export PUTPLACE_API_KEY="YOUR_API_KEY_HERE"
+# Set environment variables
+export PUTPLACE_USERNAME="admin"
+export PUTPLACE_PASSWORD="your-password"
 
-# Run client (no need to specify --api-key)
+# Run client (no need to specify --username/--password)
 python ppclient.py /path/to/scan
 ```
 
 **Add to your `.bashrc` or `.zshrc` for persistence:**
 ```bash
-echo 'export PUTPLACE_API_KEY="YOUR_API_KEY_HERE"' >> ~/.bashrc
+echo 'export PUTPLACE_USERNAME="admin"' >> ~/.bashrc
+echo 'export PUTPLACE_PASSWORD="your-password"' >> ~/.bashrc
 source ~/.bashrc
 ```
 
@@ -58,11 +64,11 @@ source ~/.bashrc
 
 ```bash
 # Create config file
-cp ppclient.conf.example ~/ppclient.conf
-
-# Edit and add your API key
-nano ~/ppclient.conf
-# Change: api-key = your-api-key-here
+cat > ~/ppclient.conf << 'EOF'
+[DEFAULT]
+username = admin
+password = your-password
+EOF
 
 # Set secure permissions (IMPORTANT!)
 chmod 600 ~/ppclient.conf
@@ -76,10 +82,10 @@ python ppclient.py /path/to/scan
 
 ## Configuration Priority
 
-If you specify the API key in multiple places, the priority is:
+If you specify credentials in multiple places, the priority is:
 
-1. **Command line** (`--api-key`) - Highest priority
-2. **Environment variable** (`PUTPLACE_API_KEY`)
+1. **Command line** (`--username`/`--password`) - Highest priority
+2. **Environment variables** (`PUTPLACE_USERNAME`/`PUTPLACE_PASSWORD`)
 3. **Config file** (`~/ppclient.conf` or `ppclient.conf`) - Lowest priority
 
 ## Complete Examples
@@ -87,8 +93,9 @@ If you specify the API key in multiple places, the priority is:
 ### Example 1: Scan Local Directory
 
 ```bash
-# Using environment variable
-export PUTPLACE_API_KEY="a1b2c3d4e5f6..."
+# Using environment variables
+export PUTPLACE_USERNAME="admin"
+export PUTPLACE_PASSWORD="your-password"
 python ppclient.py /var/log
 ```
 
@@ -106,7 +113,8 @@ python ppclient.py /home/user \
 ```bash
 python ppclient.py /var/www \
   --url "https://putplace.example.com/put_file" \
-  --api-key "your-production-api-key"
+  --username "admin" \
+  --password "production-password"
 ```
 
 ### Example 4: Dry Run (Test Without Sending)
@@ -122,7 +130,8 @@ python ppclient.py /path/to/scan --dry-run
 ```ini
 [DEFAULT]
 url = https://putplace.example.com/put_file
-api-key = your-api-key-here
+username = admin
+password = your-password
 exclude = .git
 exclude = node_modules
 exclude = *.log
@@ -138,77 +147,71 @@ python ppclient.py /var/www
 
 ### ✅ DO:
 
-1. **Protect your API key**
+1. **Protect your credentials**
    ```bash
    # Config file permissions
    chmod 600 ~/ppclient.conf
 
-   # Never commit API keys
+   # Never commit passwords
    # ppclient.conf is already in .gitignore
    ```
 
-2. **Use separate keys per client**
-   - One key per server
-   - One key per application
-   - Easier to revoke if compromised
+2. **Use separate accounts per client**
+   - One account per server
+   - One account per application
+   - Easier to manage access
 
-3. **Rotate keys regularly**
-   ```bash
-   # Create new key on server
-   python -m putplace.scripts.create_api_key --name "client-$(hostname)-$(date +%Y%m%d)"
-
-   # Update client config
-   nano ~/ppclient.conf
-
-   # Revoke old key on server
-   curl -X PUT "https://putplace.example.com/api_keys/OLD_KEY_ID/revoke" \
-     -H "X-API-Key: NEW_API_KEY"
-   ```
+3. **Use strong passwords**
+   - At least 8 characters
+   - Mix of letters, numbers, symbols
+   - Use password manager to generate
 
 ### ❌ DON'T:
 
-1. **Don't commit API keys to version control**
+1. **Don't commit passwords to version control**
    - ppclient.conf is in .gitignore
-   - Never put keys in code
+   - Never put passwords in code
 
-2. **Don't share API keys**
-   - Create separate keys for each user/server
+2. **Don't share passwords**
+   - Create separate accounts for each user/server
 
 3. **Don't use command line in production**
-   - API key visible in process list
+   - Credentials visible in process list
    - Use config file or environment variable
 
 ## Troubleshooting
 
-### "Warning: No API key provided"
+### "Both username and password are required"
 
 ```
-Warning: No API key provided (authentication may fail)
+✗ Both username and password are required for authentication
 ```
 
-**Solution:** Provide API key via:
-- `--api-key` flag
-- `PUTPLACE_API_KEY` environment variable
-- `api-key` in ~/ppclient.conf
+**Solution:** Provide both credentials via:
+- `--username` and `--password` flags
+- `PUTPLACE_USERNAME` and `PUTPLACE_PASSWORD` environment variables
+- `username` and `password` in ~/ppclient.conf
 
-### "Failed to send: 401 Unauthorized"
+### "Login failed: 401"
 
 ```
-Failed to send file.txt: Client error '401 Unauthorized'
+✗ Login failed: 401
+  Incorrect username or password
 ```
 
 **Possible causes:**
-1. No API key provided
-2. Invalid API key
-3. Revoked API key
+1. No credentials provided
+2. Invalid username or password
+3. User account disabled
 
 **Solution:**
 ```bash
-# Check your API key works
-curl -H "X-API-Key: YOUR_KEY" https://putplace.example.com/api_keys
+# Test your credentials
+curl -X POST http://localhost:8000/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "your-password"}'
 
-# If it fails, create a new key
-python -m putplace.scripts.create_api_key --name "new-client-key"
+# If you forgot password, contact server admin to reset
 ```
 
 ### "Config file not found"
@@ -230,8 +233,9 @@ nano ~/ppclient.conf
 ### Development Setup
 
 ```bash
-# 1. Get API key from server admin
-export PUTPLACE_API_KEY="dev-api-key-here"
+# 1. Get credentials from server admin
+export PUTPLACE_USERNAME="dev-user"
+export PUTPLACE_PASSWORD="dev-password"
 
 # 2. Test connection
 python ppclient.py /tmp --dry-run
@@ -247,7 +251,8 @@ python ppclient.py /home/user/projects
 cat > ~/ppclient.conf << 'EOF'
 [DEFAULT]
 url = https://putplace.example.com/put_file
-api-key = production-api-key-here
+username = prod-user
+password = production-password
 exclude = .git
 exclude = *.log
 exclude = tmp
@@ -272,13 +277,15 @@ echo "0 2 * * * /usr/bin/python3 /path/to/ppclient.py /var/www" | crontab -
 # Development
 cat > ~/ppclient.conf.dev << 'EOF'
 url = http://dev-putplace:8000/put_file
-api-key = dev-key-here
+username = dev-user
+password = dev-password
 EOF
 
 # Production
 cat > ~/ppclient.conf.prod << 'EOF'
 url = https://putplace.example.com/put_file
-api-key = prod-key-here
+username = prod-user
+password = prod-password
 EOF
 
 # Use with --config flag
@@ -297,6 +304,6 @@ python ppclient.py --version
 
 ## Next Steps
 
-- 📖 Read [Authentication Guide](AUTHENTICATION.md) for API key management
+- 📖 Read [Authentication Guide](AUTHENTICATION.md) for JWT token management
+- 📚 Check [Client Guide](client-guide.md) for comprehensive usage
 - 🔒 Review [Security Guide](../SECURITY.md) for best practices
-- 📚 Check [API Documentation](API.md) for advanced usage
