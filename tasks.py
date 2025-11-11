@@ -1120,6 +1120,80 @@ def configure_apprunner(c, region="eu-west-1", mongodb_url=None, non_interactive
 
 
 @task
+def setup_github_connection(c, region="eu-west-1"):
+    """Check and guide setup of GitHub connection for App Runner.
+
+    App Runner requires a GitHub connection to deploy from GitHub repositories.
+    This task checks if a connection exists and provides setup instructions.
+
+    Args:
+        region: AWS region (default: eu-west-1)
+
+    Examples:
+        invoke setup-github-connection
+        invoke setup-github-connection --region=us-east-1
+    """
+    import json
+
+    print(f"Checking GitHub connections in {region}...\n")
+
+    # List connections
+    connections_cmd = f"aws apprunner list-connections --region {region}"
+    result = c.run(connections_cmd, warn=True, hide=True)
+
+    if not result.ok:
+        print("✗ Failed to list connections")
+        print("\nMake sure AWS CLI is configured and you have App Runner permissions.")
+        return 1
+
+    connections = json.loads(result.stdout)
+    connection_list = connections.get('ConnectionSummaryList', [])
+
+    if not connection_list:
+        print("⚠️  No GitHub connections found")
+    else:
+        print(f"Found {len(connection_list)} connection(s):\n")
+        for conn in connection_list:
+            status = conn.get('Status', 'UNKNOWN')
+            status_icon = '✓' if status == 'AVAILABLE' else '✗'
+            print(f"{status_icon} {conn['ConnectionName']}")
+            print(f"  Provider: {conn.get('ProviderType', 'Unknown')}")
+            print(f"  Status: {status}")
+            print(f"  ARN: {conn['ConnectionArn']}")
+            print()
+
+    # Check for available GitHub connection
+    github_available = any(
+        conn.get('ProviderType') == 'GITHUB' and conn.get('Status') == 'AVAILABLE'
+        for conn in connection_list
+    )
+
+    if github_available:
+        print("✓ GitHub connection is ready!")
+        print(f"\nYou can now deploy with: invoke deploy-apprunner --region={region}")
+    else:
+        print("\n" + "="*60)
+        print("GitHub Connection Setup Instructions")
+        print("="*60)
+        print("\nOption 1: AWS Console (Recommended)")
+        print(f"1. Open: https://console.aws.amazon.com/apprunner/home?region={region}#/settings")
+        print("2. Click the 'Source connections' tab")
+        print("3. Click 'Add connection' button")
+        print("4. Select 'GitHub' as the source code provider")
+        print("5. Click 'Add connection'")
+        print("6. Authorize AWS App Runner in GitHub")
+        print("7. Give the connection a name (e.g., 'github-connection')")
+        print("8. Click 'Connect'")
+        print("\nOption 2: AWS CLI")
+        print(f"aws apprunner create-connection \\")
+        print(f"  --connection-name github-connection \\")
+        print(f"  --provider-type GITHUB \\")
+        print(f"  --region {region}")
+        print("\nNote: You'll still need to complete GitHub authorization in the console.")
+        print(f"\nAfter setup, verify with: invoke setup-github-connection --region={region}")
+
+
+@task
 def deploy_apprunner(
     c,
     service_name="putplace-api",
@@ -1180,8 +1254,28 @@ def deploy_apprunner(
     print(f"Auto-deploy: {'Enabled' if auto_deploy else 'Disabled (manual only)'}")
     print(f"{'='*60}\n")
 
+    # Check for GitHub connection
+    print("Checking GitHub connection...")
+    connections_cmd = f"aws apprunner list-connections --region {region}"
+    conn_result = c.run(connections_cmd, warn=True, hide=True)
+
+    github_connected = False
+    if conn_result.ok:
+        connections = json.loads(conn_result.stdout)
+        for conn in connections.get('ConnectionSummaryList', []):
+            if conn.get('ProviderType') == 'GITHUB' and conn.get('Status') == 'AVAILABLE':
+                github_connected = True
+                print(f"✓ GitHub connection found: {conn['ConnectionName']}")
+                break
+
+    if not github_connected:
+        print("\n⚠️  GitHub connection not configured!")
+        print(f"\nRun this command for setup instructions:")
+        print(f"  invoke setup-github-connection --region={region}")
+        return 1
+
     # Check if service already exists
-    print("Checking if service exists...")
+    print("\nChecking if service exists...")
     check_cmd = f"aws apprunner list-services --region {region}"
     check_result = c.run(check_cmd, warn=True, hide=True)
 
