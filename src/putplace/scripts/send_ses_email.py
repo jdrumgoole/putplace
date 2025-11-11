@@ -48,7 +48,7 @@ Usage:
                              --to recipient@example.com \
                              --subject "Test" \
                              --body "Testing" \
-                             --region us-west-2
+                             --region eu-west-1
 """
 
 import argparse
@@ -73,7 +73,7 @@ def send_email(
     cc_addresses: Optional[List[str]] = None,
     bcc_addresses: Optional[List[str]] = None,
     is_html: bool = False,
-    region: str = "us-east-1",
+    region: str = "eu-west-1",
     aws_profile: Optional[str] = None,
 ) -> dict:
     """Send an email via Amazon SES.
@@ -86,7 +86,7 @@ def send_email(
         cc_addresses: Optional list of CC recipients
         bcc_addresses: Optional list of BCC recipients
         is_html: If True, treat body as HTML content
-        region: AWS region for SES (default: us-east-1)
+        region: AWS region for SES (default: eu-west-1)
         aws_profile: Optional AWS profile name from ~/.aws/credentials
 
     Returns:
@@ -153,7 +153,7 @@ Examples:
 
   # Specify AWS region
   %(prog)s --from sender@example.com --to recipient@example.com \\
-           --subject "Test" --body "Testing" --region us-west-2
+           --subject "Test" --body "Testing" --region eu-west-1
 
 Environment Variables:
   AWS_ACCESS_KEY_ID       AWS access key
@@ -207,8 +207,8 @@ Note:
     )
     parser.add_argument(
         "--region",
-        default="us-east-1",
-        help="AWS region for SES (default: us-east-1)",
+        default="eu-west-1",
+        help="AWS region for SES (default: eu-west-1)",
     )
     parser.add_argument(
         "--profile",

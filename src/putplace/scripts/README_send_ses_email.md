@@ -54,7 +54,7 @@ Choose one of these methods:
 ```bash
 export AWS_ACCESS_KEY_ID=your_access_key
 export AWS_SECRET_ACCESS_KEY=your_secret_key
-export AWS_DEFAULT_REGION=us-east-1
+export AWS_DEFAULT_REGION=eu-west-1
 ```
 
 **AWS Credentials File (~/.aws/credentials):**
@@ -62,7 +62,7 @@ export AWS_DEFAULT_REGION=us-east-1
 [default]
 aws_access_key_id = your_access_key
 aws_secret_access_key = your_secret_key
-region = us-east-1
+region = eu-west-1
 
 [myprofile]
 aws_access_key_id = other_access_key
@@ -143,8 +143,8 @@ python send_ses_email.py \
   --from sender@example.com \
   --to recipient@example.com \
   --subject "Test" \
-  --body "Testing from us-west-2" \
-  --region us-west-2
+  --body "Testing from eu-west-1" \
+  --region eu-west-1
 ```
 
 ### Use AWS Profile
@@ -175,7 +175,7 @@ From: sender@example.com
 To: recipient@example.com
 Subject: Test
 Body type: Text
-Region: us-east-1
+Region: eu-west-1
 Body preview: Detailed output...
 
 ✓ Email sent successfully!
@@ -196,7 +196,7 @@ Body preview: Detailed output...
 | `--cc` | CC recipient(s) | No |
 | `--bcc` | BCC recipient(s) | No |
 | `--html` | Treat body as HTML instead of plain text | No |
-| `--region` | AWS region for SES (default: us-east-1) | No |
+| `--region` | AWS region for SES (default: eu-west-1) | No |
 | `--profile` | AWS profile name from ~/.aws/credentials | No |
 | `-v, --verbose` | Enable verbose output | No |
 
@@ -319,7 +319,7 @@ response = send_email(
     subject="Automated Report",
     body="<h1>Report</h1><p>Content here</p>",
     is_html=True,
-    region="us-east-1"
+    region="eu-west-1"
 )
 
 print(f"Email sent with Message ID: {response['MessageId']}")
