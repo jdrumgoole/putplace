@@ -432,15 +432,15 @@ def test_upload_file_content_success():
                 hostname="testhost",
                 upload_url="/upload_file/abc123",
                 base_url="http://localhost:8000",
-                api_key="test-api-key"
+                access_token="test-jwt-token"
             )
 
             assert result is True
             mock_post.assert_called_once()
-            # Verify API key was included in headers
+            # Verify Bearer token was included in headers
             call_kwargs = mock_post.call_args[1]
-            assert "X-API-Key" in call_kwargs["headers"]
-            assert call_kwargs["headers"]["X-API-Key"] == "test-api-key"
+            assert "Authorization" in call_kwargs["headers"]
+            assert call_kwargs["headers"]["Authorization"] == "Bearer test-jwt-token"
     finally:
         temp_file.unlink()
 
@@ -505,13 +505,13 @@ def test_upload_file_content_no_api_key():
                 hostname="testhost",
                 upload_url="/upload_file/abc123",
                 base_url="http://localhost:8000",
-                api_key=None  # No API key
+                access_token=None  # No access token
             )
 
             assert result is True
-            # Verify no API key in headers
+            # Verify no Authorization header
             call_kwargs = mock_post.call_args[1]
-            assert "X-API-Key" not in call_kwargs.get("headers", {})
+            assert "Authorization" not in call_kwargs.get("headers", {})
     finally:
         temp_file.unlink()
 

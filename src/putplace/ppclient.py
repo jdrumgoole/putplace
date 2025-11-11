@@ -21,6 +21,45 @@ console = Console()
 interrupted = False
 
 
+def login_and_get_token(base_url: str, username: str, password: str) -> Optional[str]:
+    """Login to the server and get JWT access token.
+
+    Args:
+        base_url: Base URL of the API server
+        username: Username for authentication
+        password: Password for authentication
+
+    Returns:
+        JWT access token if successful, None otherwise
+    """
+    login_url = f"{base_url.rstrip('/')}/api/login"
+
+    try:
+        with httpx.Client(timeout=30.0) as client:
+            response = client.post(
+                login_url,
+                json={"username": username, "password": password}
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                return data.get("access_token")
+            else:
+                console.print(f"[red]✗ Login failed: {response.status_code}[/red]")
+                if response.status_code == 401:
+                    console.print("[yellow]  Incorrect username or password[/yellow]")
+                else:
+                    console.print(f"[dim]  {response.text}[/dim]")
+                return None
+
+    except httpx.ConnectError:
+        console.print(f"[red]✗ Could not connect to server at {base_url}[/red]")
+        return None
+    except Exception as e:
+        console.print(f"[red]✗ Login error: {e}[/red]")
+        return None
+
+
 def signal_handler(signum, frame):
     """Handle Ctrl-C signal gracefully."""
     global interrupted
@@ -185,7 +224,7 @@ def upload_file_content(
     hostname: str,
     upload_url: str,
     base_url: str,
-    api_key: Optional[str] = None,
+    access_token: Optional[str] = None,
 ) -> bool:
     """Upload file content to server.
 
@@ -195,7 +234,7 @@ def upload_file_content(
         hostname: Hostname where file is located
         upload_url: Upload URL path (e.g., /upload_file/{sha256})
         base_url: Base API URL
-        api_key: Optional API key for authentication
+        access_token: Optional JWT access token for authentication
 
     Returns:
         True if upload successful, False otherwise
@@ -212,8 +251,8 @@ def upload_file_content(
 
         # Prepare headers
         headers = {}
-        if api_key:
-            headers["X-API-Key"] = api_key
+        if access_token:
+            headers["Authorization"] = f"Bearer {access_token}"
 
         # Open file and upload
         with open(filepath, "rb") as f:
@@ -239,7 +278,7 @@ def process_path(
     ip_address: str,
     api_url: str,
     dry_run: bool = False,
-    api_key: Optional[str] = None,
+    access_token: Optional[str] = None,
 ) -> tuple[int, int, int, int]:
     """Process a file or directory and send file metadata to server.
 
@@ -250,7 +289,7 @@ def process_path(
         ip_address: IP address to send
         api_url: API endpoint URL (e.g., http://localhost:8000/put_file)
         dry_run: If True, don't actually send data to server
-        api_key: Optional API key for authentication
+        access_token: Optional JWT access token for authentication
 
     Returns:
         Tuple of (total_files, successful, failed, uploaded)
@@ -413,21 +452,24 @@ Examples:
 Config file format (INI style):
   [DEFAULT]
   url = http://remote-server:8000/put_file
-  api-key = your-api-key-here
+  username = your-username
+  password = your-password
   exclude = .git
   exclude = *.log
   hostname = myserver
 
 Authentication:
   # Option 1: Command line
-  %(prog)s --path /var/log --api-key YOUR_API_KEY
+  %(prog)s --path /var/log --username admin --password secret
 
-  # Option 2: Environment variable
-  export PUTPLACE_API_KEY=YOUR_API_KEY
+  # Option 2: Environment variables
+  export PUTPLACE_USERNAME=admin
+  export PUTPLACE_PASSWORD=secret
   %(prog)s --path /var/log
 
   # Option 3: Config file (~/ppclient.conf)
-  echo "api-key = YOUR_API_KEY" >> ~/ppclient.conf
+  echo "username = admin" >> ~/ppclient.conf
+  echo "password = secret" >> ~/ppclient.conf
   %(prog)s --path /var/log
         """,
     )
@@ -489,19 +531,43 @@ Authentication:
     )
 
     parser.add_argument(
-        "--api-key",
-        "-k",
-        env_var="PUTPLACE_API_KEY",
+        "--username",
+        "-u",
+        env_var="PUTPLACE_USERNAME",
         default=None,
-        help="API key for authentication (required for API v1.0+). "
-        "Can be specified via: 1) --api-key flag, 2) PUTPLACE_API_KEY environment variable, "
-        "or 3) 'api-key' in config file.",
+        help="Username for authentication. "
+        "Can be specified via: 1) --username flag, 2) PUTPLACE_USERNAME environment variable, "
+        "or 3) 'username' in config file.",
+    )
+
+    parser.add_argument(
+        "--password",
+        "-p",
+        env_var="PUTPLACE_PASSWORD",
+        default=None,
+        help="Password for authentication. "
+        "Can be specified via: 1) --password flag, 2) PUTPLACE_PASSWORD environment variable, "
+        "or 3) 'password' in config file.",
     )
 
     args = parser.parse_args()
 
-    # Get API key (configargparse handles CLI, env var, and config file automatically)
-    api_key = args.api_key
+    # Get username and password
+    username = args.username
+    password = args.password
+
+    # Login and get access token if credentials provided
+    access_token = None
+    if username and password:
+        console.print(f"[cyan]Logging in as {username}...[/cyan]")
+        access_token = login_and_get_token(args.url.rsplit('/', 1)[0], username, password)
+        if not access_token:
+            console.print("[red]✗ Login failed. Exiting.[/red]")
+            sys.exit(1)
+        console.print("[green]✓ Login successful[/green]")
+    elif username or password:
+        console.print("[red]✗ Both username and password are required for authentication[/red]")
+        sys.exit(1)
 
     # Get hostname and IP
     hostname = args.hostname or get_hostname()
@@ -539,10 +605,10 @@ Authentication:
     console.print(f"  IP Address: {ip_address}")
     console.print(f"  API URL: {args.url}")
 
-    if api_key:
-        console.print(f"  [green]API Key: {'*' * 8}{api_key[-8:]}[/green]")
+    if access_token:
+        console.print(f"  [green]Authentication: Bearer token ({len(access_token)} chars)[/green]")
     else:
-        console.print("  [yellow]Warning: No API key provided (authentication may fail)[/yellow]")
+        console.print("  [yellow]Warning: No authentication provided (may fail for protected endpoints)[/yellow]")
 
     if exclude_patterns:
         console.print(f"  Exclude patterns: {', '.join(exclude_patterns)}")
@@ -563,7 +629,7 @@ Authentication:
         ip_address,
         args.url,
         args.dry_run,
-        api_key,
+        access_token,
     )
 
     # Display results
