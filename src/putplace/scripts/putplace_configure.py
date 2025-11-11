@@ -383,6 +383,147 @@ def write_toml_file(config: dict, toml_path: Path) -> tuple[bool, str]:
         return False, f"Failed to write TOML file: {str(e)}"
 
 
+def create_aws_secrets(config: dict, aws_region: str = 'eu-west-1') -> tuple[bool, str]:
+    """Create secrets in AWS Secrets Manager for App Runner deployment.
+
+    Creates three secrets:
+    - putplace/mongodb: MongoDB connection settings
+    - putplace/admin: Admin user credentials
+    - putplace/aws-config: AWS and API configuration
+    """
+    try:
+        import boto3
+        import json
+        from botocore.exceptions import ClientError, NoCredentialsError
+    except ImportError:
+        return False, "boto3 library not installed (pip install boto3)"
+
+    try:
+        # Create Secrets Manager client
+        client = boto3.client('secretsmanager', region_name=aws_region)
+
+        # Define secrets to create
+        secrets = {
+            'putplace/mongodb': {
+                'MONGODB_URL': config.get('mongodb_url', 'mongodb://localhost:27017'),
+                'MONGODB_DATABASE': config.get('mongodb_database', 'putplace'),
+                'MONGODB_COLLECTION': 'file_metadata'
+            },
+            'putplace/admin': {
+                'PUTPLACE_ADMIN_USERNAME': config.get('admin_username', 'admin'),
+                'PUTPLACE_ADMIN_EMAIL': config.get('admin_email', 'admin@localhost'),
+                'PUTPLACE_ADMIN_PASSWORD': config.get('admin_password', '')
+            },
+            'putplace/aws-config': {
+                'AWS_DEFAULT_REGION': aws_region,
+                'API_TITLE': 'PutPlace File Metadata API',
+                'API_VERSION': '0.5.8',
+                'PYTHONUNBUFFERED': '1',
+                'PYTHONDONTWRITEBYTECODE': '1'
+            }
+        }
+
+        created_secrets = []
+        updated_secrets = []
+
+        for secret_name, secret_value in secrets.items():
+            secret_string = json.dumps(secret_value)
+
+            try:
+                # Try to create the secret
+                client.create_secret(
+                    Name=secret_name,
+                    SecretString=secret_string,
+                    Description=f'PutPlace configuration for {secret_name.split("/")[1]}'
+                )
+                created_secrets.append(secret_name)
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'ResourceExistsException':
+                    # Secret exists, update it
+                    client.update_secret(
+                        SecretId=secret_name,
+                        SecretString=secret_string
+                    )
+                    updated_secrets.append(secret_name)
+                else:
+                    raise
+
+        result_msg = f"AWS Secrets Manager setup complete in {aws_region}:\n"
+        if created_secrets:
+            result_msg += f"  Created: {', '.join(created_secrets)}\n"
+        if updated_secrets:
+            result_msg += f"  Updated: {', '.join(updated_secrets)}\n"
+        result_msg += "\nGrant App Runner IAM role access to secrets:\n"
+        result_msg += f"  Action: secretsmanager:GetSecretValue\n"
+        result_msg += f"  Resource: arn:aws:secretsmanager:{aws_region}:*:secret:putplace/*"
+
+        return True, result_msg
+
+    except NoCredentialsError:
+        return False, "AWS credentials not configured. Set up AWS CLI or environment variables."
+    except ClientError as e:
+        error_msg = e.response['Error']['Message']
+        return False, f"AWS Secrets Manager error: {error_msg}"
+    except Exception as e:
+        return False, f"Failed to create AWS secrets: {str(e)}"
+
+
+def delete_aws_secrets(aws_region: str = 'eu-west-1', force: bool = False) -> tuple[bool, str]:
+    """Delete PutPlace secrets from AWS Secrets Manager."""
+    try:
+        import boto3
+        from botocore.exceptions import ClientError, NoCredentialsError
+    except ImportError:
+        return False, "boto3 library not installed (pip install boto3)"
+
+    try:
+        client = boto3.client('secretsmanager', region_name=aws_region)
+
+        secret_names = [
+            'putplace/mongodb',
+            'putplace/admin',
+            'putplace/aws-config'
+        ]
+
+        deleted = []
+        not_found = []
+
+        for secret_name in secret_names:
+            try:
+                if force:
+                    client.delete_secret(
+                        SecretId=secret_name,
+                        ForceDeleteWithoutRecovery=True
+                    )
+                    deleted.append(f"{secret_name} (permanent)")
+                else:
+                    client.delete_secret(
+                        SecretId=secret_name,
+                        RecoveryWindowInDays=7
+                    )
+                    deleted.append(f"{secret_name} (7 day recovery)")
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'ResourceNotFoundException':
+                    not_found.append(secret_name)
+                else:
+                    raise
+
+        result_msg = f"Deleted secrets in {aws_region}:\n"
+        if deleted:
+            result_msg += "  " + "\n  ".join(deleted)
+        if not_found:
+            result_msg += f"\n  Not found: {', '.join(not_found)}"
+
+        return True, result_msg
+
+    except NoCredentialsError:
+        return False, "AWS credentials not configured"
+    except ClientError as e:
+        return False, f"AWS error: {e.response['Error']['Message']}"
+    except Exception as e:
+        return False, f"Failed to delete secrets: {str(e)}"
+
+
 async def run_interactive_config() -> dict:
     """Run interactive configuration wizard."""
     config = {}
@@ -707,6 +848,21 @@ Examples:
         action='store_true',
         help='Skip AWS S3/SES connectivity checks'
     )
+    parser.add_argument(
+        '--create-aws-secrets',
+        action='store_true',
+        help='Create secrets in AWS Secrets Manager for App Runner deployment'
+    )
+    parser.add_argument(
+        '--delete-aws-secrets',
+        action='store_true',
+        help='Delete PutPlace secrets from AWS Secrets Manager'
+    )
+    parser.add_argument(
+        '--force-delete',
+        action='store_true',
+        help='Force delete secrets without recovery window (use with --delete-aws-secrets)'
+    )
 
     # MongoDB options
     parser.add_argument(
@@ -777,6 +933,25 @@ Examples:
 
     args = parser.parse_args()
 
+    # Handle delete AWS secrets mode
+    if args.delete_aws_secrets:
+        print_panel("Deleting PutPlace AWS Secrets", style="red")
+        print_message(f"Region: {args.aws_region}", "yellow")
+
+        if RICH_AVAILABLE:
+            confirm = Confirm.ask("Are you sure you want to delete all PutPlace secrets?", default=False)
+        else:
+            confirm_input = input("Are you sure you want to delete all PutPlace secrets? [y/N]: ").strip().lower()
+            confirm = confirm_input == 'y'
+
+        if not confirm:
+            print_message("Deletion cancelled.", "yellow")
+            sys.exit(0)
+
+        success, message = delete_aws_secrets(args.aws_region, args.force_delete)
+        print_message(f"{'✓' if success else '✗'} {message}", "green" if success else "red")
+        sys.exit(0 if success else 1)
+
     # Handle standalone test modes
     if args.test_mode == 'S3':
         print_panel("Testing S3 Access", style="cyan")
@@ -815,9 +990,17 @@ Examples:
         # Print summary
         print_summary(config)
 
+        # Create AWS Secrets if requested
+        if args.create_aws_secrets:
+            print_message("\nCreating AWS Secrets Manager secrets...", "yellow")
+            success, message = create_aws_secrets(config, args.aws_region)
+            print_message(f"{'✓' if success else '✗'} {message}", "green" if success else "red")
+
+            if not success:
+                print_message("Warning: AWS Secrets creation failed. Continue with local configuration.", "yellow")
+
         # Final instructions
-        print_panel(
-            f"""Configuration complete!
+        final_msg = f"""Configuration complete!
 
 Next steps:
 1. Review the generated configuration: {config['config_path']}
@@ -830,7 +1013,17 @@ Admin credentials:
   Email: {config['admin_email']}
 
 IMPORTANT: Save the admin password securely!
-""",
+"""
+
+        if args.create_aws_secrets:
+            final_msg += f"""
+AWS App Runner Deployment:
+  Secrets created in region: {args.aws_region}
+  Next: Deploy to App Runner with: invoke deploy-apprunner --region={args.aws_region}
+"""
+
+        print_panel(
+            final_msg,
             title="Setup Complete",
             style="green"
         )

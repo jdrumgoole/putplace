@@ -1056,3 +1056,305 @@ def list_ses_emails(c, region="eu-west-1"):
         print("\nCommon issues:")
         print("  - AWS CLI not installed")
         print("  - AWS credentials not configured")
+
+
+@task
+def configure_apprunner(c, region="eu-west-1", mongodb_url=None, non_interactive=False):
+    """Configure PutPlace for AWS App Runner deployment.
+
+    Creates AWS Secrets Manager secrets with MongoDB connection, admin user,
+    and API configuration for App Runner deployment.
+
+    Requirements:
+        - AWS CLI installed and configured
+        - MongoDB connection string (MongoDB Atlas recommended)
+        - boto3 library installed
+
+    Args:
+        region: AWS region for deployment (default: eu-west-1)
+        mongodb_url: MongoDB connection string (will prompt if not provided)
+        non_interactive: Skip prompts and use defaults (default: False)
+
+    Examples:
+        # Interactive mode (recommended)
+        invoke configure-apprunner
+
+        # Non-interactive with MongoDB Atlas
+        invoke configure-apprunner --mongodb-url="mongodb+srv://user:pass@cluster.mongodb.net/"
+
+        # Different region
+        invoke configure-apprunner --region=us-east-1
+    """
+    import shlex
+
+    cmd = [
+        "uv", "run", "python", "-m",
+        "putplace.scripts.putplace_configure",
+        "--create-aws-secrets",
+        "--aws-region", region
+    ]
+
+    if non_interactive:
+        cmd.append("--non-interactive")
+
+    if mongodb_url:
+        cmd.append("--mongodb-url")
+        cmd.append(mongodb_url)
+
+    print(f"Configuring PutPlace for App Runner deployment in {region}...")
+    print("This will create secrets in AWS Secrets Manager.\n")
+
+    result = c.run(shlex.join(cmd), warn=True)
+
+    if result.ok:
+        print(f"\n✓ Configuration complete!")
+        print(f"\nNext steps:")
+        print(f"  1. Review the secrets in AWS Secrets Manager console")
+        print(f"  2. Deploy to App Runner: invoke deploy-apprunner --region={region}")
+    else:
+        print(f"\n✗ Configuration failed")
+        print("\nCommon issues:")
+        print("  - AWS credentials not configured")
+        print("  - boto3 not installed (pip install boto3)")
+        print("  - MongoDB connection string invalid")
+
+
+@task
+def deploy_apprunner(
+    c,
+    service_name="putplace-api",
+    region="eu-west-1",
+    github_repo=None,
+    github_branch="main",
+    cpu="1 vCPU",
+    memory="2 GB",
+    auto_deploy=False
+):
+    """Deploy PutPlace to AWS App Runner.
+
+    Creates or updates an App Runner service with manual deployment trigger.
+    Requires AWS Secrets Manager secrets to be created first.
+
+    Requirements:
+        - AWS CLI installed and configured
+        - Secrets created (run: invoke configure-apprunner first)
+        - GitHub repository access (will prompt for connection)
+
+    Args:
+        service_name: App Runner service name (default: putplace-api)
+        region: AWS region (default: eu-west-1)
+        github_repo: GitHub repository URL (e.g., https://github.com/user/repo)
+        github_branch: Git branch to deploy (default: main)
+        cpu: CPU allocation (default: 1 vCPU)
+        memory: Memory allocation (default: 2 GB)
+        auto_deploy: Enable automatic deployment on git push (default: False - manual only)
+
+    Examples:
+        # Deploy with manual trigger (recommended)
+        invoke deploy-apprunner --github-repo=https://github.com/user/putplace
+
+        # Different instance size
+        invoke deploy-apprunner --cpu="2 vCPU" --memory="4 GB"
+
+        # Enable auto-deploy on commits
+        invoke deploy-apprunner --auto-deploy
+
+    Notes:
+        - By default, deployment is MANUAL only (no auto-deploy on commits)
+        - Use App Runner console or CLI to trigger deployments manually
+        - Automatic deployments can be enabled with --auto-deploy flag
+    """
+    import json
+
+    if not github_repo:
+        github_repo = input("GitHub repository URL: ").strip()
+
+    if not github_repo:
+        print("Error: GitHub repository URL is required")
+        return 1
+
+    print(f"\n{'='*60}")
+    print(f"Deploying PutPlace to AWS App Runner")
+    print(f"{'='*60}")
+    print(f"Service name: {service_name}")
+    print(f"Region: {region}")
+    print(f"Repository: {github_repo}")
+    print(f"Branch: {github_branch}")
+    print(f"Instance: {cpu}, {memory}")
+    print(f"Auto-deploy: {'Enabled' if auto_deploy else 'Disabled (manual only)'}")
+    print(f"{'='*60}\n")
+
+    # Check if service already exists
+    print("Checking if service exists...")
+    check_cmd = f"aws apprunner list-services --region {region}"
+    check_result = c.run(check_cmd, warn=True, hide=True)
+
+    service_exists = False
+    if check_result.ok:
+        import json
+        services = json.loads(check_result.stdout)
+        for svc in services.get('ServiceSummaryList', []):
+            if svc['ServiceName'] == service_name:
+                service_exists = True
+                service_arn = svc['ServiceArn']
+                print(f"✓ Service exists: {service_arn}")
+                break
+
+    if service_exists:
+        print(f"\n⚠️  Service '{service_name}' already exists")
+        print("To update the service, trigger a manual deployment:")
+        print(f"  aws apprunner start-deployment --service-arn {service_arn} --region {region}")
+        return 0
+
+    # Create new service
+    print("\nCreating App Runner service...")
+    print("Note: You may need to connect GitHub in the AWS console first")
+
+    # Build source configuration
+    source_config = {
+        "CodeRepository": {
+            "RepositoryUrl": github_repo,
+            "SourceCodeVersion": {
+                "Type": "BRANCH",
+                "Value": github_branch
+            },
+            "CodeConfiguration": {
+                "ConfigurationSource": "REPOSITORY"
+            }
+        },
+        "AutoDeploymentsEnabled": auto_deploy
+    }
+
+    # Write source config to temp file
+    import tempfile
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        json.dump(source_config, f)
+        source_config_file = f.name
+
+    try:
+        create_cmd = f"""aws apprunner create-service \\
+            --service-name {service_name} \\
+            --source-configuration file://{source_config_file} \\
+            --instance-configuration Cpu="{cpu}",Memory="{memory}" \\
+            --region {region}"""
+
+        print("\nExecuting:")
+        print(create_cmd)
+        print()
+
+        result = c.run(create_cmd, warn=True)
+
+        if result.ok:
+            print(f"\n✓ App Runner service created successfully!")
+            print(f"\nService: {service_name}")
+            print(f"Region: {region}")
+            print(f"\nNext steps:")
+            print(f"  1. Check deployment status:")
+            print(f"     aws apprunner list-services --region {region}")
+            print(f"  2. View service in console:")
+            print(f"     https://console.aws.amazon.com/apprunner/")
+            print(f"  3. Grant IAM role access to secrets:")
+            print(f"     Action: secretsmanager:GetSecretValue")
+            print(f"     Resource: arn:aws:secretsmanager:{region}:*:secret:putplace/*")
+
+            if not auto_deploy:
+                print(f"\n  Manual deployment mode enabled.")
+                print(f"  Trigger deployments with:")
+                print(f"     invoke trigger-apprunner-deploy --service-name={service_name}")
+        else:
+            print(f"\n✗ Failed to create service")
+            print("\nCommon issues:")
+            print("  - GitHub connection not configured (set up in AWS console)")
+            print("  - Invalid repository URL")
+            print("  - Insufficient IAM permissions")
+            print("  - Service name already exists")
+
+    finally:
+        import os
+        os.unlink(source_config_file)
+
+
+@task
+def trigger_apprunner_deploy(c, service_name="putplace-api", region="eu-west-1"):
+    """Trigger a manual deployment for App Runner service.
+
+    Use this to deploy code changes when auto-deploy is disabled.
+
+    Args:
+        service_name: App Runner service name (default: putplace-api)
+        region: AWS region (default: eu-west-1)
+
+    Examples:
+        invoke trigger-apprunner-deploy
+        invoke trigger-apprunner-deploy --service-name=my-service
+    """
+    print(f"Triggering deployment for {service_name} in {region}...")
+
+    # Get service ARN
+    list_cmd = f"aws apprunner list-services --region {region}"
+    result = c.run(list_cmd, hide=True, warn=True)
+
+    if not result.ok:
+        print("✗ Failed to list services")
+        return 1
+
+    import json
+    services = json.loads(result.stdout)
+
+    service_arn = None
+    for svc in services.get('ServiceSummaryList', []):
+        if svc['ServiceName'] == service_name:
+            service_arn = svc['ServiceArn']
+            break
+
+    if not service_arn:
+        print(f"✗ Service not found: {service_name}")
+        print(f"\nAvailable services:")
+        for svc in services.get('ServiceSummaryList', []):
+            print(f"  - {svc['ServiceName']}")
+        return 1
+
+    # Start deployment
+    deploy_cmd = f"aws apprunner start-deployment --service-arn {service_arn} --region {region}"
+    result = c.run(deploy_cmd, warn=True)
+
+    if result.ok:
+        print(f"\n✓ Deployment triggered successfully")
+        print(f"\nMonitor deployment:")
+        print(f"  aws apprunner describe-service --service-arn {service_arn} --region {region}")
+    else:
+        print(f"\n✗ Failed to trigger deployment")
+
+
+@task
+def delete_apprunner_secrets(c, region="eu-west-1", force=False):
+    """Delete PutPlace secrets from AWS Secrets Manager.
+
+    Args:
+        region: AWS region (default: eu-west-1)
+        force: Force delete without recovery period (default: False)
+
+    Examples:
+        invoke delete-apprunner-secrets
+        invoke delete-apprunner-secrets --force
+    """
+    import shlex
+
+    cmd = [
+        "uv", "run", "python", "-m",
+        "putplace.scripts.putplace_configure",
+        "--delete-aws-secrets",
+        "--aws-region", region
+    ]
+
+    if force:
+        cmd.append("--force-delete")
+
+    print(f"Deleting PutPlace secrets from {region}...")
+    result = c.run(shlex.join(cmd), warn=True)
+
+    if not result.ok:
+        print("\nTo delete secrets manually:")
+        print(f"  aws secretsmanager delete-secret --secret-id putplace/mongodb --region {region}")
+        print(f"  aws secretsmanager delete-secret --secret-id putplace/admin --region {region}")
+        print(f"  aws secretsmanager delete-secret --secret-id putplace/aws-config --region {region}")

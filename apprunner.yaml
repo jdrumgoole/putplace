@@ -24,24 +24,66 @@ run:
     port: 8000
     env: APP_PORT
   env:
-    - name: PYTHONUNBUFFERED
-      value: "1"
-    - name: PYTHONDONTWRITEBYTECODE
-      value: "1"
+    # MongoDB configuration from AWS Secrets Manager
+    - name: MONGODB_URL
+      value-from:
+        type: secret
+        name: putplace/mongodb
+        key: MONGODB_URL
+    - name: MONGODB_DATABASE
+      value-from:
+        type: secret
+        name: putplace/mongodb
+        key: MONGODB_DATABASE
+    - name: MONGODB_COLLECTION
+      value-from:
+        type: secret
+        name: putplace/mongodb
+        key: MONGODB_COLLECTION
+
+    # Admin user configuration from AWS Secrets Manager
+    - name: PUTPLACE_ADMIN_USERNAME
+      value-from:
+        type: secret
+        name: putplace/admin
+        key: PUTPLACE_ADMIN_USERNAME
+    - name: PUTPLACE_ADMIN_EMAIL
+      value-from:
+        type: secret
+        name: putplace/admin
+        key: PUTPLACE_ADMIN_EMAIL
+    - name: PUTPLACE_ADMIN_PASSWORD
+      value-from:
+        type: secret
+        name: putplace/admin
+        key: PUTPLACE_ADMIN_PASSWORD
+
+    # AWS and API configuration from AWS Secrets Manager
+    - name: AWS_DEFAULT_REGION
+      value-from:
+        type: secret
+        name: putplace/aws-config
+        key: AWS_DEFAULT_REGION
     - name: API_TITLE
-      value: "PutPlace File Metadata API"
+      value-from:
+        type: secret
+        name: putplace/aws-config
+        key: API_TITLE
     - name: API_VERSION
-      value: "0.5.8"
-    # MongoDB connection - set in App Runner console or AWS Secrets Manager
-    # - name: MONGODB_URL
-    #   value: "mongodb://your-mongodb-host:27017"
-    # - name: MONGODB_DATABASE
-    #   value: "putplace"
-    # - name: MONGODB_COLLECTION
-    #   value: "file_metadata"
-    # AWS region for SES (if using email features)
-    # - name: AWS_DEFAULT_REGION
-    #   value: "eu-west-1"
+      value-from:
+        type: secret
+        name: putplace/aws-config
+        key: API_VERSION
+    - name: PYTHONUNBUFFERED
+      value-from:
+        type: secret
+        name: putplace/aws-config
+        key: PYTHONUNBUFFERED
+    - name: PYTHONDONTWRITEBYTECODE
+      value-from:
+        type: secret
+        name: putplace/aws-config
+        key: PYTHONDONTWRITEBYTECODE
 
 health-check:
   protocol: http
