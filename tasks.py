@@ -1104,7 +1104,7 @@ def configure_apprunner(c, region="eu-west-1", mongodb_url=None, non_interactive
     print(f"Configuring PutPlace for App Runner deployment in {region}...")
     print("This will create secrets in AWS Secrets Manager.\n")
 
-    result = c.run(shlex.join(cmd), warn=True)
+    result = c.run(shlex.join(cmd), warn=True, pty=True)
 
     if result.ok:
         print(f"\n✓ Configuration complete!")
@@ -1351,7 +1351,7 @@ def delete_apprunner_secrets(c, region="eu-west-1", force=False):
         cmd.append("--force-delete")
 
     print(f"Deleting PutPlace secrets from {region}...")
-    result = c.run(shlex.join(cmd), warn=True)
+    result = c.run(shlex.join(cmd), warn=True, pty=True)
 
     if not result.ok:
         print("\nTo delete secrets manually:")
