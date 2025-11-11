@@ -35,24 +35,34 @@ uvicorn putplace.main:app --reload
 
 Keep this terminal open. Open a new terminal for the next steps.
 
-## Step 3: Create API Key (1 minute)
+## Step 3: Get Admin Credentials (1 minute)
+
+The admin user is automatically created on first server startup. Check the server logs or the credentials file:
 
 ```bash
-# In a new terminal, create your first API key
-python -m putplace.scripts.create_api_key --name "my-first-key"
+# Check credentials file (created on first startup)
+cat /tmp/putplace_initial_creds.txt
 
-# Save the API key that's displayed!
 # Example output:
-# API Key: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6...
+# PutPlace Admin User Created
+# ===========================
+# Username: admin
+# Password: Xy9K3mP#vL2nQ@8sW4tR
+#
+# ⚠️  Save these credentials securely and delete this file!
 ```
 
-**⚠️ IMPORTANT:** Copy and save the API key! You'll need it for the next step.
+**⚠️ IMPORTANT:** Copy and save these credentials! Delete the file after saving:
+```bash
+rm /tmp/putplace_initial_creds.txt
+```
 
 ## Step 4: Use the Client (1 minute)
 
 ```bash
-# Set your API key
-export PUTPLACE_API_KEY="paste-your-api-key-here"
+# Set your credentials
+export PUTPLACE_USERNAME="admin"
+export PUTPLACE_PASSWORD="paste-your-password-here"
 
 # Scan a directory (dry run first)
 python ppclient.py /tmp --dry-run
@@ -61,6 +71,8 @@ python ppclient.py /tmp --dry-run
 python ppclient.py /tmp
 
 # You should see:
+# Logging in as admin...
+# ✓ Login successful
 # PutPlace Client
 #   Path: /tmp
 #   ...
@@ -71,17 +83,19 @@ python ppclient.py /tmp
 ## Step 5: Verify It Worked
 
 ```bash
-# List your API keys
-curl -H "X-API-Key: $PUTPLACE_API_KEY" http://localhost:8000/api_keys
+# Test login
+curl -X POST http://localhost:8000/api/login \
+  -H "Content-Type: application/json" \
+  -d "{\"username\": \"$PUTPLACE_USERNAME\", \"password\": \"$PUTPLACE_PASSWORD\"}"
 
-# You should see JSON output with your API key metadata
+# You should see JSON output with an access_token
 ```
 
 ## 🎉 Success!
 
 You now have:
 - ✅ PutPlace server running
-- ✅ API key created
+- ✅ Admin user created
 - ✅ Client scanning files
 - ✅ Metadata stored in MongoDB
 
@@ -141,21 +155,24 @@ python ppclient.py /var/log --exclude "*.log" --exclude ".git"
 python ppclient.py /var/log --url http://remote-server:8000/put_file
 
 # Use config file
-cp ppclient.conf.example ~/ppclient.conf
-nano ~/ppclient.conf  # Add your API key
+cat > ~/ppclient.conf << EOF
+[DEFAULT]
+username = admin
+password = your-password
+EOF
+chmod 600 ~/ppclient.conf
 python ppclient.py /var/log
 ```
 
-### Create More API Keys
+### Create More Users
 
 ```bash
-# Create key for another server
-curl -X POST http://localhost:8000/api_keys \
-  -H "X-API-Key: $PUTPLACE_API_KEY" \
+# Register a new user via API
+curl -X POST http://localhost:8000/api/register \
   -H "Content-Type: application/json" \
-  -d '{"name": "server-02", "description": "Production server 02"}'
+  -d '{"username": "newuser", "email": "user@example.com", "password": "secure-password"}'
 
-# Save the returned API key!
+# User can now login and use the client
 ```
 
 ## Common First-Time Issues
@@ -182,17 +199,20 @@ sudo mkdir -p /var/putplace/files
 sudo chown $USER:$USER /var/putplace/files
 ```
 
-### "API key required"
+### "Login failed: 401"
 
-**Problem:** Forgot to set API key
+**Problem:** Forgot credentials or incorrect password
 
 **Solution:**
 ```bash
-# Set environment variable
-export PUTPLACE_API_KEY="your-api-key-here"
+# Set environment variables
+export PUTPLACE_USERNAME="admin"
+export PUTPLACE_PASSWORD="your-password"
 
 # Or use command line
-python ppclient.py /tmp --api-key "your-api-key-here"
+python ppclient.py /tmp --username "admin" --password "your-password"
+
+# If you lost the admin password, check the server logs from first startup
 ```
 
 ## Quick Reference Commands
@@ -201,14 +221,21 @@ python ppclient.py /tmp --api-key "your-api-key-here"
 # Start server
 uvicorn putplace.main:app --reload
 
-# Create API key
-python -m putplace.scripts.create_api_key --name "KEY_NAME"
+# Register new user
+curl -X POST http://localhost:8000/api/register \
+  -H "Content-Type: application/json" \
+  -d '{"username": "user", "email": "user@example.com", "password": "password"}'
+
+# Login and get token
+curl -X POST http://localhost:8000/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "your-password"}'
 
 # Scan directory
 python ppclient.py /path/to/scan
 
-# Scan with API key
-python ppclient.py /path --api-key "YOUR_KEY"
+# Scan with credentials
+python ppclient.py /path --username "admin" --password "your-password"
 
 # Scan remote server
 python ppclient.py /path --url http://server:8000/put_file
@@ -218,9 +245,6 @@ python ppclient.py /path --dry-run
 
 # Health check
 curl http://localhost:8000/health
-
-# List API keys
-curl -H "X-API-Key: KEY" http://localhost:8000/api_keys
 ```
 
 ## Example Workflow
@@ -231,15 +255,17 @@ Here's a complete example workflow:
 # 1. Start server (Terminal 1)
 uvicorn putplace.main:app
 
-# 2. Create API key (Terminal 2)
-python -m putplace.scripts.create_api_key --name "laptop"
-# Save the key: a1b2c3d4e5f6...
+# 2. Get admin credentials (Terminal 2)
+cat /tmp/putplace_initial_creds.txt
+# Username: admin
+# Password: Xy9K3mP#vL2nQ@8sW4tR
 
 # 3. Create config file
 cat > ~/ppclient.conf << EOF
 [DEFAULT]
 url = http://localhost:8000/put_file
-api-key = a1b2c3d4e5f6...
+username = admin
+password = Xy9K3mP#vL2nQ@8sW4tR
 exclude = .git
 exclude = node_modules
 exclude = __pycache__
@@ -250,7 +276,9 @@ chmod 600 ~/ppclient.conf
 python ppclient.py ~/Documents
 
 # 5. Check results
-curl -H "X-API-Key: a1b2c3d4e5f6..." http://localhost:8000/api_keys
+curl -X POST http://localhost:8000/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "Xy9K3mP#vL2nQ@8sW4tR"}'
 ```
 
 ## Architecture at a Glance
@@ -258,15 +286,16 @@ curl -H "X-API-Key: a1b2c3d4e5f6..." http://localhost:8000/api_keys
 ```
 [Your Files] → [ppclient.py] → [PutPlace API] → [MongoDB + Storage]
                     ↓                              ↓
-              X-API-Key Auth            Metadata + File Content
+              JWT Bearer Auth           Metadata + File Content
 ```
 
 **Flow:**
-1. Client scans files, calculates SHA256
-2. Sends metadata to API (with API key)
-3. API checks if file already exists (deduplication!)
-4. If new file: client uploads content
-5. If duplicate: skip upload (saved bandwidth!)
+1. Client logs in with username/password, gets JWT token
+2. Client scans files, calculates SHA256
+3. Sends metadata to API (with JWT token)
+4. API checks if file already exists (deduplication!)
+5. If new file: client uploads content
+6. If duplicate: skip upload (saved bandwidth!)
 
 ## Development Mode
 
@@ -314,7 +343,7 @@ Now that you have PutPlace running, explore these guides:
 
 - **[Client Guide](client-guide.md)** - Learn all client features
 - **[API Reference](api-reference.md)** - Explore the REST API
-- **[Authentication](AUTHENTICATION.md)** - Manage API keys
+- **[Authentication](AUTHENTICATION.md)** - User authentication and JWT tokens
 - **[Configuration](configuration.md)** - Customize PutPlace
 - **[Storage Backends](storage.md)** - Configure S3 or local storage
 - **[Deployment](deployment.md)** - Production deployment
