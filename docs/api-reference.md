@@ -15,9 +15,29 @@ https://putplace.example.com
 
 ## Authentication
 
-All endpoints except `/` and `/health` require authentication via API key.
+All endpoints except `/`, `/health`, `/api/register`, and `/api/login` require authentication.
 
-### API Key Header
+PutPlace supports **two authentication methods**:
+
+### Method 1: JWT Bearer Token (Recommended)
+
+Login with username/password to get a JWT token:
+
+```bash
+# 1. Login to get token
+curl -X POST http://localhost:8000/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "your-password"}'
+
+# Returns: {"access_token": "eyJ0eXAi...", "token_type": "bearer"}
+
+# 2. Use token in Authorization header
+curl -H "Authorization: Bearer eyJ0eXAi..." http://localhost:8000/api/my_files
+```
+
+### Method 2: API Key Header (Advanced)
+
+For backwards compatibility and advanced use cases:
 
 ```http
 X-API-Key: your-api-key-here
@@ -157,7 +177,7 @@ Store file metadata in database and determine if file upload is needed.
 **Status Codes:**
 - `201 Created` - Metadata stored successfully
 - `400 Bad Request` - Invalid request body
-- `401 Unauthorized` - Missing or invalid API key
+- `401 Unauthorized` - Missing or invalid authentication
 - `500 Internal Server Error` - Database error
 
 **Example:**
@@ -218,7 +238,7 @@ Upload actual file content for previously registered metadata.
 **Status Codes:**
 - `200 OK` - File uploaded successfully
 - `400 Bad Request` - Invalid SHA256 or hash mismatch
-- `401 Unauthorized` - Missing or invalid API key
+- `401 Unauthorized` - Missing or invalid authentication
 - `404 Not Found` - No metadata found for this file
 - `500 Internal Server Error` - Storage error
 
@@ -273,7 +293,7 @@ Retrieve file metadata by SHA256 hash.
 **Status Codes:**
 - `200 OK` - File found
 - `400 Bad Request` - Invalid SHA256 format
-- `401 Unauthorized` - Missing or invalid API key
+- `401 Unauthorized` - Missing or invalid authentication
 - `404 Not Found` - File not found
 - `500 Internal Server Error` - Database error
 
@@ -452,7 +472,7 @@ python -m putplace.scripts.create_api_key
 **Status Codes:**
 - `201 Created` - API key created successfully
 - `400 Bad Request` - Invalid request body
-- `401 Unauthorized` - Missing or invalid API key
+- `401 Unauthorized` - Missing or invalid authentication
 - `500 Internal Server Error` - Database error
 
 **Example:**
@@ -500,7 +520,7 @@ List all API keys (without showing actual keys).
 
 **Status Codes:**
 - `200 OK` - Success
-- `401 Unauthorized` - Missing or invalid API key
+- `401 Unauthorized` - Missing or invalid authentication
 - `500 Internal Server Error` - Database error
 
 **Example:**
@@ -529,7 +549,7 @@ Revoke (deactivate) an API key without deleting it.
 
 **Status Codes:**
 - `200 OK` - API key revoked
-- `401 Unauthorized` - Missing or invalid API key
+- `401 Unauthorized` - Missing or invalid authentication
 - `404 Not Found` - API key not found
 - `500 Internal Server Error` - Database error
 
@@ -561,7 +581,7 @@ Permanently delete an API key.
 
 **Status Codes:**
 - `200 OK` - API key deleted
-- `401 Unauthorized` - Missing or invalid API key
+- `401 Unauthorized` - Missing or invalid authentication
 - `404 Not Found` - API key not found
 - `500 Internal Server Error` - Database error
 
@@ -952,6 +972,6 @@ result = client.scan_and_upload("/path/to/file.txt", "my-laptop")
 ## Next Steps
 
 - [Client Guide](client-guide.md) - Using the command-line client
-- [Authentication Guide](AUTHENTICATION.md) - Managing API keys
+- [Authentication Guide](AUTHENTICATION.md) - JWT tokens and API keys
 - [File Upload Workflow](FILE_UPLOAD_WORKFLOW.md) - Understanding the upload process
 - [Configuration](configuration.md) - Server and client configuration
