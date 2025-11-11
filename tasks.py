@@ -1327,6 +1327,84 @@ def trigger_apprunner_deploy(c, service_name="putplace-api", region="eu-west-1")
 
 
 @task
+def list_apprunner_secrets(c, region="eu-west-1", show_values=False):
+    """List PutPlace secrets from AWS Secrets Manager.
+
+    Args:
+        region: AWS region (default: eu-west-1)
+        show_values: Show actual secret values (default: False - only shows keys)
+
+    Examples:
+        invoke list-apprunner-secrets
+        invoke list-apprunner-secrets --show-values
+        invoke list-apprunner-secrets --region=us-east-1
+    """
+    import json
+
+    secret_names = [
+        'putplace/mongodb',
+        'putplace/admin',
+        'putplace/aws-config'
+    ]
+
+    print(f"Listing PutPlace secrets in {region}...\n")
+
+    for secret_name in secret_names:
+        # Check if secret exists
+        describe_cmd = f"aws secretsmanager describe-secret --secret-id {secret_name} --region {region}"
+        result = c.run(describe_cmd, warn=True, hide=True)
+
+        if not result.ok:
+            print(f"✗ {secret_name}: Not found")
+            continue
+
+        # Get secret metadata
+        secret_info = json.loads(result.stdout)
+        created_date = secret_info.get('CreatedDate', 'Unknown')
+        last_changed = secret_info.get('LastChangedDate', 'Unknown')
+
+        print(f"✓ {secret_name}")
+        print(f"  Created: {created_date}")
+        print(f"  Last Changed: {last_changed}")
+
+        if show_values:
+            # Get secret value
+            get_cmd = f"aws secretsmanager get-secret-value --secret-id {secret_name} --region {region}"
+            value_result = c.run(get_cmd, warn=True, hide=True)
+
+            if value_result.ok:
+                secret_data = json.loads(value_result.stdout)
+                secret_string = json.loads(secret_data['SecretString'])
+
+                print(f"  Values:")
+                for key, value in secret_string.items():
+                    # Mask passwords
+                    if 'PASSWORD' in key.upper():
+                        display_value = '*' * len(value) if value else '(empty)'
+                    else:
+                        display_value = value
+                    print(f"    {key}: {display_value}")
+            else:
+                print(f"  Values: Unable to retrieve")
+        else:
+            # Get secret value to show keys only
+            get_cmd = f"aws secretsmanager get-secret-value --secret-id {secret_name} --region {region}"
+            value_result = c.run(get_cmd, warn=True, hide=True)
+
+            if value_result.ok:
+                secret_data = json.loads(value_result.stdout)
+                secret_string = json.loads(secret_data['SecretString'])
+                keys = list(secret_string.keys())
+                print(f"  Keys: {', '.join(keys)}")
+            else:
+                print(f"  Keys: Unable to retrieve")
+
+        print()
+
+    print("Tip: Use --show-values to see actual secret values (passwords will be masked)")
+
+
+@task
 def delete_apprunner_secrets(c, region="eu-west-1", force=False):
     """Delete PutPlace secrets from AWS Secrets Manager.
 
