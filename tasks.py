@@ -1361,10 +1361,13 @@ def deploy_apprunner(
         source_config_file = f.name
 
     try:
+        # Get or create instance role ARN
+        instance_role_arn = "arn:aws:iam::230950121080:role/AppRunnerPutPlaceInstanceRole"
+
         create_cmd = f"""aws apprunner create-service \\
             --service-name {service_name} \\
             --source-configuration file://{source_config_file} \\
-            --instance-configuration Cpu="{cpu}",Memory="{memory}" \\
+            --instance-configuration Cpu="{cpu}",Memory="{memory}",InstanceRoleArn="{instance_role_arn}" \\
             --region {region}"""
 
         print("\nExecuting:")
