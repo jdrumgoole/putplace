@@ -23,67 +23,8 @@ run:
   network:
     port: 8000
     env: APP_PORT
-  env:
-    # MongoDB configuration from AWS Secrets Manager
-    - name: MONGODB_URL
-      value-from:
-        type: secret
-        name: putplace/mongodb
-        key: MONGODB_URL
-    - name: MONGODB_DATABASE
-      value-from:
-        type: secret
-        name: putplace/mongodb
-        key: MONGODB_DATABASE
-    - name: MONGODB_COLLECTION
-      value-from:
-        type: secret
-        name: putplace/mongodb
-        key: MONGODB_COLLECTION
-
-    # Admin user configuration from AWS Secrets Manager
-    - name: PUTPLACE_ADMIN_USERNAME
-      value-from:
-        type: secret
-        name: putplace/admin
-        key: PUTPLACE_ADMIN_USERNAME
-    - name: PUTPLACE_ADMIN_EMAIL
-      value-from:
-        type: secret
-        name: putplace/admin
-        key: PUTPLACE_ADMIN_EMAIL
-    - name: PUTPLACE_ADMIN_PASSWORD
-      value-from:
-        type: secret
-        name: putplace/admin
-        key: PUTPLACE_ADMIN_PASSWORD
-
-    # AWS and API configuration from AWS Secrets Manager
-    - name: AWS_DEFAULT_REGION
-      value-from:
-        type: secret
-        name: putplace/aws-config
-        key: AWS_DEFAULT_REGION
-    - name: API_TITLE
-      value-from:
-        type: secret
-        name: putplace/aws-config
-        key: API_TITLE
-    - name: API_VERSION
-      value-from:
-        type: secret
-        name: putplace/aws-config
-        key: API_VERSION
-    - name: PYTHONUNBUFFERED
-      value-from:
-        type: secret
-        name: putplace/aws-config
-        key: PYTHONUNBUFFERED
-    - name: PYTHONDONTWRITEBYTECODE
-      value-from:
-        type: secret
-        name: putplace/aws-config
-        key: PYTHONDONTWRITEBYTECODE
+  # Note: Environment variables are configured via AWS CLI using
+  # --instance-configuration with environment secrets references
 
 health-check:
   protocol: http

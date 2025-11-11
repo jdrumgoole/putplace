@@ -1336,7 +1336,28 @@ def deploy_apprunner(
     # Create new service
     print("\nCreating App Runner service...")
 
-    # Build source configuration with connection ARN
+    # Build code configuration values with secrets
+    runtime_env_secrets = []
+    # MongoDB secrets
+    for key in ['MONGODB_URL', 'MONGODB_DATABASE', 'MONGODB_COLLECTION']:
+        runtime_env_secrets.append({
+            "Name": key,
+            "Value": f"putplace/mongodb:{key}"
+        })
+    # Admin secrets
+    for key in ['PUTPLACE_ADMIN_USERNAME', 'PUTPLACE_ADMIN_EMAIL', 'PUTPLACE_ADMIN_PASSWORD']:
+        runtime_env_secrets.append({
+            "Name": key,
+            "Value": f"putplace/admin:{key}"
+        })
+    # AWS/API secrets
+    for key in ['AWS_DEFAULT_REGION', 'API_TITLE', 'API_VERSION', 'PYTHONUNBUFFERED', 'PYTHONDONTWRITEBYTECODE']:
+        runtime_env_secrets.append({
+            "Name": key,
+            "Value": f"putplace/aws-config:{key}"
+        })
+
+    # Build source configuration with API-based configuration
     source_config = {
         "CodeRepository": {
             "RepositoryUrl": github_repo,
@@ -1345,7 +1366,14 @@ def deploy_apprunner(
                 "Value": github_branch
             },
             "CodeConfiguration": {
-                "ConfigurationSource": "REPOSITORY"
+                "ConfigurationSource": "API",
+                "CodeConfigurationValues": {
+                    "Runtime": "PYTHON_3",
+                    "RuntimeEnvironmentSecrets": runtime_env_secrets,
+                    "BuildCommand": "curl -LsSf https://astral.sh/uv/install.sh | sh && export PATH=\"/root/.cargo/bin:$PATH\" && uv pip install --system -e . && uv pip install --system -e '.[s3]'",
+                    "StartCommand": "uvicorn putplace.main:app --host 0.0.0.0 --port 8000 --workers 2",
+                    "Port": "8000"
+                }
             }
         },
         "AuthenticationConfiguration": {
