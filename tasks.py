@@ -1259,16 +1259,17 @@ def deploy_apprunner(
     connections_cmd = f"aws apprunner list-connections --region {region}"
     conn_result = c.run(connections_cmd, warn=True, hide=True)
 
-    github_connected = False
+    github_connection_arn = None
     if conn_result.ok:
         connections = json.loads(conn_result.stdout)
         for conn in connections.get('ConnectionSummaryList', []):
             if conn.get('ProviderType') == 'GITHUB' and conn.get('Status') == 'AVAILABLE':
-                github_connected = True
+                github_connection_arn = conn['ConnectionArn']
                 print(f"✓ GitHub connection found: {conn['ConnectionName']}")
+                print(f"  ARN: {github_connection_arn}")
                 break
 
-    if not github_connected:
+    if not github_connection_arn:
         print("\n⚠️  GitHub connection not configured!")
         print(f"\nRun this command for setup instructions:")
         print(f"  invoke setup-github-connection --region={region}")
@@ -1298,9 +1299,8 @@ def deploy_apprunner(
 
     # Create new service
     print("\nCreating App Runner service...")
-    print("Note: You may need to connect GitHub in the AWS console first")
 
-    # Build source configuration
+    # Build source configuration with connection ARN
     source_config = {
         "CodeRepository": {
             "RepositoryUrl": github_repo,
@@ -1310,6 +1310,9 @@ def deploy_apprunner(
             },
             "CodeConfiguration": {
                 "ConfigurationSource": "REPOSITORY"
+            },
+            "SourceCodeAuthenticationConfiguration": {
+                "ConnectionArn": github_connection_arn
             }
         },
         "AutoDeploymentsEnabled": auto_deploy
