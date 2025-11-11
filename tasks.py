@@ -2426,92 +2426,8 @@ def deploy_website(c, source_dir="website", bucket=None):
     import os
     if not os.path.exists(source_dir):
         print(f"✗ Source directory not found: {source_dir}")
-        print(f"\nCreating sample website directory...")
-        c.run(f"mkdir -p {source_dir}")
-
-        # Create sample index.html
-        sample_html = """<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PutPlace - File Metadata Storage Service</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 40px 20px;
-            line-height: 1.6;
-            color: #333;
-        }
-        h1 { color: #2563eb; }
-        .api-link {
-            display: inline-block;
-            background: #2563eb;
-            color: white;
-            padding: 10px 20px;
-            text-decoration: none;
-            border-radius: 5px;
-            margin: 10px 0;
-        }
-        .api-link:hover { background: #1d4ed8; }
-        code {
-            background: #f1f5f9;
-            padding: 2px 6px;
-            border-radius: 3px;
-        }
-    </style>
-</head>
-<body>
-    <h1>PutPlace</h1>
-    <p>Fast, secure file metadata storage service powered by FastAPI and MongoDB.</p>
-
-    <h2>API Documentation</h2>
-    <p>Access our API at <a href="https://app.putplace.org" class="api-link">app.putplace.org</a></p>
-
-    <h2>Features</h2>
-    <ul>
-        <li>Store and retrieve file metadata (filepath, hostname, IP, SHA256)</li>
-        <li>RESTful API with interactive documentation</li>
-        <li>MongoDB backend for fast queries</li>
-        <li>AWS App Runner deployment</li>
-    </ul>
-
-    <h2>Quick Start</h2>
-    <pre><code>curl -X POST https://app.putplace.org/put_file \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "filepath": "/var/log/app.log",
-    "hostname": "server01",
-    "ip_address": "192.168.1.100",
-    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-  }'</code></pre>
-
-    <p>Updated: """ + str(time.time()) + """</p>
-</body>
-</html>"""
-
-        with open(f"{source_dir}/index.html", 'w') as f:
-            f.write(sample_html)
-
-        # Create error page
-        error_html = """<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>404 - Page Not Found</title>
-</head>
-<body>
-    <h1>404 - Page Not Found</h1>
-    <p><a href="/">Return to homepage</a></p>
-</body>
-</html>"""
-
-        with open(f"{source_dir}/error.html", 'w') as f:
-            f.write(error_html)
-
-        print(f"✓ Created sample website in {source_dir}/")
+        print(f"\nPlease create the website content first or use the default 'website/' directory.")
+        return 1
 
     # Upload to S3
     print(f"\nUploading files to S3...")
@@ -2522,18 +2438,30 @@ def deploy_website(c, source_dir="website", bucket=None):
         print(f"\n✓ Website deployed successfully")
 
         # Invalidate CloudFront cache
+        print(f"\nInvalidating CloudFront cache...")
+
+        # Try to get distribution ID from file first, then query CloudFront
+        dist_id = None
         try:
             with open("/tmp/putplace-cloudfront-id.txt", 'r') as f:
                 dist_id = f.read().strip()
+        except FileNotFoundError:
+            # Query CloudFront for distribution serving this domain
+            query_cmd = f"aws cloudfront list-distributions --query \"DistributionList.Items[?Aliases.Items[0]=='{bucket}'].Id | [0]\" --output text"
+            query_result = c.run(query_cmd, warn=True, hide=True)
+            if query_result.ok and query_result.stdout.strip():
+                dist_id = query_result.stdout.strip()
 
-            print(f"\nInvalidating CloudFront cache...")
+        if dist_id and dist_id != "None":
             invalidate_cmd = f"aws cloudfront create-invalidation --distribution-id {dist_id} --paths '/*'"
             result = c.run(invalidate_cmd, warn=True, hide=True)
 
             if result.ok:
-                print(f"✓ CloudFront cache invalidated")
-        except FileNotFoundError:
-            print(f"\n⚠ CloudFront distribution ID not found. Cache not invalidated.")
+                print(f"✓ CloudFront cache invalidated (Distribution: {dist_id})")
+            else:
+                print(f"⚠ Failed to invalidate cache")
+        else:
+            print(f"⚠ CloudFront distribution not found for {bucket}. Cache not invalidated.")
 
         print(f"\n{'='*60}")
         print(f"Website URL: https://putplace.org")
