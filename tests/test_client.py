@@ -329,3 +329,248 @@ def test_process_path_single_file_ignores_exclude_patterns():
         assert uploaded == 0
     finally:
         temp_file.unlink()
+
+
+def test_get_exclude_patterns_from_config():
+    """Test extracting exclude patterns from config file."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".conf", delete=False) as f:
+        f.write("exclude = .git\n")
+        f.write("exclude = *.log\n")
+        f.write("other_setting = value\n")
+        f.write("exclude = __pycache__\n")
+        config_file = f.name
+
+    try:
+        patterns = ppclient.get_exclude_patterns_from_config([config_file])
+        assert len(patterns) == 3
+        assert ".git" in patterns
+        assert "*.log" in patterns
+        assert "__pycache__" in patterns
+    finally:
+        Path(config_file).unlink()
+
+
+def test_get_exclude_patterns_from_config_nonexistent():
+    """Test getting patterns from non-existent config file."""
+    patterns = ppclient.get_exclude_patterns_from_config(["/nonexistent/config.conf"])
+    assert patterns == []
+
+
+def test_get_exclude_patterns_from_config_invalid():
+    """Test getting patterns from invalid config file."""
+    with tempfile.NamedTemporaryFile(mode="wb", suffix=".conf", delete=False) as f:
+        # Write invalid binary data
+        f.write(b"\x00\x01\x02\x03")
+        config_file = f.name
+
+    try:
+        # Should handle error gracefully
+        patterns = ppclient.get_exclude_patterns_from_config([config_file])
+        # Might return empty list or partial results
+        assert isinstance(patterns, list)
+    finally:
+        Path(config_file).unlink()
+
+
+def test_get_exclude_patterns_multiple_files():
+    """Test extracting patterns from multiple config files."""
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".conf", delete=False) as f1:
+        f1.write("exclude = .git\n")
+        config1 = f1.name
+
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".conf", delete=False) as f2:
+        f2.write("exclude = *.log\n")
+        config2 = f2.name
+
+    try:
+        patterns = ppclient.get_exclude_patterns_from_config([config1, config2])
+        assert len(patterns) == 2
+        assert ".git" in patterns
+        assert "*.log" in patterns
+    finally:
+        Path(config1).unlink()
+        Path(config2).unlink()
+
+
+def test_signal_handler():
+    """Test signal handler sets interrupted flag."""
+    import importlib
+    # Reload module to reset global state
+    importlib.reload(ppclient)
+
+    # Initially not interrupted
+    assert ppclient.interrupted is False
+
+    # Call signal handler
+    ppclient.signal_handler(None, None)
+
+    # Should set interrupted flag
+    assert ppclient.interrupted is True
+
+    # Reset for other tests
+    ppclient.interrupted = False
+
+
+def test_upload_file_content_success():
+    """Test successful file upload."""
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        f.write("test content")
+        temp_file = Path(f.name)
+
+    try:
+        from unittest.mock import Mock, patch
+
+        # Mock httpx.post to return success
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = Mock()
+
+        with patch('httpx.post', return_value=mock_response) as mock_post:
+            result = ppclient.upload_file_content(
+                temp_file,
+                sha256="abc123" * 10 + "abcd",
+                hostname="testhost",
+                upload_url="/upload_file/abc123",
+                base_url="http://localhost:8000",
+                api_key="test-api-key"
+            )
+
+            assert result is True
+            mock_post.assert_called_once()
+            # Verify API key was included in headers
+            call_kwargs = mock_post.call_args[1]
+            assert "X-API-Key" in call_kwargs["headers"]
+            assert call_kwargs["headers"]["X-API-Key"] == "test-api-key"
+    finally:
+        temp_file.unlink()
+
+
+def test_upload_file_content_http_error():
+    """Test file upload with HTTP error."""
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        f.write("test content")
+        temp_file = Path(f.name)
+
+    try:
+        from unittest.mock import Mock, patch
+        import httpx
+
+        # Mock httpx.post to raise HTTPError
+        with patch('httpx.post', side_effect=httpx.HTTPError("Connection error")):
+            result = ppclient.upload_file_content(
+                temp_file,
+                sha256="abc123" * 10 + "abcd",
+                hostname="testhost",
+                upload_url="/upload_file/abc123",
+                base_url="http://localhost:8000"
+            )
+
+            assert result is False
+    finally:
+        temp_file.unlink()
+
+
+def test_upload_file_content_file_not_found():
+    """Test file upload when file doesn't exist."""
+    nonexistent = Path("/nonexistent/file.txt")
+
+    result = ppclient.upload_file_content(
+        nonexistent,
+        sha256="abc123" * 10 + "abcd",
+        hostname="testhost",
+        upload_url="/upload_file/abc123",
+        base_url="http://localhost:8000"
+    )
+
+    assert result is False
+
+
+def test_upload_file_content_no_api_key():
+    """Test file upload without API key."""
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        f.write("test content")
+        temp_file = Path(f.name)
+
+    try:
+        from unittest.mock import Mock, patch
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.raise_for_status = Mock()
+
+        with patch('httpx.post', return_value=mock_response) as mock_post:
+            result = ppclient.upload_file_content(
+                temp_file,
+                sha256="abc123" * 10 + "abcd",
+                hostname="testhost",
+                upload_url="/upload_file/abc123",
+                base_url="http://localhost:8000",
+                api_key=None  # No API key
+            )
+
+            assert result is True
+            # Verify no API key in headers
+            call_kwargs = mock_post.call_args[1]
+            assert "X-API-Key" not in call_kwargs.get("headers", {})
+    finally:
+        temp_file.unlink()
+
+
+def test_get_ip_address_fallback():
+    """Test IP address detection with fallback."""
+    from unittest.mock import patch
+    import socket
+
+    # Mock socket to raise exception
+    with patch('socket.socket') as mock_socket:
+        mock_socket.side_effect = Exception("Network error")
+
+        ip = ppclient.get_ip_address()
+        # Should fallback to localhost
+        assert ip == "127.0.0.1"
+
+
+def test_matches_exclude_pattern_path_not_relative():
+    """Test matches_exclude_pattern when path is not relative to base."""
+    base = Path("/home/user/project")
+    other = Path("/tmp/file.txt")
+
+    # Should not match since path is not relative to base
+    result = ppclient.matches_exclude_pattern(other, base, [".git"])
+    assert result is False
+
+
+def test_calculate_sha256_io_error():
+    """Test SHA256 calculation with IO error during read."""
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        f.write("test content")
+        temp_file = Path(f.name)
+
+    try:
+        from unittest.mock import patch, mock_open
+
+        # Mock open to raise IOError
+        with patch('builtins.open', mock_open()) as mock_file:
+            mock_file.side_effect = IOError("Permission denied")
+
+            sha256 = ppclient.calculate_sha256(temp_file)
+            assert sha256 is None
+    finally:
+        temp_file.unlink()
+
+
+def test_get_file_stats_os_error():
+    """Test get_file_stats with OS error."""
+    from unittest.mock import patch
+
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
+        f.write("test")
+        temp_file = Path(f.name)
+
+    try:
+        # Mock os.stat to raise OSError
+        with patch('os.stat', side_effect=OSError("Permission denied")):
+            stats = ppclient.get_file_stats(temp_file)
+            assert stats is None
+    finally:
+        temp_file.unlink()
