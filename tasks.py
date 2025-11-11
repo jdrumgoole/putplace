@@ -1371,8 +1371,8 @@ def deploy_apprunner(
                 "CodeConfigurationValues": {
                     "Runtime": "PYTHON_311",
                     "RuntimeEnvironmentSecrets": runtime_env_secrets,
-                    "BuildCommand": "python3.11 -m pip install .[s3]",
-                    "StartCommand": "python3.11 -m uvicorn putplace.main:app --host 0.0.0.0 --port 8000 --workers 2",
+                    "BuildCommand": "python3.11 -m pip install --target=/app/packages .[s3] && export PYTHONPATH=/app/packages:$PYTHONPATH",
+                    "StartCommand": "PYTHONPATH=/app/packages:$PYTHONPATH python3.11 -m uvicorn putplace.main:app --host 0.0.0.0 --port 8000 --workers 2",
                     "Port": "8000"
                 }
             }
