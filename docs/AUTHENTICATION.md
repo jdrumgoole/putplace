@@ -1,14 +1,13 @@
 # Authentication Guide
 
-PutPlace API uses **API Key authentication** to secure API endpoints and **User authentication** for web access. This guide explains how to set up and use authentication.
+PutPlace supports **two authentication methods**: JWT tokens (recommended for most users) and API keys (advanced use cases). This guide explains how to set up and use authentication.
 
 ## Table of Contents
 
 - [Overview](#overview)
 - [Initial Setup](#initial-setup)
-- [Quick Start](#quick-start)
-- [Creating Your First API Key](#creating-your-first-api-key)
-- [Using API Keys](#using-api-keys)
+- [Quick Start (Recommended: Username/Password)](#quick-start-recommended-usernamepassword)
+- [Advanced: API Key Authentication](#advanced-api-key-authentication)
 - [API Key Management](#api-key-management)
 - [Security Best Practices](#security-best-practices)
 
@@ -17,8 +16,8 @@ PutPlace API uses **API Key authentication** to secure API endpoints and **User 
 ## Overview
 
 **Authentication Methods:**
-- **API Key Authentication** (via `X-API-Key` header) - For API endpoints
-- **User Authentication** (username/password + JWT) - For web interface
+- **JWT Token Authentication** (username/password login) - **Recommended** for client and web interface
+- **API Key Authentication** (via `X-API-Key` header) - Advanced use cases and backwards compatibility
 
 **Protected Endpoints:**
 - `POST /put_file` - Upload file metadata
@@ -108,68 +107,59 @@ Once the admin user exists:
 
 ---
 
-## Quick Start
+## Quick Start (Recommended: Username/Password)
 
-### 1. Create Your First API Key
+### 1. Get Admin Credentials
 
-Use the bootstrap script to create your first API key:
-
-```bash
-# Basic usage
-python -m putplace.scripts.create_api_key --name "admin-key"
-
-# With description
-python -m putplace.scripts.create_api_key \
-    --name "production-server-01" \
-    --description "API key for production server #1"
-```
-
-**Output:**
-```
-================================================================================
-✓ API Key Created Successfully!
-================================================================================
-
-API Key ID: 65f1234567890abcdef12345
-Name: admin-key
-Created: 2025-10-15 10:30:00
-
-⚠️  IMPORTANT: Save this API key - it won't be shown again!
-
-  API Key: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6a7b8c9d0
-
-================================================================================
-Usage:
-  curl -H 'X-API-Key: a1b2c3d4...' http://localhost:8000/api_keys
-
-Or in your .env file:
-  PUTPLACE_API_KEY=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6a7b8c9d0
-================================================================================
-```
-
-**⚠️ IMPORTANT:** Save the API key securely! It's shown only once and cannot be retrieved later.
-
-### 2. Use the API Key with Client
+The admin user is automatically created on first server startup:
 
 ```bash
-# Option 1: Command line argument
-python ppclient.py /var/log --api-key "YOUR_API_KEY_HERE"
+# Check the credentials file (created on first startup)
+cat /tmp/putplace_initial_creds.txt
 
-# Option 2: Environment variable
-export PUTPLACE_API_KEY="YOUR_API_KEY_HERE"
+# Example output:
+# Username: admin
+# Password: Xy9K3mP#vL2nQ@8sW4tR
+```
+
+**⚠️ IMPORTANT:** Save these credentials and delete the file: `rm /tmp/putplace_initial_creds.txt`
+
+### 2. Use Credentials with Client
+
+```bash
+# Option 1: Command line arguments
+python ppclient.py /var/log --username "admin" --password "your-password"
+
+# Option 2: Environment variables (recommended)
+export PUTPLACE_USERNAME="admin"
+export PUTPLACE_PASSWORD="your-password"
 python ppclient.py /var/log
 
-# Option 3: Config file
-echo "api_key = YOUR_API_KEY_HERE" >> ~/ppclient.conf
+# Option 3: Config file (most secure)
+cat > ~/ppclient.conf << EOF
+[DEFAULT]
+username = admin
+password = your-password
+EOF
+chmod 600 ~/ppclient.conf
 python ppclient.py /var/log
 ```
 
-### 3. Use the API Key with curl
+### 3. Test Login with curl
 
 ```bash
-# Upload file metadata
+# Get JWT token
+curl -X POST http://localhost:8000/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "your-password"}'
+
+# Returns:
+# {"access_token": "eyJ0eXAiOiJKV1QiLCJhbGc...", "token_type": "bearer"}
+
+# Use token for API calls
+TOKEN="eyJ0eXAiOiJKV1QiLCJhbGc..."
 curl -X POST http://localhost:8000/put_file \
-  -H "X-API-Key: YOUR_API_KEY_HERE" \
+  -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "filepath": "/var/log/app.log",
@@ -188,7 +178,11 @@ curl -X POST http://localhost:8000/put_file \
 
 ---
 
-## Creating Your First API Key
+## Advanced: API Key Authentication
+
+**Note:** API keys are supported for backwards compatibility and advanced use cases. Most users should use username/password authentication instead.
+
+### Creating Your First API Key
 
 Since all endpoints require authentication, you need to bootstrap the first API key directly in the database.
 
@@ -234,16 +228,7 @@ echo "API Key: $API_KEY"
 
 ## Using API Keys
 
-### With Python Client
-
-```bash
-# Using command line
-ppclient /var/log --api-key "your-api-key-here"
-
-# Using environment variable
-export PUTPLACE_API_KEY="your-api-key-here"
-ppclient /var/log
-```
+**Note:** The PutPlace client (ppclient) now uses username/password authentication by default. API keys can still be used directly with curl or custom scripts for advanced use cases.
 
 ### With curl
 
@@ -487,18 +472,29 @@ graph TD
 
 ## Example Workflows
 
-### Single Server Setup
+### Single Server Setup (Username/Password - Recommended)
+
+```bash
+# 1. Get admin credentials from first startup
+cat /tmp/putplace_initial_creds.txt
+
+# 2. Save to environment
+echo 'export PUTPLACE_USERNAME="admin"' >> ~/.bashrc
+echo 'export PUTPLACE_PASSWORD="your-password-here"' >> ~/.bashrc
+source ~/.bashrc
+
+# 3. Use client
+ppclient /var/log
+```
+
+### Single Server Setup (API Key - Advanced)
 
 ```bash
 # 1. Create API key
 python -m putplace.scripts.create_api_key --name "server-01"
 
-# 2. Save to environment
-echo 'export PUTPLACE_API_KEY="your-key-here"' >> ~/.bashrc
-source ~/.bashrc
-
-# 3. Use client
-ppclient /var/log
+# 2. Use with curl
+curl -H "X-API-Key: your-key-here" http://localhost:8000/api_keys
 ```
 
 ### Multi-Server Setup
