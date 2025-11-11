@@ -1732,3 +1732,304 @@ def delete_apprunner_secrets(c, region="eu-west-1", force=False):
         print(f"  aws secretsmanager delete-secret --secret-id putplace/mongodb --region {region}")
         print(f"  aws secretsmanager delete-secret --secret-id putplace/admin --region {region}")
         print(f"  aws secretsmanager delete-secret --secret-id putplace/aws-config --region {region}")
+
+@task
+def configure_custom_domain(c, domain, service_name="putplace-api", region="eu-west-1"):
+    """Configure a custom domain for App Runner service.
+    
+    This will:
+    1. Associate the custom domain with the App Runner service
+    2. Provide DNS records to add to Route 53
+    
+    Args:
+        domain: Custom domain name (e.g., app.putplace.org)
+        service_name: App Runner service name (default: putplace-api)
+        region: AWS region (default: eu-west-1)
+    
+    Examples:
+        invoke configure-custom-domain --domain=app.putplace.org
+    """
+    import json
+    
+    print(f"\n{'='*60}")
+    print(f"Configuring Custom Domain for App Runner")
+    print(f"{'='*60}")
+    print(f"Domain: {domain}")
+    print(f"Service: {service_name}")
+    print(f"Region: {region}")
+    print(f"{'='*60}\n")
+    
+    # Get service ARN
+    print("Finding App Runner service...")
+    list_cmd = f"aws apprunner list-services --region {region}"
+    result = c.run(list_cmd, warn=True, hide=True)
+    
+    if not result.ok:
+        print("✗ Failed to list services")
+        return 1
+    
+    services = json.loads(result.stdout)
+    service_arn = None
+    
+    for svc in services.get('ServiceSummaryList', []):
+        if svc['ServiceName'] == service_name:
+            service_arn = svc['ServiceArn']
+            break
+    
+    if not service_arn:
+        print(f"✗ Service not found: {service_name}")
+        return 1
+    
+    print(f"✓ Found service: {service_arn}\n")
+    
+    # Associate custom domain
+    print(f"Associating custom domain '{domain}'...")
+    associate_cmd = f"aws apprunner associate-custom-domain --service-arn {service_arn} --domain-name {domain} --region {region}"
+    result = c.run(associate_cmd, warn=True, hide=False)
+    
+    if result.ok:
+        response = json.loads(result.stdout)
+        
+        print(f"\n{'='*60}")
+        print(f"✓ Custom domain association initiated!")
+        print(f"{'='*60}\n")
+        
+        # Extract DNS records
+        dns_target = response.get('DNSTarget', 'N/A')
+        custom_domain = response.get('CustomDomain', {})
+        cert_validation_records = custom_domain.get('CertificateValidationRecords', [])
+        
+        print(f"DNS Configuration Required:")
+        print(f"{'='*60}\n")
+        
+        # CNAME record for the domain
+        print(f"1. Add CNAME record for your domain:")
+        print(f"   Type: CNAME")
+        print(f"   Name: {domain}")
+        print(f"   Value: {dns_target}")
+        print(f"   TTL: 300 (or your preference)\n")
+        
+        # Certificate validation records
+        if cert_validation_records:
+            print(f"2. Add certificate validation records:")
+            for i, record in enumerate(cert_validation_records, 1):
+                print(f"\n   Record {i}:")
+                print(f"   Type: {record.get('Type', 'CNAME')}")
+                print(f"   Name: {record.get('Name', 'N/A')}")
+                print(f"   Value: {record.get('Value', 'N/A')}")
+                print(f"   Status: {record.get('Status', 'PENDING')}")
+        
+        print(f"\n{'='*60}")
+        print(f"Route 53 Setup Commands:")
+        print(f"{'='*60}\n")
+        
+        # Get hosted zone ID
+        print("Finding Route 53 hosted zone for putplace.org...")
+        zone_cmd = "aws route53 list-hosted-zones-by-name --dns-name putplace.org --max-items 1"
+        zone_result = c.run(zone_cmd, warn=True, hide=True)
+        
+        if zone_result.ok:
+            zones = json.loads(zone_result.stdout)
+            hosted_zones = zones.get('HostedZones', [])
+            
+            if hosted_zones:
+                zone_id = hosted_zones[0]['Id'].split('/')[-1]
+                
+                print(f"✓ Found hosted zone: {zone_id}\n")
+                print(f"Run these commands to create DNS records:\n")
+                
+                # CNAME record for domain
+                print(f"# 1. Create CNAME record for {domain}")
+                print(f'cat > /tmp/change-batch-cname.json << EOF')
+                print(f'{{')
+                print(f'  "Changes": [{{')
+                print(f'    "Action": "UPSERT",')
+                print(f'    "ResourceRecordSet": {{')
+                print(f'      "Name": "{domain}",')
+                print(f'      "Type": "CNAME",')
+                print(f'      "TTL": 300,')
+                print(f'      "ResourceRecords": [{{')
+                print(f'        "Value": "{dns_target}"')
+                print(f'      }}]')
+                print(f'    }}')
+                print(f'  }}]')
+                print(f'}}')
+                print(f'EOF')
+                print(f'\naws route53 change-resource-record-sets \\')
+                print(f'  --hosted-zone-id {zone_id} \\')
+                print(f'  --change-batch file:///tmp/change-batch-cname.json\n')
+                
+                # Certificate validation records
+                if cert_validation_records:
+                    for i, record in enumerate(cert_validation_records, 1):
+                        print(f"# {i+1}. Create certificate validation record {i}")
+                        print(f'cat > /tmp/change-batch-cert-{i}.json << EOF')
+                        print(f'{{')
+                        print(f'  "Changes": [{{')
+                        print(f'    "Action": "UPSERT",')
+                        print(f'    "ResourceRecordSet": {{')
+                        print(f'      "Name": "{record.get("Name", "")}",')
+                        print(f'      "Type": "{record.get("Type", "CNAME")}",')
+                        print(f'      "TTL": 300,')
+                        print(f'      "ResourceRecords": [{{')
+                        print(f'        "Value": "{record.get("Value", "")}"')
+                        print(f'      }}]')
+                        print(f'    }}')
+                        print(f'  }}]')
+                        print(f'}}')
+                        print(f'EOF')
+                        print(f'\naws route53 change-resource-record-sets \\')
+                        print(f'  --hosted-zone-id {zone_id} \\')
+                        print(f'  --change-batch file:///tmp/change-batch-cert-{i}.json\n')
+        
+        print(f"{'='*60}")
+        print(f"Next Steps:")
+        print(f"{'='*60}")
+        print(f"1. Create the DNS records shown above in Route 53")
+        print(f"2. Wait for DNS propagation (5-10 minutes)")
+        print(f"3. Wait for certificate validation (5-30 minutes)")
+        print(f"4. Check domain status:")
+        print(f"   invoke check-custom-domain --domain={domain}")
+        print(f"\nOnce validated, your service will be available at:")
+        print(f"  https://{domain}")
+        
+    else:
+        print(f"\n✗ Failed to associate custom domain")
+        print(f"\nCommon issues:")
+        print(f"  - Domain already associated with another service")
+        print(f"  - Invalid domain name format")
+        print(f"  - Service not in RUNNING state")
+
+
+@task
+def check_custom_domain(c, domain, service_name="putplace-api", region="eu-west-1"):
+    """Check status of custom domain configuration.
+    
+    Args:
+        domain: Custom domain name (e.g., app.putplace.org)
+        service_name: App Runner service name (default: putplace-api)
+        region: AWS region (default: eu-west-1)
+    
+    Examples:
+        invoke check-custom-domain --domain=app.putplace.org
+    """
+    import json
+    
+    # Get service ARN
+    list_cmd = f"aws apprunner list-services --region {region}"
+    result = c.run(list_cmd, warn=True, hide=True)
+    
+    if not result.ok:
+        print("✗ Failed to list services")
+        return 1
+    
+    services = json.loads(result.stdout)
+    service_arn = None
+    
+    for svc in services.get('ServiceSummaryList', []):
+        if svc['ServiceName'] == service_name:
+            service_arn = svc['ServiceArn']
+            break
+    
+    if not service_arn:
+        print(f"✗ Service not found: {service_name}")
+        return 1
+    
+    # Describe custom domain
+    describe_cmd = f"aws apprunner describe-custom-domains --service-arn {service_arn} --region {region}"
+    result = c.run(describe_cmd, warn=True, hide=True)
+    
+    if result.ok:
+        response = json.loads(result.stdout)
+        custom_domains = response.get('CustomDomains', [])
+        
+        print(f"\n{'='*60}")
+        print(f"Custom Domain Status")
+        print(f"{'='*60}\n")
+        
+        domain_found = False
+        for custom_domain in custom_domains:
+            if custom_domain.get('DomainName') == domain:
+                domain_found = True
+                status = custom_domain.get('Status', 'UNKNOWN')
+                
+                print(f"Domain: {domain}")
+                print(f"Status: {status}")
+                print(f"DNS Target: {response.get('DNSTarget', 'N/A')}\n")
+                
+                # Certificate validation records
+                cert_records = custom_domain.get('CertificateValidationRecords', [])
+                if cert_records:
+                    print(f"Certificate Validation Records:")
+                    for record in cert_records:
+                        print(f"  Name: {record.get('Name', 'N/A')}")
+                        print(f"  Status: {record.get('Status', 'PENDING')}")
+                        print()
+                
+                if status == 'active':
+                    print(f"✓ Domain is active and ready!")
+                    print(f"\nYour service is available at:")
+                    print(f"  https://{domain}")
+                elif status == 'pending_certificate_dns_validation':
+                    print(f"⏳ Waiting for DNS validation...")
+                    print(f"\nMake sure the DNS records are created in Route 53.")
+                elif status == 'creating':
+                    print(f"⏳ Domain configuration in progress...")
+                else:
+                    print(f"⚠️  Status: {status}")
+                
+                break
+        
+        if not domain_found:
+            print(f"✗ Domain '{domain}' not found in service configuration")
+            print(f"\nAssociated domains:")
+            for custom_domain in custom_domains:
+                print(f"  - {custom_domain.get('DomainName', 'N/A')}")
+    else:
+        print(f"✗ Failed to describe custom domains")
+
+
+@task
+def remove_custom_domain(c, domain, service_name="putplace-api", region="eu-west-1"):
+    """Remove a custom domain from App Runner service.
+    
+    Args:
+        domain: Custom domain name (e.g., app.putplace.org)
+        service_name: App Runner service name (default: putplace-api)
+        region: AWS region (default: eu-west-1)
+    
+    Examples:
+        invoke remove-custom-domain --domain=app.putplace.org
+    """
+    import json
+    
+    # Get service ARN
+    list_cmd = f"aws apprunner list-services --region {region}"
+    result = c.run(list_cmd, warn=True, hide=True)
+    
+    if not result.ok:
+        print("✗ Failed to list services")
+        return 1
+    
+    services = json.loads(result.stdout)
+    service_arn = None
+    
+    for svc in services.get('ServiceSummaryList', []):
+        if svc['ServiceName'] == service_name:
+            service_arn = svc['ServiceArn']
+            break
+    
+    if not service_arn:
+        print(f"✗ Service not found: {service_name}")
+        return 1
+    
+    print(f"Removing custom domain '{domain}' from {service_name}...")
+    
+    disassociate_cmd = f"aws apprunner disassociate-custom-domain --service-arn {service_arn} --domain-name {domain} --region {region}"
+    result = c.run(disassociate_cmd, warn=True, hide=False)
+    
+    if result.ok:
+        print(f"\n✓ Custom domain removed successfully")
+        print(f"\nDon't forget to remove the DNS records from Route 53 if no longer needed.")
+    else:
+        print(f"\n✗ Failed to remove custom domain")
