@@ -1310,10 +1310,10 @@ def deploy_apprunner(
             },
             "CodeConfiguration": {
                 "ConfigurationSource": "REPOSITORY"
-            },
-            "SourceCodeAuthenticationConfiguration": {
-                "ConnectionArn": github_connection_arn
             }
+        },
+        "AuthenticationConfiguration": {
+            "ConnectionArn": github_connection_arn
         },
         "AutoDeploymentsEnabled": auto_deploy
     }
