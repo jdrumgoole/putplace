@@ -1359,6 +1359,11 @@ def deploy_apprunner(
         runtime_env_secrets[key] = f"{secrets_arns['putplace/aws-config']}:{key}::"
 
     # Build source configuration with API-based configuration
+    # Use shlex to properly quote the start command with PYTHONPATH
+    import shlex
+    inner_cmd = "PYTHONPATH=/app/packages:$PYTHONPATH python3.11 -m uvicorn putplace.main:app --host 0.0.0.0 --port 8000 --workers 2"
+    start_command = shlex.join(["/bin/sh", "-c", inner_cmd])
+
     source_config = {
         "CodeRepository": {
             "RepositoryUrl": github_repo,
@@ -1371,8 +1376,8 @@ def deploy_apprunner(
                 "CodeConfigurationValues": {
                     "Runtime": "PYTHON_311",
                     "RuntimeEnvironmentSecrets": runtime_env_secrets,
-                    "BuildCommand": "python3.11 -m pip install --target=/app/packages .[s3] && export PYTHONPATH=/app/packages:$PYTHONPATH",
-                    "StartCommand": "/bin/sh -c \"PYTHONPATH=/app/packages:\\$PYTHONPATH python3.11 -m uvicorn putplace.main:app --host 0.0.0.0 --port 8000 --workers 2\"",
+                    "BuildCommand": "python3.11 -m pip install --target=/app/packages .[s3]",
+                    "StartCommand": start_command,
                     "Port": "8000"
                 }
             }
