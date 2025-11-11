@@ -1124,7 +1124,7 @@ def deploy_apprunner(
     c,
     service_name="putplace-api",
     region="eu-west-1",
-    github_repo=None,
+    github_repo="https://github.com/jdrumgoole/putplace",
     github_branch="main",
     cpu="1 vCPU",
     memory="2 GB",
@@ -1143,14 +1143,17 @@ def deploy_apprunner(
     Args:
         service_name: App Runner service name (default: putplace-api)
         region: AWS region (default: eu-west-1)
-        github_repo: GitHub repository URL (e.g., https://github.com/user/repo)
+        github_repo: GitHub repository URL (default: https://github.com/jdrumgoole/putplace)
         github_branch: Git branch to deploy (default: main)
         cpu: CPU allocation (default: 1 vCPU)
         memory: Memory allocation (default: 2 GB)
         auto_deploy: Enable automatic deployment on git push (default: False - manual only)
 
     Examples:
-        # Deploy with manual trigger (recommended)
+        # Deploy with defaults (uses jdrumgoole/putplace repo)
+        invoke deploy-apprunner
+
+        # Deploy with custom repository
         invoke deploy-apprunner --github-repo=https://github.com/user/putplace
 
         # Different instance size
@@ -1165,13 +1168,6 @@ def deploy_apprunner(
         - Automatic deployments can be enabled with --auto-deploy flag
     """
     import json
-
-    if not github_repo:
-        github_repo = input("GitHub repository URL: ").strip()
-
-    if not github_repo:
-        print("Error: GitHub repository URL is required")
-        return 1
 
     print(f"\n{'='*60}")
     print(f"Deploying PutPlace to AWS App Runner")
