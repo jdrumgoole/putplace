@@ -913,10 +913,12 @@ def send_test_email(c, to="joe@joedrumgoole.com", verbose=False):
         invoke send-test-email --verbose                 # Show detailed output
     """
 
-    # Build command
+    # Build command - use -m to run as module instead of file path
+    import shlex
+
     cmd = [
-        "uv", "run", "python",
-        "src/putplace/scripts/send_ses_email.py",
+        "uv", "run", "python", "-m",
+        "putplace.scripts.send_ses_email",
         "--from", "Joe.Drumgoole@putplace.org",
         "--to", to,
         "--subject", "TestSES",
@@ -927,7 +929,8 @@ def send_test_email(c, to="joe@joedrumgoole.com", verbose=False):
         cmd.append("--verbose")
 
     print(f"Sending test email to {to}...")
-    result = c.run(" ".join(cmd), warn=True)
+    # Use shlex.join to properly quote arguments with spaces
+    result = c.run(shlex.join(cmd), warn=True)
 
     if result.ok:
         print(f"\n✓ Test email sent successfully to {to}")
