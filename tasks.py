@@ -2033,3 +2033,510 @@ def remove_custom_domain(c, domain, service_name="putplace-api", region="eu-west
         print(f"\nDon't forget to remove the DNS records from Route 53 if no longer needed.")
     else:
         print(f"\n✗ Failed to remove custom domain")
+
+
+@task
+def setup_static_website(c, domain="putplace.org", region="us-east-1"):
+    """Set up S3 + CloudFront static website hosting for putplace.org.
+
+    This will:
+    1. Create S3 bucket for static website hosting
+    2. Configure bucket for public read access
+    3. Create CloudFront distribution with SSL certificate
+    4. Configure Route 53 DNS records
+
+    Args:
+        domain: Domain name (default: putplace.org)
+        region: AWS region (default: us-east-1 for CloudFront)
+
+    Examples:
+        invoke setup-static-website
+        invoke setup-static-website --domain=putplace.org
+    """
+    import json
+
+    print(f"\n{'='*60}")
+    print(f"Setting Up Static Website Hosting")
+    print(f"{'='*60}")
+    print(f"Domain: {domain}")
+    print(f"Region: {region}")
+    print(f"{'='*60}\n")
+
+    bucket_name = domain  # Use domain as bucket name
+
+    # Step 1: Create S3 bucket
+    print(f"Step 1: Creating S3 bucket '{bucket_name}'...")
+    create_bucket_cmd = f"aws s3api create-bucket --bucket {bucket_name} --region {region}"
+    if region != "us-east-1":
+        create_bucket_cmd += f" --create-bucket-configuration LocationConstraint={region}"
+
+    result = c.run(create_bucket_cmd, warn=True, hide=True)
+    if result.ok:
+        print(f"✓ Bucket created: {bucket_name}")
+    elif "BucketAlreadyOwnedByYou" in result.stderr:
+        print(f"✓ Bucket already exists: {bucket_name}")
+    else:
+        print(f"✗ Failed to create bucket")
+        print(result.stderr)
+        return 1
+
+    # Step 2: Configure bucket for static website hosting
+    print(f"\nStep 2: Configuring static website hosting...")
+    website_config = {
+        "IndexDocument": {"Suffix": "index.html"},
+        "ErrorDocument": {"Key": "error.html"}
+    }
+
+    config_file = "/tmp/website-config.json"
+    with open(config_file, 'w') as f:
+        json.dump(website_config, f)
+
+    website_cmd = f"aws s3api put-bucket-website --bucket {bucket_name} --website-configuration file://{config_file}"
+    result = c.run(website_cmd, warn=True, hide=True)
+    if result.ok:
+        print(f"✓ Website hosting configured")
+    else:
+        print(f"✗ Failed to configure website hosting")
+        return 1
+
+    # Step 3: Create bucket policy for public read access
+    print(f"\nStep 3: Setting bucket policy for public read access...")
+    bucket_policy = {
+        "Version": "2012-10-17",
+        "Statement": [{
+            "Sid": "PublicReadGetObject",
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "s3:GetObject",
+            "Resource": f"arn:aws:s3:::{bucket_name}/*"
+        }]
+    }
+
+    policy_file = "/tmp/bucket-policy.json"
+    with open(policy_file, 'w') as f:
+        json.dump(bucket_policy, f)
+
+    # Disable block public access first
+    public_access_cmd = f"aws s3api put-public-access-block --bucket {bucket_name} --public-access-block-configuration BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false"
+    c.run(public_access_cmd, warn=True, hide=True)
+
+    policy_cmd = f"aws s3api put-bucket-policy --bucket {bucket_name} --policy file://{policy_file}"
+    result = c.run(policy_cmd, warn=True, hide=True)
+    if result.ok:
+        print(f"✓ Bucket policy configured")
+    else:
+        print(f"✗ Failed to set bucket policy")
+        return 1
+
+    # Step 4: Request ACM certificate for CloudFront (must be in us-east-1)
+    print(f"\nStep 4: Requesting SSL certificate in us-east-1...")
+    cert_cmd = f"aws acm request-certificate --domain-name {domain} --subject-alternative-names www.{domain} --validation-method DNS --region us-east-1"
+    result = c.run(cert_cmd, warn=True, hide=True)
+
+    if result.ok:
+        cert_response = json.loads(result.stdout)
+        cert_arn = cert_response.get('CertificateArn')
+        print(f"✓ Certificate requested: {cert_arn}")
+
+        # Get certificate validation records
+        print(f"\nWaiting for certificate details...")
+        import time
+        time.sleep(5)  # Wait for certificate to be created
+
+        describe_cert_cmd = f"aws acm describe-certificate --certificate-arn {cert_arn} --region us-east-1"
+        result = c.run(describe_cert_cmd, warn=True, hide=True)
+
+        if result.ok:
+            cert_details = json.loads(result.stdout)
+            validation_options = cert_details.get('Certificate', {}).get('DomainValidationOptions', [])
+
+            print(f"\n{'='*60}")
+            print(f"Certificate Validation Required")
+            print(f"{'='*60}\n")
+
+            # Get Route 53 hosted zone
+            zone_cmd = f"aws route53 list-hosted-zones-by-name --dns-name {domain} --max-items 1"
+            zone_result = c.run(zone_cmd, warn=True, hide=True)
+
+            if zone_result.ok:
+                zones = json.loads(zone_result.stdout)
+                hosted_zones = zones.get('HostedZones', [])
+
+                if hosted_zones:
+                    zone_id = hosted_zones[0]['Id'].split('/')[-1]
+                    print(f"Found Route 53 hosted zone: {zone_id}\n")
+
+                    # Create validation records
+                    changes = []
+                    for option in validation_options:
+                        if 'ResourceRecord' in option:
+                            record = option['ResourceRecord']
+                            changes.append({
+                                "Action": "UPSERT",
+                                "ResourceRecordSet": {
+                                    "Name": record['Name'],
+                                    "Type": record['Type'],
+                                    "TTL": 300,
+                                    "ResourceRecords": [{"Value": record['Value']}]
+                                }
+                            })
+
+                    if changes:
+                        change_batch_file = "/tmp/cert-validation-changes.json"
+                        with open(change_batch_file, 'w') as f:
+                            json.dump({"Changes": changes}, f)
+
+                        route53_cmd = f"aws route53 change-resource-record-sets --hosted-zone-id {zone_id} --change-batch file://{change_batch_file}"
+                        result = c.run(route53_cmd, warn=True, hide=True)
+
+                        if result.ok:
+                            print(f"✓ Certificate validation records created in Route 53")
+                            print(f"\nWaiting for certificate validation (this may take 5-30 minutes)...")
+                            print(f"\nYou can continue with the next steps. The certificate will be validated automatically.")
+                            print(f"\nTo check certificate status:")
+                            print(f"  aws acm describe-certificate --certificate-arn {cert_arn} --region us-east-1")
+                        else:
+                            print(f"✗ Failed to create validation records")
+
+                    # Save certificate ARN for CloudFront setup
+                    with open("/tmp/putplace-cert-arn.txt", 'w') as f:
+                        f.write(cert_arn)
+
+                    print(f"\n{'='*60}")
+                    print(f"Next Steps")
+                    print(f"{'='*60}")
+                    print(f"1. Wait for certificate validation (~10-15 minutes)")
+                    print(f"2. Run: invoke create-cloudfront-distribution")
+                    print(f"3. Upload website content to S3: invoke deploy-website")
+                    print(f"\nCertificate ARN saved to /tmp/putplace-cert-arn.txt")
+    else:
+        print(f"✗ Failed to request certificate")
+        print(result.stderr)
+
+
+@task
+def create_cloudfront_distribution(c, domain="putplace.org", cert_arn=None):
+    """Create CloudFront distribution for static website.
+
+    Args:
+        domain: Domain name (default: putplace.org)
+        cert_arn: ACM certificate ARN (reads from /tmp/putplace-cert-arn.txt if not provided)
+
+    Examples:
+        invoke create-cloudfront-distribution
+        invoke create-cloudfront-distribution --cert-arn=arn:aws:acm:...
+    """
+    import json
+    import time
+
+    # Get certificate ARN
+    if not cert_arn:
+        try:
+            with open("/tmp/putplace-cert-arn.txt", 'r') as f:
+                cert_arn = f.read().strip()
+        except FileNotFoundError:
+            print("✗ Certificate ARN not found. Run setup-static-website first.")
+            return 1
+
+    # Verify certificate is validated
+    print(f"Checking certificate status...")
+    describe_cmd = f"aws acm describe-certificate --certificate-arn {cert_arn} --region us-east-1"
+    result = c.run(describe_cmd, warn=True, hide=True)
+
+    if result.ok:
+        cert_details = json.loads(result.stdout)
+        cert_status = cert_details.get('Certificate', {}).get('Status')
+
+        if cert_status != 'ISSUED':
+            print(f"⏳ Certificate status: {cert_status}")
+            print(f"Please wait for certificate validation to complete.")
+            print(f"Current status must be 'ISSUED' to proceed.")
+            return 1
+
+        print(f"✓ Certificate validated and issued")
+
+    bucket_name = domain
+
+    print(f"\n{'='*60}")
+    print(f"Creating CloudFront Distribution")
+    print(f"{'='*60}")
+    print(f"Domain: {domain}")
+    print(f"S3 Bucket: {bucket_name}")
+    print(f"{'='*60}\n")
+
+    # Create CloudFront distribution configuration
+    distribution_config = {
+        "CallerReference": f"putplace-{int(time.time())}",
+        "Comment": f"Static website for {domain}",
+        "Enabled": True,
+        "Origins": {
+            "Quantity": 1,
+            "Items": [{
+                "Id": f"S3-{bucket_name}",
+                "DomainName": f"{bucket_name}.s3-website-us-east-1.amazonaws.com",
+                "CustomOriginConfig": {
+                    "HTTPPort": 80,
+                    "HTTPSPort": 443,
+                    "OriginProtocolPolicy": "http-only"
+                }
+            }]
+        },
+        "DefaultRootObject": "index.html",
+        "DefaultCacheBehavior": {
+            "TargetOriginId": f"S3-{bucket_name}",
+            "ViewerProtocolPolicy": "redirect-to-https",
+            "AllowedMethods": {
+                "Quantity": 2,
+                "Items": ["GET", "HEAD"],
+                "CachedMethods": {
+                    "Quantity": 2,
+                    "Items": ["GET", "HEAD"]
+                }
+            },
+            "ForwardedValues": {
+                "QueryString": False,
+                "Cookies": {"Forward": "none"}
+            },
+            "MinTTL": 0,
+            "DefaultTTL": 86400,
+            "MaxTTL": 31536000,
+            "Compress": True
+        },
+        "Aliases": {
+            "Quantity": 2,
+            "Items": [domain, f"www.{domain}"]
+        },
+        "ViewerCertificate": {
+            "ACMCertificateArn": cert_arn,
+            "SSLSupportMethod": "sni-only",
+            "MinimumProtocolVersion": "TLSv1.2_2021"
+        }
+    }
+
+    config_file = "/tmp/cloudfront-config.json"
+    with open(config_file, 'w') as f:
+        json.dump(distribution_config, f, indent=2)
+
+    create_cmd = f"aws cloudfront create-distribution --distribution-config file://{config_file}"
+    result = c.run(create_cmd, warn=True, hide=True)
+
+    if result.ok:
+        distribution = json.loads(result.stdout)
+        dist_id = distribution.get('Distribution', {}).get('Id')
+        dist_domain = distribution.get('Distribution', {}).get('DomainName')
+
+        print(f"✓ CloudFront distribution created")
+        print(f"\nDistribution ID: {dist_id}")
+        print(f"CloudFront Domain: {dist_domain}")
+
+        # Save distribution ID
+        with open("/tmp/putplace-cloudfront-id.txt", 'w') as f:
+            f.write(dist_id)
+
+        print(f"\n{'='*60}")
+        print(f"Configuring Route 53 DNS")
+        print(f"{'='*60}\n")
+
+        # Get hosted zone
+        zone_cmd = f"aws route53 list-hosted-zones-by-name --dns-name {domain} --max-items 1"
+        zone_result = c.run(zone_cmd, warn=True, hide=True)
+
+        if zone_result.ok:
+            zones = json.loads(zone_result.stdout)
+            hosted_zones = zones.get('HostedZones', [])
+
+            if hosted_zones:
+                zone_id = hosted_zones[0]['Id'].split('/')[-1]
+
+                # Create A records for domain and www subdomain
+                changes = [
+                    {
+                        "Action": "UPSERT",
+                        "ResourceRecordSet": {
+                            "Name": domain,
+                            "Type": "A",
+                            "AliasTarget": {
+                                "HostedZoneId": "Z2FDTNDATAQYW2",  # CloudFront hosted zone ID
+                                "DNSName": dist_domain,
+                                "EvaluateTargetHealth": False
+                            }
+                        }
+                    },
+                    {
+                        "Action": "UPSERT",
+                        "ResourceRecordSet": {
+                            "Name": f"www.{domain}",
+                            "Type": "A",
+                            "AliasTarget": {
+                                "HostedZoneId": "Z2FDTNDATAQYW2",
+                                "DNSName": dist_domain,
+                                "EvaluateTargetHealth": False
+                            }
+                        }
+                    }
+                ]
+
+                change_batch_file = "/tmp/route53-cloudfront-changes.json"
+                with open(change_batch_file, 'w') as f:
+                    json.dump({"Changes": changes}, f)
+
+                route53_cmd = f"aws route53 change-resource-record-sets --hosted-zone-id {zone_id} --change-batch file://{change_batch_file}"
+                result = c.run(route53_cmd, warn=True, hide=True)
+
+                if result.ok:
+                    print(f"✓ Route 53 DNS records created")
+                    print(f"\n{'='*60}")
+                    print(f"Setup Complete!")
+                    print(f"{'='*60}")
+                    print(f"\nYour static website is being deployed...")
+                    print(f"\nCloudFront distribution is being created (15-20 minutes)")
+                    print(f"Once ready, your site will be available at:")
+                    print(f"  - https://{domain}")
+                    print(f"  - https://www.{domain}")
+                    print(f"\nNext step: Upload website content")
+                    print(f"  invoke deploy-website")
+    else:
+        print(f"✗ Failed to create CloudFront distribution")
+        print(result.stderr)
+
+
+@task
+def deploy_website(c, source_dir="website", bucket=None):
+    """Deploy website content to S3 bucket.
+
+    Args:
+        source_dir: Directory containing website files (default: website)
+        bucket: S3 bucket name (default: putplace.org)
+
+    Examples:
+        invoke deploy-website
+        invoke deploy-website --source-dir=docs/_build/html
+    """
+    if not bucket:
+        bucket = "putplace.org"
+
+    print(f"\n{'='*60}")
+    print(f"Deploying Website to S3")
+    print(f"{'='*60}")
+    print(f"Source: {source_dir}")
+    print(f"Bucket: s3://{bucket}")
+    print(f"{'='*60}\n")
+
+    # Check if source directory exists
+    import os
+    if not os.path.exists(source_dir):
+        print(f"✗ Source directory not found: {source_dir}")
+        print(f"\nCreating sample website directory...")
+        c.run(f"mkdir -p {source_dir}")
+
+        # Create sample index.html
+        sample_html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PutPlace - File Metadata Storage Service</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            line-height: 1.6;
+            color: #333;
+        }
+        h1 { color: #2563eb; }
+        .api-link {
+            display: inline-block;
+            background: #2563eb;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .api-link:hover { background: #1d4ed8; }
+        code {
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <h1>PutPlace</h1>
+    <p>Fast, secure file metadata storage service powered by FastAPI and MongoDB.</p>
+
+    <h2>API Documentation</h2>
+    <p>Access our API at <a href="https://app.putplace.org" class="api-link">app.putplace.org</a></p>
+
+    <h2>Features</h2>
+    <ul>
+        <li>Store and retrieve file metadata (filepath, hostname, IP, SHA256)</li>
+        <li>RESTful API with interactive documentation</li>
+        <li>MongoDB backend for fast queries</li>
+        <li>AWS App Runner deployment</li>
+    </ul>
+
+    <h2>Quick Start</h2>
+    <pre><code>curl -X POST https://app.putplace.org/put_file \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "filepath": "/var/log/app.log",
+    "hostname": "server01",
+    "ip_address": "192.168.1.100",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }'</code></pre>
+
+    <p>Updated: """ + str(time.time()) + """</p>
+</body>
+</html>"""
+
+        with open(f"{source_dir}/index.html", 'w') as f:
+            f.write(sample_html)
+
+        # Create error page
+        error_html = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>404 - Page Not Found</title>
+</head>
+<body>
+    <h1>404 - Page Not Found</h1>
+    <p><a href="/">Return to homepage</a></p>
+</body>
+</html>"""
+
+        with open(f"{source_dir}/error.html", 'w') as f:
+            f.write(error_html)
+
+        print(f"✓ Created sample website in {source_dir}/")
+
+    # Upload to S3
+    print(f"\nUploading files to S3...")
+    sync_cmd = f"aws s3 sync {source_dir}/ s3://{bucket}/ --delete --cache-control 'max-age=300'"
+    result = c.run(sync_cmd, warn=True)
+
+    if result.ok:
+        print(f"\n✓ Website deployed successfully")
+
+        # Invalidate CloudFront cache
+        try:
+            with open("/tmp/putplace-cloudfront-id.txt", 'r') as f:
+                dist_id = f.read().strip()
+
+            print(f"\nInvalidating CloudFront cache...")
+            invalidate_cmd = f"aws cloudfront create-invalidation --distribution-id {dist_id} --paths '/*'"
+            result = c.run(invalidate_cmd, warn=True, hide=True)
+
+            if result.ok:
+                print(f"✓ CloudFront cache invalidated")
+        except FileNotFoundError:
+            print(f"\n⚠ CloudFront distribution ID not found. Cache not invalidated.")
+
+        print(f"\n{'='*60}")
+        print(f"Website URL: https://putplace.org")
+        print(f"{'='*60}")
+    else:
+        print(f"\n✗ Failed to deploy website")

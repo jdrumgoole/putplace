@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="PutPlace - Fast, secure file metadata storage service powered by FastAPI and MongoDB">
+    <title>PutPlace - File Metadata Storage Service</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            line-height: 1.6;
+            color: #1f2937;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 40px 20px;
+        }
+
+        header {
+            background: white;
+            border-radius: 20px;
+            padding: 60px 40px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            font-size: 3.5em;
+            color: #667eea;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+
+        .tagline {
+            font-size: 1.3em;
+            color: #6b7280;
+            margin-bottom: 30px;
+        }
+
+        .api-link {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 40px;
+            text-decoration: none;
+            border-radius: 50px;
+            margin: 10px;
+            font-weight: 600;
+            font-size: 1.1em;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .api-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        .secondary-link {
+            background: #f3f4f6;
+            color: #667eea;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .secondary-link:hover {
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .content {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        h2 {
+            color: #667eea;
+            font-size: 2em;
+            margin-bottom: 20px;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin: 30px 0;
+        }
+
+        .feature {
+            background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+            padding: 25px;
+            border-radius: 15px;
+            border-left: 4px solid #667eea;
+        }
+
+        .feature h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 1.3em;
+        }
+
+        pre {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 20px;
+            border-radius: 10px;
+            overflow-x: auto;
+            margin: 20px 0;
+            font-size: 0.9em;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        code {
+            font-family: 'Monaco', 'Courier New', monospace;
+        }
+
+        .inline-code {
+            background: #f3f4f6;
+            padding: 3px 8px;
+            border-radius: 5px;
+            font-size: 0.95em;
+            color: #764ba2;
+        }
+
+        footer {
+            text-align: center;
+            color: white;
+            padding: 20px;
+            font-size: 0.9em;
+        }
+
+        .github-link {
+            color: white;
+            text-decoration: none;
+            font-weight: 600;
+            border-bottom: 2px solid white;
+            transition: opacity 0.2s;
+        }
+
+        .github-link:hover {
+            opacity: 0.8;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.5em;
+            }
+
+            .tagline {
+                font-size: 1.1em;
+            }
+
+            header {
+                padding: 40px 30px;
+            }
+
+            .content {
+                padding: 30px 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🗂️ PutPlace</h1>
+            <p class="tagline">Fast, secure file metadata storage service</p>
+            <p style="color: #9ca3af; margin-bottom: 30px;">Powered by FastAPI and MongoDB</p>
+            <a href="https://app.putplace.org/docs" class="api-link">API Documentation</a>
+            <a href="https://github.com/jdrumgoole/putplace" class="api-link secondary-link">View on GitHub</a>
+        </header>
+
+        <div class="content">
+            <h2>Features</h2>
+            <div class="features">
+                <div class="feature">
+                    <h3>📊 Metadata Storage</h3>
+                    <p>Store file metadata including filepath, hostname, IP address, and SHA256 hash</p>
+                </div>
+                <div class="feature">
+                    <h3>⚡ Fast API</h3>
+                    <p>RESTful API built with FastAPI for high performance and async operations</p>
+                </div>
+                <div class="feature">
+                    <h3>🗃️ MongoDB Backend</h3>
+                    <p>Scalable NoSQL database with efficient indexing for fast queries</p>
+                </div>
+                <div class="feature">
+                    <h3>🔒 Secure</h3>
+                    <p>Authentication via API keys, deployed on AWS App Runner with SSL/TLS</p>
+                </div>
+                <div class="feature">
+                    <h3>📝 Interactive Docs</h3>
+                    <p>Swagger UI and ReDoc for easy API exploration and testing</p>
+                </div>
+                <div class="feature">
+                    <h3>☁️ Cloud Native</h3>
+                    <p>Deployed on AWS infrastructure with automatic scaling</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="content">
+            <h2>Quick Start</h2>
+            <p>Store file metadata with a simple API call:</p>
+            <pre><code>curl -X POST https://app.putplace.org/put_file \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -d '{
+    "filepath": "/var/log/app.log",
+    "hostname": "server01",
+    "ip_address": "192.168.1.100",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }'</code></pre>
+
+            <p>Retrieve file metadata by SHA256 hash:</p>
+            <pre><code>curl https://app.putplace.org/get_file/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 \
+  -H "X-API-Key: YOUR_API_KEY"</code></pre>
+        </div>
+
+        <div class="content">
+            <h2>Use Cases</h2>
+            <ul style="list-style-position: inside; line-height: 2;">
+                <li>Track file distributions across multiple servers</li>
+                <li>Build content-addressable storage systems</li>
+                <li>Implement file deduplication based on SHA256 hashes</li>
+                <li>Audit and compliance logging for file access</li>
+                <li>Build distributed file synchronization systems</li>
+            </ul>
+        </div>
+
+        <div class="content">
+            <h2>Endpoints</h2>
+            <ul style="list-style-position: inside; line-height: 2;">
+                <li><span class="inline-code">GET /</span> - API information</li>
+                <li><span class="inline-code">GET /health</span> - Health check</li>
+                <li><span class="inline-code">POST /put_file</span> - Store file metadata</li>
+                <li><span class="inline-code">GET /get_file/{sha256}</span> - Retrieve metadata by hash</li>
+                <li><span class="inline-code">GET /docs</span> - Interactive API documentation (Swagger UI)</li>
+                <li><span class="inline-code">GET /redoc</span> - Alternative documentation (ReDoc)</li>
+            </ul>
+        </div>
+
+        <footer>
+            <p>Built with ❤️ using FastAPI, MongoDB, and AWS</p>
+            <p style="margin-top: 10px;">
+                <a href="https://github.com/jdrumgoole/putplace" class="github-link">View Source on GitHub</a>
+            </p>
+        </footer>
+    </div>
+</body>
+</html>

@@ -1,0 +1,56 @@
+name: Deploy Website to S3
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'website/**'
+      - '.github/workflows/deploy-website.yml'
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write  # Required for OIDC authentication
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Sync website to S3
+        run: |
+          aws s3 sync website/ s3://putplace.org/ \
+            --delete \
+            --cache-control 'max-age=300' \
+            --exclude '.git/*' \
+            --exclude '.github/*'
+
+      - name: Invalidate CloudFront cache
+        run: |
+          DISTRIBUTION_ID=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?Aliases.Items[0]=='putplace.org'].Id | [0]" \
+            --output text)
+
+          if [ ! -z "$DISTRIBUTION_ID" ]; then
+            aws cloudfront create-invalidation \
+              --distribution-id $DISTRIBUTION_ID \
+              --paths '/*'
+            echo "✓ CloudFront cache invalidated for distribution: $DISTRIBUTION_ID"
+          else
+            echo "⚠ CloudFront distribution not found"
+          fi
+
+      - name: Deployment summary
+        run: |
+          echo "✓ Website deployed to S3: s3://putplace.org/"
+          echo "✓ CloudFront cache invalidated"
+          echo "Website URL: https://putplace.org"
