@@ -1337,25 +1337,17 @@ def deploy_apprunner(
     print("\nCreating App Runner service...")
 
     # Build code configuration values with secrets
-    runtime_env_secrets = []
+    # Format: {"ENV_VAR_NAME": "secret_name:json_key"}
+    runtime_env_secrets = {}
     # MongoDB secrets
     for key in ['MONGODB_URL', 'MONGODB_DATABASE', 'MONGODB_COLLECTION']:
-        runtime_env_secrets.append({
-            "Name": key,
-            "Value": f"putplace/mongodb:{key}"
-        })
+        runtime_env_secrets[key] = f"putplace/mongodb:{key}"
     # Admin secrets
     for key in ['PUTPLACE_ADMIN_USERNAME', 'PUTPLACE_ADMIN_EMAIL', 'PUTPLACE_ADMIN_PASSWORD']:
-        runtime_env_secrets.append({
-            "Name": key,
-            "Value": f"putplace/admin:{key}"
-        })
+        runtime_env_secrets[key] = f"putplace/admin:{key}"
     # AWS/API secrets
     for key in ['AWS_DEFAULT_REGION', 'API_TITLE', 'API_VERSION', 'PYTHONUNBUFFERED', 'PYTHONDONTWRITEBYTECODE']:
-        runtime_env_secrets.append({
-            "Name": key,
-            "Value": f"putplace/aws-config:{key}"
-        })
+        runtime_env_secrets[key] = f"putplace/aws-config:{key}"
 
     # Build source configuration with API-based configuration
     source_config = {
