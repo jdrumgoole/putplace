@@ -1243,7 +1243,43 @@ def deploy_apprunner(
     """
     import json
 
-    print(f"\n{'='*60}")
+    # Check for uncommitted changes
+    print("Checking git status...")
+    git_status = c.run("git status --porcelain", hide=True, warn=True)
+
+    if git_status.ok and git_status.stdout.strip():
+        print("\n⚠️  You have uncommitted changes!")
+        print("\nUncommitted files:")
+        for line in git_status.stdout.strip().split('\n'):
+            print(f"  {line}")
+        print("\nPlease commit or stash your changes before deploying:")
+        print("  git add .")
+        print("  git commit -m 'Your commit message'")
+        print("  git push")
+        print(f"\nThen run: invoke deploy-apprunner --region={region}")
+        return 1
+
+    # Check if local branch is up to date with remote
+    print("Checking if local branch is up to date...")
+    git_fetch = c.run("git fetch", hide=True, warn=True)
+    if git_fetch.ok:
+        git_status_remote = c.run(f"git status -uno", hide=True, warn=True)
+        if git_status_remote.ok and "Your branch is behind" in git_status_remote.stdout:
+            print("\n⚠️  Your local branch is behind the remote!")
+            print("\nPull the latest changes:")
+            print("  git pull")
+            print(f"\nThen run: invoke deploy-apprunner --region={region}")
+            return 1
+        elif git_status_remote.ok and "Your branch is ahead" in git_status_remote.stdout:
+            print("\n⚠️  Your local branch is ahead of the remote!")
+            print("\nPush your changes:")
+            print("  git push")
+            print(f"\nThen run: invoke deploy-apprunner --region={region}")
+            return 1
+
+    print("✓ Git status clean and up to date\n")
+
+    print(f"{'='*60}")
     print(f"Deploying PutPlace to AWS App Runner")
     print(f"{'='*60}")
     print(f"Service name: {service_name}")
@@ -1429,6 +1465,44 @@ def trigger_apprunner_deploy(c, service_name="putplace-api", region="eu-west-1")
         invoke trigger-apprunner-deploy
         invoke trigger-apprunner-deploy --service-name=my-service
     """
+    import json
+
+    # Check for uncommitted changes
+    print("Checking git status...")
+    git_status = c.run("git status --porcelain", hide=True, warn=True)
+
+    if git_status.ok and git_status.stdout.strip():
+        print("\n⚠️  You have uncommitted changes!")
+        print("\nUncommitted files:")
+        for line in git_status.stdout.strip().split('\n'):
+            print(f"  {line}")
+        print("\nPlease commit or stash your changes before deploying:")
+        print("  git add .")
+        print("  git commit -m 'Your commit message'")
+        print("  git push")
+        print(f"\nThen run: invoke trigger-apprunner-deploy --service-name={service_name}")
+        return 1
+
+    # Check if local branch is up to date with remote
+    print("Checking if local branch is up to date...")
+    git_fetch = c.run("git fetch", hide=True, warn=True)
+    if git_fetch.ok:
+        git_status_remote = c.run(f"git status -uno", hide=True, warn=True)
+        if git_status_remote.ok and "Your branch is behind" in git_status_remote.stdout:
+            print("\n⚠️  Your local branch is behind the remote!")
+            print("\nPull the latest changes:")
+            print("  git pull")
+            print(f"\nThen run: invoke trigger-apprunner-deploy --service-name={service_name}")
+            return 1
+        elif git_status_remote.ok and "Your branch is ahead" in git_status_remote.stdout:
+            print("\n⚠️  Your local branch is ahead of the remote!")
+            print("\nPush your changes:")
+            print("  git push")
+            print(f"\nThen run: invoke trigger-apprunner-deploy --service-name={service_name}")
+            return 1
+
+    print("✓ Git status clean and up to date\n")
+
     print(f"Triggering deployment for {service_name} in {region}...")
 
     # Get service ARN
