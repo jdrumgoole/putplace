@@ -892,11 +892,11 @@ def ppserver_logs(c, lines=50, follow=False):
 
 
 @task
-def send_test_email(c, to=None, verbose=False):
+def send_test_email(c, to="joe@joedrumgoole.com", verbose=False):
     """Send a test email via Amazon SES.
 
     This is a convenience task that sends a test email to verify SES configuration.
-    By default, sends to Joe.Drumgoole@putplace.org.
+    By default, sends to joe@joedrumgoole.com.
 
     Requirements:
         - AWS credentials configured (environment, ~/.aws/credentials, or IAM role)
@@ -904,17 +904,14 @@ def send_test_email(c, to=None, verbose=False):
         - If in SES sandbox, recipient email must also be verified
 
     Args:
-        to: Recipient email address (default: Joe.Drumgoole@putplace.org)
+        to: Recipient email address (default: joe@joedrumgoole.com)
         verbose: Show detailed output (default: False)
 
     Examples:
-        invoke send-test-email                           # Send to Joe.Drumgoole@putplace.org
+        invoke send-test-email                           # Send to joe@joedrumgoole.com
         invoke send-test-email --to=user@example.com     # Send to specific address
         invoke send-test-email --verbose                 # Show detailed output
     """
-    # Default recipient
-    if not to:
-        to = "Joe.Drumgoole@putplace.org"
 
     # Build command
     cmd = [
