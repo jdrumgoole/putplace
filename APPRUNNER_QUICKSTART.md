@@ -374,9 +374,79 @@ AWS App Runner pricing (as of 2024):
 6. **Enable AWS WAF** for additional protection
 7. **Set up CloudWatch alarms** for errors and latency
 
+## Custom Domain Configuration
+
+Set up a custom domain (e.g., app.putplace.org) for your App Runner service:
+
+### Step 1: Configure Custom Domain
+
+```bash
+# Associate domain with App Runner service
+invoke configure-custom-domain --domain=app.putplace.org
+
+# This will output the DNS records needed
+```
+
+### Step 2: Create DNS Records
+
+The task automatically creates the necessary Route 53 DNS records:
+1. **CNAME record** - Points your domain to App Runner (e.g., `app.putplace.org` → `xxxxx.awsapprunner.com`)
+2. **Certificate validation records** - For SSL/TLS certificate (automatically created)
+
+The DNS records are created immediately in Route 53.
+
+### Step 3: Wait for Certificate Validation
+
+```bash
+# Check domain status
+invoke check-custom-domain --domain=app.putplace.org
+```
+
+**Timeline:**
+- DNS propagation: 5-10 minutes
+- Certificate validation: 5-30 minutes (usually ~10 minutes)
+
+**Status values:**
+- `pending_certificate_dns_validation` - Waiting for DNS and cert validation
+- `active` - Domain is ready to use
+
+### Step 4: Access Your Custom Domain
+
+Once the status shows `active`, your API will be available at:
+```
+https://app.putplace.org
+```
+
+Test it:
+```bash
+# Health check
+curl https://app.putplace.org/health
+
+# API documentation
+open https://app.putplace.org/docs
+```
+
+### Troubleshooting Custom Domains
+
+**Check DNS propagation:**
+```bash
+dig app.putplace.org CNAME +short
+# Should return: xxxxx.awsapprunner.com
+```
+
+**Check certificate validation records:**
+```bash
+dig _xxxxx.app.putplace.org CNAME +short
+# Should return ACM validation record
+```
+
+**Remove custom domain:**
+```bash
+invoke remove-custom-domain --domain=app.putplace.org
+```
+
 ## Next Steps
 
-- Set up custom domain: [Custom Domains Guide](https://docs.aws.amazon.com/apprunner/latest/dg/manage-custom-domains.html)
 - Configure auto-scaling: Adjust min/max instances
 - Set up CI/CD: Integrate with GitHub Actions
 - Add monitoring: CloudWatch dashboards and alarms
@@ -404,6 +474,11 @@ invoke deploy-apprunner                 # Create service (manual mode)
 invoke deploy-apprunner --auto-deploy   # Enable auto-deployment
 invoke deploy-apprunner --cpu="2 vCPU" --memory="4 GB"  # Custom size
 invoke trigger-apprunner-deploy         # Manually trigger deployment
+
+# Custom Domains
+invoke configure-custom-domain --domain=app.putplace.org  # Configure custom domain
+invoke check-custom-domain --domain=app.putplace.org      # Check domain status
+invoke remove-custom-domain --domain=app.putplace.org     # Remove custom domain
 
 # Verification
 invoke verify-ses-email --email=user@example.com  # Verify SES email
