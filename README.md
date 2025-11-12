@@ -14,6 +14,8 @@ A distributed file metadata storage and content deduplication system with SHA256
 - **MongoDB (PyMongo Async)** - Native async MongoDB driver (PyMongo 4.10+)
 - **Argon2** - Modern password hashing algorithm
 - **JWT** - JSON Web Tokens for authentication
+- **AWS SES** - Email service for user registration confirmation
+- **boto3** - AWS SDK for Python (SES integration)
 - **uv** - Fast Python package manager
 - **pytest** - Comprehensive test suite with 125+ tests
 
@@ -26,6 +28,7 @@ A distributed file metadata storage and content deduplication system with SHA256
 - 👥 **Clone Detection** - Track duplicate files across all users with epoch file identification
 - 💾 **Multiple Storage Backends** - Local filesystem or AWS S3 for file content
 - 🔐 **Flexible Authentication** - Username/password login with JWT tokens and Google OAuth
+- 📧 **Email Confirmation** - Secure email verification for new user registrations via AWS SES
 - 🌐 **Google Sign-In Integration** - One-click authentication with Google accounts
 - 🌐 **Interactive Web UI** - Tree-based file browser with clone visualization
 - 🚀 **Production Ready** - Comprehensive tests, TOML configuration, graceful interrupt handling
@@ -342,12 +345,74 @@ Once the server is running:
 - `GET /api/my_files` - Get user's files (requires JWT)
 
 **Authentication:**
-- `POST /api/register` - Register new user
+- `POST /api/register` - Register new user (sends email confirmation)
+- `GET /api/confirm-email?token=...` - Confirm email address
 - `POST /api/login` - Login and get JWT token
 - `POST /api/auth/google` - Google Sign-In authentication
 - `GET /api/oauth/config` - Get OAuth configuration
 - `POST /api_keys` - Create API key (requires JWT)
 - `GET /api_keys` - List API keys (requires JWT)
+
+**Email Confirmation:**
+
+PutPlace uses email confirmation for user registration via AWS SES:
+
+1. **Registration**: Users register with username, email, and password
+2. **Email Sent**: Confirmation email sent with secure 24-hour link
+3. **Confirmation**: User clicks link to activate account
+4. **Cleanup**: Unconfirmed registrations auto-deleted after 24 hours
+
+Configure email settings in `ppserver.toml`:
+```toml
+[email]
+sender_email = "noreply@putplace.org"  # SES verified sender
+base_url = "http://localhost:8000"     # Server base URL for confirmation links
+aws_region = "eu-west-1"               # AWS SES region
+
+[server]
+registration_enabled = true  # Set to false to disable new user registration
+```
+
+Or via environment variables:
+```bash
+PUTPLACE_SENDER_EMAIL=noreply@putplace.org
+PUTPLACE_BASE_URL=https://putplace.example.com
+PUTPLACE_EMAIL_AWS_REGION=eu-west-1
+PUTPLACE_REGISTRATION_ENABLED=true  # false to disable registration
+```
+
+**Disabling Registration:**
+
+To disable new user registration (e.g., in production), you can:
+- Set `registration_enabled = false` in `ppserver.toml` under `[server]` section
+- Set environment variable `PUTPLACE_REGISTRATION_ENABLED=false`
+- No redeployment needed - just edit the config file and restart the server
+
+**For AWS App Runner:**
+
+Use the provided Python script to toggle registration without redeployment:
+
+```bash
+# Set your service ARN (one time)
+export APPRUNNER_SERVICE_ARN="arn:aws:apprunner:region:account:service/putplace/xxx"
+
+# Disable registration
+invoke toggle-registration --action=disable
+
+# Re-enable registration later
+invoke toggle-registration --action=enable
+
+# Or use the script directly
+uv run python -m putplace.scripts.toggle_registration disable
+uv run python -m putplace.scripts.toggle_registration enable
+```
+
+The script will:
+- Update the `PUTPLACE_REGISTRATION_ENABLED` environment variable
+- Trigger an automatic redeployment (2-3 minutes)
+- Preserve all other environment variables
+
+**Note**: AWS SES must be out of sandbox mode to send to any email address.
 
 **Google Sign-In Setup:**
 

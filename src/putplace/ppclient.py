@@ -385,10 +385,10 @@ def process_path(
                 successful += 1
             else:
                 try:
-                    # Prepare headers with API key if provided
+                    # Prepare headers with access token if provided
                     headers = {}
-                    if api_key:
-                        headers["X-API-Key"] = api_key
+                    if access_token:
+                        headers["Authorization"] = f"Bearer {access_token}"
 
                     response = httpx.post(api_url, json=metadata, headers=headers, timeout=10.0)
                     response.raise_for_status()
@@ -401,7 +401,7 @@ def process_path(
                         if upload_url:
                             # Extract base URL from api_url (remove /put_file suffix)
                             base_url = api_url.rsplit("/", 1)[0]
-                            if upload_file_content(filepath, sha256, hostname, upload_url, base_url, api_key):
+                            if upload_file_content(filepath, sha256, hostname, upload_url, base_url, access_token):
                                 uploaded += 1
                     else:
                         console.print(f"[dim]Skipped upload (deduplicated): {filepath.name}[/dim]")
@@ -542,7 +542,6 @@ Authentication:
 
     parser.add_argument(
         "--password",
-        "-p",
         env_var="PUTPLACE_PASSWORD",
         default=None,
         help="Password for authentication. "

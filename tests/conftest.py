@@ -203,11 +203,13 @@ async def test_db(test_settings: Settings) -> AsyncGenerator[MongoDB, None]:
     test_db_instance = db.client[test_settings.mongodb_database]
     db.collection = test_db_instance[test_settings.mongodb_collection]
     db.users_collection = test_db_instance["users_test"]
+    db.pending_users_collection = test_db_instance["pending_users_test"]
     api_keys_collection = test_db_instance["api_keys"]
 
     # Drop collections first to ensure clean state
     await db.collection.drop()
     await db.users_collection.drop()
+    await db.pending_users_collection.drop()
     await api_keys_collection.drop()
 
     # Create indexes for file metadata
@@ -217,6 +219,11 @@ async def test_db(test_settings: Settings) -> AsyncGenerator[MongoDB, None]:
     # Create indexes for users collection
     await db.users_collection.create_index("username", unique=True)
     await db.users_collection.create_index("email", unique=True)
+
+    # Create indexes for pending users collection
+    await db.pending_users_collection.create_index("confirmation_token", unique=True)
+    await db.pending_users_collection.create_index("email", unique=True)
+    await db.pending_users_collection.create_index("expires_at")
 
     # Create indexes for API keys collection
     await api_keys_collection.create_index("key_hash", unique=True)
@@ -228,6 +235,7 @@ async def test_db(test_settings: Settings) -> AsyncGenerator[MongoDB, None]:
     try:
         await db.collection.drop()
         await db.users_collection.drop()
+        await db.pending_users_collection.drop()
         await api_keys_collection.drop()
     except Exception:
         pass  # Ignore cleanup errors

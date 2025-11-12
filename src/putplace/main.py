@@ -223,6 +223,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     try:
         await database.mongodb.connect()
         logger.info("Application startup: Database connected successfully")
+
+        # Start cleanup task for expired pending users
+        from .cleanup_tasks import start_cleanup_task
+        start_cleanup_task()
+
     except ConnectionFailure as e:
         logger.error(f"Failed to connect to database during startup: {e}")
         logger.warning("Application starting without database connection - health endpoint will report degraded")
@@ -707,16 +712,16 @@ async def health(db: MongoDB = Depends(get_db)) -> dict[str, str | dict]:
 async def put_file(
     file_metadata: FileMetadata,
     db: MongoDB = Depends(get_db),
-    api_key: dict = Depends(get_current_api_key),
+    current_user: dict = Depends(get_current_user),
 ) -> FileMetadataUploadResponse:
     """Store file metadata in MongoDB.
 
-    Requires authentication via X-API-Key header.
+    Requires authentication via JWT Bearer token.
 
     Args:
         file_metadata: File metadata containing filepath, hostname, ip_address, and sha256
         db: Database instance (injected)
-        api_key: API key metadata (injected, for authentication)
+        current_user: Current authenticated user (injected, for authentication)
 
     Returns:
         Stored file metadata with MongoDB ID and upload requirement information
@@ -731,9 +736,9 @@ async def put_file(
         # Convert to dict for MongoDB insertion
         data = file_metadata.model_dump()
 
-        # Track which user uploaded this file (from API key)
-        data["uploaded_by_user_id"] = api_key.get("user_id")
-        data["uploaded_by_api_key_id"] = api_key.get("_id")
+        # Track which user uploaded this file
+        data["uploaded_by_user_id"] = str(current_user.get("_id"))
+        data["uploaded_by_username"] = current_user.get("username")
 
         # Insert into MongoDB
         doc_id = await db.insert_file_metadata(data)
@@ -765,11 +770,11 @@ async def put_file(
 async def get_file(
     sha256: str,
     db: MongoDB = Depends(get_db),
-    api_key: dict = Depends(get_current_api_key),
+    current_user: dict = Depends(get_current_user),
 ) -> FileMetadataResponse:
     """Retrieve file metadata by SHA256 hash.
 
-    Requires authentication via X-API-Key header.
+    Requires authentication via JWT Bearer token.
 
     Args:
         sha256: SHA256 hash of the file (64 characters)
@@ -814,11 +819,11 @@ async def upload_file(
     file: UploadFile = File(...),
     db: MongoDB = Depends(get_db),
     storage: StorageBackend = Depends(get_storage),
-    api_key: dict = Depends(get_current_api_key),
+    current_user: dict = Depends(get_current_user),
 ) -> dict[str, str]:
     """Upload actual file content for a previously registered file metadata.
 
-    Requires authentication via X-API-Key header.
+    Requires authentication via JWT Bearer token.
 
     This endpoint is called after POST /put_file indicates upload_required=true.
     The file content is stored using the configured storage backend (local or S3).
@@ -2098,25 +2103,85 @@ async def register_page() -> str:
 
 @app.post("/api/register", tags=["users"])
 async def register_user(user_data: UserCreate, db: MongoDB = Depends(get_db)) -> dict:
-    """Register a new user."""
+    """
+    Register a new user (creates pending user and sends confirmation email).
+
+    User must confirm their email within 24 hours to activate the account.
+    """
     from pymongo.errors import DuplicateKeyError
     from .user_auth import get_password_hash
-    
+    from .email_tokens import generate_confirmation_token, calculate_expiration_time
+    from .email_service import get_email_service
+
+    # Check if registration is enabled
+    if not settings.registration_enabled:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Registration is currently disabled. Please contact the administrator."
+        )
+
     try:
+        # Check if user already exists (active)
+        existing_user = await db.get_user_by_email(user_data.email)
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered"
+            )
+
+        # Check if username already exists
+        existing_username = await db.get_user_by_username(user_data.username)
+        if existing_username:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Username already taken"
+            )
+
         # Hash the password
         hashed_password = get_password_hash(user_data.password)
-        
-        # Create user in database
-        user_id = await db.create_user(
+
+        # Generate confirmation token
+        confirmation_token = generate_confirmation_token()
+        expires_at = calculate_expiration_time(hours=24)
+
+        # Create pending user in database
+        pending_user_id = await db.create_pending_user(
             username=user_data.username,
             email=user_data.email,
             hashed_password=hashed_password,
+            confirmation_token=confirmation_token,
+            expires_at=expires_at,
             full_name=user_data.full_name
         )
-        
-        return {"message": "User registered successfully", "user_id": user_id}
-        
+
+        # Send confirmation email
+        email_service = get_email_service()
+        email_sent = email_service.send_confirmation_email(
+            recipient_email=user_data.email,
+            username=user_data.username,
+            confirmation_token=confirmation_token
+        )
+
+        if not email_sent:
+            # If email fails, delete pending user
+            await db.delete_pending_user(confirmation_token)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to send confirmation email. Please try again later."
+            )
+
+        return {
+            "message": "Registration successful! Please check your email to confirm your account.",
+            "email": user_data.email,
+            "expires_in_hours": 24
+        }
+
     except DuplicateKeyError as e:
+        if "email" in str(e):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email already registered (pending or active)"
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
@@ -2150,8 +2215,67 @@ async def login_user(user_login: UserLogin, db: MongoDB = Depends(get_db)) -> To
     access_token = create_access_token(
         data={"sub": user["username"]}, expires_delta=access_token_expires
     )
-    
+
     return Token(access_token=access_token)
+
+
+@app.get("/api/confirm-email", tags=["users"])
+async def confirm_email(token: str, db: MongoDB = Depends(get_db)) -> dict:
+    """
+    Confirm user email and activate account.
+
+    Args:
+        token: Email confirmation token from the confirmation link
+
+    Returns:
+        Success message with user details
+    """
+    from .email_tokens import is_token_expired
+
+    # Get pending user by token
+    pending_user = await db.get_pending_user_by_token(token)
+
+    if not pending_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invalid or expired confirmation link"
+        )
+
+    # Check if token is expired
+    if is_token_expired(pending_user["expires_at"]):
+        # Delete expired pending user
+        await db.delete_pending_user(token)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Confirmation link has expired. Please register again."
+        )
+
+    # Create actual user account
+    try:
+        user_id = await db.create_user(
+            username=pending_user["username"],
+            email=pending_user["email"],
+            hashed_password=pending_user["hashed_password"],
+            full_name=pending_user.get("full_name")
+        )
+
+        # Delete pending user after successful creation
+        await db.delete_pending_user(token)
+
+        return {
+            "message": "Email confirmed successfully! Your account is now active.",
+            "user_id": user_id,
+            "username": pending_user["username"],
+            "email": pending_user["email"]
+        }
+
+    except Exception as e:
+        # Log error and return generic message
+        logger.error(f"Error creating user from pending: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to activate account. Please contact support."
+        )
 
 
 @app.post("/api/auth/google", response_model=Token, tags=["users"])

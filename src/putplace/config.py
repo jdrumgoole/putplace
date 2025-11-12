@@ -119,6 +119,22 @@ def load_toml_config() -> dict[str, Any]:
             if "google_client_secret" in oauth:
                 config["google_client_secret"] = oauth["google_client_secret"]
 
+        # Email settings
+        if "email" in toml_data:
+            email = toml_data["email"]
+            if "sender_email" in email:
+                config["sender_email"] = email["sender_email"]
+            if "base_url" in email:
+                config["base_url"] = email["base_url"]
+            if "aws_region" in email:
+                config["email_aws_region"] = email["aws_region"]
+
+        # Server settings
+        if "server" in toml_data:
+            server = toml_data["server"]
+            if "registration_enabled" in server:
+                config["registration_enabled"] = server["registration_enabled"]
+
         return config
 
     except Exception as e:
@@ -165,6 +181,14 @@ class Settings(BaseSettings):
     google_client_id: Optional[str] = None
     google_client_secret: Optional[str] = None
 
+    # Email settings for SES
+    sender_email: str = "noreply@putplace.org"
+    base_url: str = "http://localhost:8000"
+    email_aws_region: str = "eu-west-1"
+
+    # Registration control
+    registration_enabled: bool = True  # Set to False to disable new user registration
+
     model_config = SettingsConfigDict(
         case_sensitive=False,
         extra="ignore",  # Ignore extra environment variables (e.g., PUTPLACE_API_KEY for client)
@@ -207,6 +231,9 @@ class Settings(BaseSettings):
             "aws_secret_access_key": get_value("aws_secret_access_key"),
             "google_client_id": get_value("google_client_id"),
             "google_client_secret": get_value("google_client_secret"),
+            "sender_email": get_value("sender_email", "noreply@putplace.org"),
+            "base_url": get_value("base_url", "http://localhost:8000"),
+            "email_aws_region": get_value("email_aws_region", "eu-west-1"),
         }
 
         # Merge with any remaining kwargs
@@ -222,3 +249,8 @@ class Settings(BaseSettings):
 # 3. Defaults in class definition
 # Since we're not passing any constructor args, env vars will naturally override defaults
 settings = Settings()
+
+
+def get_settings() -> Settings:
+    """Get application settings."""
+    return settings

@@ -25,7 +25,8 @@ def sample_config_content():
     """Sample config file content."""
     return """[DEFAULT]
 url = http://config-server:9000/put_file
-api-key = config-api-key-12345
+username = config-user
+password = config-pass
 hostname = config-hostname
 ip = 10.0.0.99
 exclude = .git
@@ -49,37 +50,47 @@ def test_main_with_config_file(temp_test_dir, temp_config_file, sample_config_co
 
     with patch("sys.argv", test_args):
         with patch("putplace.ppclient.process_path") as mock_scan:
-            # Mock process_path to avoid actual scanning
-            mock_scan.return_value = (0, 0, 0, 0)
+            with patch("putplace.ppclient.login_and_get_token") as mock_login:
+                # Mock login to return a token
+                mock_login.return_value = "mock-jwt-token"
+                # Mock process_path to avoid actual scanning
+                mock_scan.return_value = (0, 0, 0, 0)
 
-            # Run main
-            exit_code = ppclient.main()
+                # Run main
+                exit_code = ppclient.main()
 
-            # Verify process_path was called with config values
-            assert mock_scan.called
-            call_args = mock_scan.call_args[0]  # Get positional args
+                # Verify login was called with credentials from config
+                assert mock_login.called
+                login_call_args = mock_login.call_args[0]
+                base_url, username, password = login_call_args
+                assert username == "config-user"
+                assert password == "config-pass"
 
-            # Args: start_path, exclude_patterns, hostname, ip_address, api_url, dry_run, api_key
-            start_path, exclude_patterns, hostname, ip_address, api_url, dry_run, api_key = call_args
+                # Verify process_path was called with config values
+                assert mock_scan.called
+                call_args = mock_scan.call_args[0]  # Get positional args
 
-            # Check URL from config file
-            assert api_url == "http://config-server:9000/put_file"
+                # Args: start_path, exclude_patterns, hostname, ip_address, api_url, dry_run, access_token
+                start_path, exclude_patterns, hostname, ip_address, api_url, dry_run, access_token = call_args
 
-            # Check API key from config file
-            assert api_key == "config-api-key-12345"
+                # Check URL from config file
+                assert api_url == "http://config-server:9000/put_file"
 
-            # Check hostname from config file
-            assert hostname == "config-hostname"
+                # Check access token from login
+                assert access_token == "mock-jwt-token"
 
-            # Check IP from config file
-            assert ip_address == "10.0.0.99"
+                # Check hostname from config file
+                assert hostname == "config-hostname"
 
-            # Check exclude patterns from config file
-            assert ".git" in exclude_patterns
-            assert "*.log" in exclude_patterns
-            assert "__pycache__" in exclude_patterns
+                # Check IP from config file
+                assert ip_address == "10.0.0.99"
 
-            assert exit_code == 0
+                # Check exclude patterns from config file
+                assert ".git" in exclude_patterns
+                assert "*.log" in exclude_patterns
+                assert "__pycache__" in exclude_patterns
+
+                assert exit_code == 0
 
 
 def test_command_line_overrides_config_file(temp_test_dir, temp_config_file, sample_config_content):
@@ -93,92 +104,113 @@ def test_command_line_overrides_config_file(temp_test_dir, temp_config_file, sam
         "--path", str(temp_test_dir),
         "--config", str(temp_config_file),
         "--url", "http://cli-server:8080/put_file",  # Override URL
-        "--api-key", "cli-api-key-67890",  # Override API key
+        "--username", "cli-user",  # Override username
+        "--password", "cli-pass",  # Override password
         "--hostname", "cli-hostname",  # Override hostname
         "--dry-run",
     ]
 
     with patch("sys.argv", test_args):
         with patch("putplace.ppclient.process_path") as mock_scan:
-            mock_scan.return_value = (0, 0, 0, 0)
+            with patch("putplace.ppclient.login_and_get_token") as mock_login:
+                mock_login.return_value = "mock-jwt-token"
+                mock_scan.return_value = (0, 0, 0, 0)
 
-            exit_code = ppclient.main()
+                exit_code = ppclient.main()
 
-            # Verify command line values were used instead of config
-            call_args = mock_scan.call_args[0]  # Get positional args
-            start_path, exclude_patterns, hostname, ip_address, api_url, dry_run, api_key = call_args
+                # Verify CLI credentials were used
+                login_call_args = mock_login.call_args[0]
+                base_url, username, password = login_call_args
+                assert username == "cli-user"
+                assert password == "cli-pass"
 
-            # CLI values should override config values
-            assert api_url == "http://cli-server:8080/put_file"
-            assert api_key == "cli-api-key-67890"
-            assert hostname == "cli-hostname"
+                # Verify command line values were used instead of config
+                call_args = mock_scan.call_args[0]  # Get positional args
+                start_path, exclude_patterns, hostname, ip_address, api_url, dry_run, access_token = call_args
 
-            # But exclude patterns should still include config values
-            # (unless explicitly excluded on CLI)
-            assert ".git" in exclude_patterns
+                # CLI values should override config values
+                assert api_url == "http://cli-server:8080/put_file"
+                assert access_token == "mock-jwt-token"
+                assert hostname == "cli-hostname"
 
-            assert exit_code == 0
+                # But exclude patterns should still include config values
+                # (unless explicitly excluded on CLI)
+                assert ".git" in exclude_patterns
+
+                assert exit_code == 0
 
 
 def test_environment_variable_api_key(temp_test_dir):
-    """Test that API key from environment variable is used."""
+    """Test that username/password from environment variables are used."""
     test_args = [
         "ppclient.py",
         "--path", str(temp_test_dir),
         "--dry-run",
     ]
 
-    # Set environment variable
-    env_api_key = "env-api-key-from-environment"
+    # Set environment variables
+    env_username = "env-user"
+    env_password = "env-pass"
 
     with patch("sys.argv", test_args):
-        with patch.dict(os.environ, {"PUTPLACE_API_KEY": env_api_key}):
+        with patch.dict(os.environ, {"PUTPLACE_USERNAME": env_username, "PUTPLACE_PASSWORD": env_password}):
             with patch("putplace.ppclient.process_path") as mock_scan:
-                mock_scan.return_value = (0, 0, 0, 0)
+                with patch("putplace.ppclient.login_and_get_token") as mock_login:
+                    mock_login.return_value = "mock-jwt-token"
+                    mock_scan.return_value = (0, 0, 0, 0)
 
-                exit_code = ppclient.main()
+                    exit_code = ppclient.main()
 
-                # Verify environment variable was used
-                call_args = mock_scan.call_args[0]  # Get positional args
-                start_path, exclude_patterns, hostname, ip_address, api_url, dry_run, api_key = call_args
-                assert api_key == env_api_key
+                    # Verify environment variables were used
+                    login_call_args = mock_login.call_args[0]
+                    base_url, username, password = login_call_args
+                    assert username == env_username
+                    assert password == env_password
 
-                assert exit_code == 0
+                    assert exit_code == 0
 
 
 def test_cli_overrides_environment_variable(temp_test_dir):
-    """Test that CLI API key overrides environment variable."""
-    cli_api_key = "cli-api-key-override"
-    env_api_key = "env-api-key-should-not-be-used"
+    """Test that CLI username/password overrides environment variables."""
+    cli_username = "cli-user"
+    cli_password = "cli-pass"
+    env_username = "env-user-should-not-be-used"
+    env_password = "env-pass-should-not-be-used"
 
     test_args = [
         "ppclient.py",
         "--path", str(temp_test_dir),
-        "--api-key", cli_api_key,
+        "--username", cli_username,
+        "--password", cli_password,
         "--dry-run",
     ]
 
     with patch("sys.argv", test_args):
-        with patch.dict(os.environ, {"PUTPLACE_API_KEY": env_api_key}):
+        with patch.dict(os.environ, {"PUTPLACE_USERNAME": env_username, "PUTPLACE_PASSWORD": env_password}):
             with patch("putplace.ppclient.process_path") as mock_scan:
-                mock_scan.return_value = (0, 0, 0, 0)
+                with patch("putplace.ppclient.login_and_get_token") as mock_login:
+                    mock_login.return_value = "mock-jwt-token"
+                    mock_scan.return_value = (0, 0, 0, 0)
 
-                exit_code = ppclient.main()
+                    exit_code = ppclient.main()
 
-                # Verify CLI value was used, not environment
-                call_args = mock_scan.call_args[0]  # Get positional args
-                start_path, exclude_patterns, hostname, ip_address, api_url, dry_run, api_key = call_args
-                assert api_key == cli_api_key
-                assert api_key != env_api_key
+                    # Verify CLI values were used, not environment
+                    login_call_args = mock_login.call_args[0]
+                    base_url, username, password = login_call_args
+                    assert username == cli_username
+                    assert password == cli_password
+                    assert username != env_username
+                    assert password != env_password
 
-                assert exit_code == 0
+                    assert exit_code == 0
 
 
 def test_priority_order_cli_env_config(temp_test_dir, temp_config_file):
     """Test configuration priority: CLI > Environment > Config File."""
-    # Config file with API key
+    # Config file with username/password
     config_content = """[DEFAULT]
-api-key = config-api-key
+username = config-user
+password = config-pass
 url = http://config-server:9000/put_file
 """
     temp_config_file.write_text(config_content)
@@ -193,33 +225,42 @@ url = http://config-server:9000/put_file
 
     with patch("sys.argv", test_args):
         with patch("putplace.ppclient.process_path") as mock_scan:
-            mock_scan.return_value = (0, 0, 0, 0)
-            ppclient.main()
-            call_args = mock_scan.call_args[0]
-            start_path, exclude_patterns, hostname, ip_address, api_url, dry_run, api_key = call_args
-            assert api_key == "config-api-key"
+            with patch("putplace.ppclient.login_and_get_token") as mock_login:
+                mock_login.return_value = "mock-jwt-token"
+                mock_scan.return_value = (0, 0, 0, 0)
+                ppclient.main()
+                login_call_args = mock_login.call_args[0]
+                base_url, username, password = login_call_args
+                assert username == "config-user"
+                assert password == "config-pass"
 
     # Test 2: Environment overrides config
     with patch("sys.argv", test_args):
-        with patch.dict(os.environ, {"PUTPLACE_API_KEY": "env-api-key"}):
+        with patch.dict(os.environ, {"PUTPLACE_USERNAME": "env-user", "PUTPLACE_PASSWORD": "env-pass"}):
             with patch("putplace.ppclient.process_path") as mock_scan:
-                mock_scan.return_value = (0, 0, 0, 0)
-                ppclient.main()
-                call_args = mock_scan.call_args[0]
-                start_path, exclude_patterns, hostname, ip_address, api_url, dry_run, api_key = call_args
-                assert api_key == "env-api-key"
+                with patch("putplace.ppclient.login_and_get_token") as mock_login:
+                    mock_login.return_value = "mock-jwt-token"
+                    mock_scan.return_value = (0, 0, 0, 0)
+                    ppclient.main()
+                    login_call_args = mock_login.call_args[0]
+                    base_url, username, password = login_call_args
+                    assert username == "env-user"
+                    assert password == "env-pass"
 
     # Test 3: CLI overrides both
-    test_args_with_cli = test_args + ["--api-key", "cli-api-key"]
+    test_args_with_cli = test_args + ["--username", "cli-user", "--password", "cli-pass"]
 
     with patch("sys.argv", test_args_with_cli):
-        with patch.dict(os.environ, {"PUTPLACE_API_KEY": "env-api-key"}):
+        with patch.dict(os.environ, {"PUTPLACE_USERNAME": "env-user", "PUTPLACE_PASSWORD": "env-pass"}):
             with patch("putplace.ppclient.process_path") as mock_scan:
-                mock_scan.return_value = (0, 0, 0, 0)
-                ppclient.main()
-                call_args = mock_scan.call_args[0]
-                start_path, exclude_patterns, hostname, ip_address, api_url, dry_run, api_key = call_args
-                assert api_key == "cli-api-key"
+                with patch("putplace.ppclient.login_and_get_token") as mock_login:
+                    mock_login.return_value = "mock-jwt-token"
+                    mock_scan.return_value = (0, 0, 0, 0)
+                    ppclient.main()
+                    login_call_args = mock_login.call_args[0]
+                    base_url, username, password = login_call_args
+                    assert username == "cli-user"
+                    assert password == "cli-pass"
 
 
 def test_config_file_with_multiple_exclude_patterns(temp_test_dir, temp_config_file):
@@ -249,7 +290,7 @@ exclude = node_modules
 
             # Verify all exclude patterns were loaded
             call_args = mock_scan.call_args[0]  # Get positional args
-            start_path, exclude_patterns, hostname, ip_address, api_url, dry_run, api_key = call_args
+            start_path, exclude_patterns, hostname, ip_address, api_url, dry_run, access_token = call_args
 
             assert ".git" in exclude_patterns
             assert ".svn" in exclude_patterns
@@ -284,7 +325,7 @@ exclude = *.log
 
             # Verify both config and CLI excludes are present
             call_args = mock_scan.call_args[0]  # Get positional args
-            start_path, exclude_patterns, hostname, ip_address, api_url, dry_run, api_key = call_args
+            start_path, exclude_patterns, hostname, ip_address, api_url, dry_run, access_token = call_args
 
             # From config
             assert ".git" in exclude_patterns
@@ -296,7 +337,7 @@ exclude = *.log
 
 
 def test_no_api_key_provided(temp_test_dir, capsys, monkeypatch):
-    """Test that warning is shown when no API key is provided."""
+    """Test that ppclient works without authentication (access_token will be None)."""
     # Change to temp directory to avoid loading ppclient.conf from repo root
     monkeypatch.chdir(temp_test_dir)
 
@@ -317,10 +358,10 @@ def test_no_api_key_provided(temp_test_dir, capsys, monkeypatch):
 
             ppclient.main()
 
-            # Verify scan was called with None for api_key
+            # Verify scan was called with None for access_token
             call_args = mock_scan.call_args[0]  # Get positional args
-            start_path, exclude_patterns, hostname, ip_address, api_url, dry_run, api_key = call_args
-            assert api_key is None
+            start_path, exclude_patterns, hostname, ip_address, api_url, dry_run, access_token = call_args
+            assert access_token is None
 
 
 def test_config_file_not_found_raises_error(temp_test_dir):
@@ -347,7 +388,8 @@ def test_default_config_file_locations(temp_test_dir, monkeypatch):
     # Create a config in "current directory"
     current_dir_config = Path("ppclient.conf")
     config_content = """[DEFAULT]
-api-key = default-location-key
+username = default-location-user
+password = default-location-pass
 """
 
     # We can't easily test this without actually creating the file,
@@ -377,7 +419,7 @@ def test_dry_run_mode(temp_test_dir):
 
             # Verify dry_run was set to True
             call_args = mock_scan.call_args[0]  # Get positional args
-            start_path, exclude_patterns, hostname, ip_address, api_url, dry_run, api_key = call_args
+            start_path, exclude_patterns, hostname, ip_address, api_url, dry_run, access_token = call_args
             assert dry_run is True
 
 
@@ -386,16 +428,19 @@ def test_without_dry_run_mode(temp_test_dir):
     test_args = [
         "ppclient.py",
         "--path", str(temp_test_dir),
-        "--api-key", "test-key",
+        "--username", "test-user",
+        "--password", "test-pass",
     ]
 
     with patch("sys.argv", test_args):
         with patch("putplace.ppclient.process_path") as mock_scan:
-            mock_scan.return_value = (0, 0, 0, 0)
+            with patch("putplace.ppclient.login_and_get_token") as mock_login:
+                mock_login.return_value = "mock-jwt-token"
+                mock_scan.return_value = (0, 0, 0, 0)
 
-            ppclient.main()
+                ppclient.main()
 
-            # Verify dry_run was set to False
-            call_args = mock_scan.call_args[0]  # Get positional args
-            start_path, exclude_patterns, hostname, ip_address, api_url, dry_run, api_key = call_args
-            assert dry_run is False
+                # Verify dry_run was set to False
+                call_args = mock_scan.call_args[0]  # Get positional args
+                start_path, exclude_patterns, hostname, ip_address, api_url, dry_run, access_token = call_args
+                assert dry_run is False

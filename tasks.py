@@ -2468,3 +2468,47 @@ def deploy_website(c, source_dir="website", bucket=None):
         print(f"{'='*60}")
     else:
         print(f"\n✗ Failed to deploy website")
+
+
+@task
+def toggle_registration(c, action):
+    """Toggle user registration on AWS App Runner.
+
+    Args:
+        action: "enable" or "disable"
+
+    Environment Variables:
+        APPRUNNER_SERVICE_ARN: ARN of the App Runner service (required)
+
+    Examples:
+        invoke toggle-registration --action=disable
+        invoke toggle-registration --action=enable
+
+    Setup:
+        export APPRUNNER_SERVICE_ARN="arn:aws:apprunner:region:account:service/putplace/xxx"
+    """
+    import sys
+    import os
+
+    # Validate action
+    if action not in ["enable", "disable"]:
+        print(f"❌ Error: Action must be 'enable' or 'disable', got '{action}'")
+        print()
+        print("Usage:")
+        print("  invoke toggle-registration --action=enable")
+        print("  invoke toggle-registration --action=disable")
+        sys.exit(1)
+
+    # Check for service ARN
+    if not os.environ.get("APPRUNNER_SERVICE_ARN"):
+        print("❌ Error: APPRUNNER_SERVICE_ARN environment variable not set")
+        print()
+        print("Set it with:")
+        print('  export APPRUNNER_SERVICE_ARN="arn:aws:apprunner:region:account:service/putplace/xxx"')
+        print()
+        print("Or find it with:")
+        print("  aws apprunner list-services --query 'ServiceSummaryList[?ServiceName==`putplace`].ServiceArn' --output text")
+        sys.exit(1)
+
+    # Run the Python script
+    c.run(f"uv run python -m putplace.scripts.toggle_registration {action}")

@@ -42,6 +42,17 @@ path = "./storage/files"
 google_client_id = ""  # e.g., "123456789-abcdefghijk.apps.googleusercontent.com"
 # Note: google_client_secret is not needed for ID token verification
 
+[email]
+# Email Confirmation Settings (AWS SES)
+# Required for user registration email confirmation
+sender_email = "noreply@putplace.org"  # Must be verified in AWS SES
+base_url = "http://localhost:8000"     # Server base URL for confirmation links
+aws_region = "eu-west-1"               # AWS SES region
+
+[server]
+# Server Configuration
+registration_enabled = true  # Set to false to disable new user registration
+
 # =============================================================================
 # Usage Notes
 # =============================================================================

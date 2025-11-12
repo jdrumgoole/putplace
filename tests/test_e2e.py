@@ -18,7 +18,7 @@ from putplace import ppclient
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_e2e_file_metadata_stored(client, test_db, temp_test_dir, test_api_key):
+async def test_e2e_file_metadata_stored(client, test_db, temp_test_dir, test_user_token: str):
     """Test that file metadata is properly stored and retrieved."""
     # Calculate hash and stats for a test file
     test_file = temp_test_dir / "file1.txt"
@@ -37,14 +37,14 @@ async def test_e2e_file_metadata_stored(client, test_db, temp_test_dir, test_api
     response = await client.post(
         "/put_file",
         json=metadata,
-        headers={"X-API-Key": test_api_key}
+        headers={"Authorization": f"Bearer {test_user_token}"}
     )
     assert response.status_code == 201
 
     # Retrieve via API (also requires API key)
     get_response = await client.get(
         f"/get_file/{sha256}",
-        headers={"X-API-Key": test_api_key}
+        headers={"Authorization": f"Bearer {test_user_token}"}
     )
     assert get_response.status_code == 200
 
@@ -58,7 +58,7 @@ async def test_e2e_file_metadata_stored(client, test_db, temp_test_dir, test_api
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_e2e_multiple_files_different_hosts(client, test_db, temp_test_dir, test_api_key):
+async def test_e2e_multiple_files_different_hosts(client, test_db, temp_test_dir, test_user_token: str):
     """Test storing metadata from multiple files and hosts."""
     files_to_process = [
         (temp_test_dir / "file1.txt", "host1", "10.0.0.1"),
@@ -79,7 +79,7 @@ async def test_e2e_multiple_files_different_hosts(client, test_db, temp_test_dir
         response = await client.post(
             "/put_file",
             json=metadata,
-            headers={"X-API-Key": test_api_key}
+            headers={"Authorization": f"Bearer {test_user_token}"}
         )
         assert response.status_code == 201
 
@@ -111,7 +111,7 @@ async def test_e2e_client_sha256_calculation(temp_test_dir):
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_e2e_duplicate_files_different_hosts(client, test_db, temp_test_dir, test_api_key):
+async def test_e2e_duplicate_files_different_hosts(client, test_db, temp_test_dir, test_user_token: str):
     """Test that same file from different hosts creates multiple records."""
     test_file = temp_test_dir / "file1.txt"
     sha256 = ppclient.calculate_sha256(test_file)
@@ -129,7 +129,7 @@ async def test_e2e_duplicate_files_different_hosts(client, test_db, temp_test_di
         response = await client.post(
             "/put_file",
             json=metadata,
-            headers={"X-API-Key": test_api_key}
+            headers={"Authorization": f"Bearer {test_user_token}"}
         )
         assert response.status_code == 201
 
@@ -140,7 +140,7 @@ async def test_e2e_duplicate_files_different_hosts(client, test_db, temp_test_di
 
 @pytest.mark.asyncio
 @pytest.mark.integration
-async def test_e2e_file_content_upload_and_deduplication(client, test_db, temp_test_dir, test_api_key):
+async def test_e2e_file_content_upload_and_deduplication(client, test_db, temp_test_dir, test_user_token: str):
     """Test complete workflow including file content upload and deduplication.
 
     This test:
@@ -172,7 +172,7 @@ async def test_e2e_file_content_upload_and_deduplication(client, test_db, temp_t
     response1 = await client.post(
         "/put_file",
         json=metadata1,
-        headers={"X-API-Key": test_api_key}
+        headers={"Authorization": f"Bearer {test_user_token}"}
     )
     assert response1.status_code == 201
     data1 = response1.json()
@@ -184,7 +184,7 @@ async def test_e2e_file_content_upload_and_deduplication(client, test_db, temp_t
         upload_response = await client.post(
             f"/upload_file/{sha256_file1}?hostname=e2e-test-host&filepath={test_file1}",
             files={"file": ("upload_test1.txt", f, "application/octet-stream")},
-            headers={"X-API-Key": test_api_key}
+            headers={"Authorization": f"Bearer {test_user_token}"}
         )
     assert upload_response.status_code == 200
     upload_data = upload_response.json()
@@ -204,7 +204,7 @@ async def test_e2e_file_content_upload_and_deduplication(client, test_db, temp_t
     response2 = await client.post(
         "/put_file",
         json=metadata2,
-        headers={"X-API-Key": test_api_key}
+        headers={"Authorization": f"Bearer {test_user_token}"}
     )
     assert response2.status_code == 201
     data2 = response2.json()
@@ -214,7 +214,7 @@ async def test_e2e_file_content_upload_and_deduplication(client, test_db, temp_t
         upload_response2 = await client.post(
             f"/upload_file/{sha256_file2}?hostname=e2e-test-host&filepath={test_file2}",
             files={"file": ("upload_test2.txt", f, "application/octet-stream")},
-            headers={"X-API-Key": test_api_key}
+            headers={"Authorization": f"Bearer {test_user_token}"}
         )
     assert upload_response2.status_code == 200
 
@@ -234,7 +234,7 @@ async def test_e2e_file_content_upload_and_deduplication(client, test_db, temp_t
     response_dup = await client.post(
         "/put_file",
         json=metadata_dup,
-        headers={"X-API-Key": test_api_key}
+        headers={"Authorization": f"Bearer {test_user_token}"}
     )
     assert response_dup.status_code == 201
     data_dup = response_dup.json()
@@ -292,26 +292,32 @@ async def test_e2e_real_server_and_client_with_upload(worker_id):
         # Clean up database before test
         await test_collection_obj.drop()
 
-        # Create test database instance for API key creation
+        # Create test database instance for user creation
         test_db = MongoDB()
         test_db.client = mongo_client
         test_db.collection = test_collection_obj
-        test_db.users_collection = test_db_instance["users_test"]
+        # Important: Use "users" collection (not "users_test") - this is what the server will use
+        test_db.users_collection = test_db_instance["users"]
 
-        # Create API key
-        from putplace.auth import APIKeyAuth, hash_api_key
-        auth = APIKeyAuth(test_db)
-        api_key, _ = await auth.create_api_key(
-            name="e2e_test_key",
-            user_id=None,
-            description="E2E test API key"
-        )
+        # Create a test user with username/password
+        from putplace.user_auth import get_password_hash
+        from datetime import datetime
+        test_username = "e2e_test_user"
+        test_password = "e2e_test_password"
+        hashed_password = get_password_hash(test_password)
 
-        # Verify API key was created
-        api_keys_collection = test_db_instance["api_keys"]
-        key_hash = hash_api_key(api_key)
-        key_doc = await api_keys_collection.find_one({"key_hash": key_hash})
-        assert key_doc is not None, "API key not found in database after creation"
+        await test_db.users_collection.insert_one({
+            "username": test_username,
+            "email": "e2e_test@example.com",
+            "hashed_password": hashed_password,
+            "full_name": "E2E Test User",
+            "is_active": True,
+            "created_at": datetime.utcnow()
+        })
+
+        # Verify user was created
+        user_doc = await test_db.users_collection.find_one({"username": test_username})
+        assert user_doc is not None, "Test user not found in database after creation"
 
         # Start uvicorn server in subprocess
         # Find an available port dynamically to avoid conflicts in parallel testing
@@ -377,7 +383,26 @@ async def test_e2e_real_server_and_client_with_upload(worker_id):
             print(f"\n=== SERVER INFO ===")
             print(f"Health check response: {settings_response.json()}")
 
-            # Test API key authentication directly with server
+            # Test username/password authentication with server - login to get JWT token
+            login_response = httpx.post(
+                f"http://127.0.0.1:{server_port}/api/login",
+                json={"username": test_username, "password": test_password},
+                timeout=5.0,
+            )
+            if login_response.status_code != 200:
+                print(f"\n=== LOGIN TEST FAILED ===")
+                print(f"Status: {login_response.status_code}")
+                print(f"Response: {login_response.text}")
+                # Check if user is still in database
+                check_user = await test_db.users_collection.find_one({"username": test_username})
+                print(f"User still in DB: {check_user is not None}")
+                if check_user:
+                    print(f"User doc: {check_user}")
+
+            assert login_response.status_code == 200, f"Login failed: {login_response.text}"
+            jwt_token = login_response.json()["access_token"]
+
+            # Test JWT authentication with put_file endpoint
             test_metadata = {
                 "filepath": "/test/path.txt",
                 "hostname": "test-host",
@@ -394,26 +419,16 @@ async def test_e2e_real_server_and_client_with_upload(worker_id):
             auth_test_response = httpx.post(
                 f"http://127.0.0.1:{server_port}/put_file",
                 json=test_metadata,
-                headers={"X-API-Key": api_key},
+                headers={"Authorization": f"Bearer {jwt_token}"},
                 timeout=5.0,
             )
             if auth_test_response.status_code != 201:
                 print(f"\n=== AUTH TEST FAILED ===")
                 print(f"Status: {auth_test_response.status_code}")
                 print(f"Response: {auth_test_response.text}")
-                print(f"API Key (full): {api_key}")
-                print(f"API Key hash (expected): {key_hash}")
-                # Check if API key is still in database
-                check_key = await api_keys_collection.find_one({"key_hash": key_hash})
-                print(f"API key still in DB: {check_key is not None}")
-                if check_key:
-                    print(f"Key doc: {check_key}")
-                    print(f"Hashes match: {check_key['key_hash'] == key_hash}")
-                # Also check all API keys in database
-                all_keys = await api_keys_collection.find({}).to_list(length=100)
-                print(f"Total API keys in DB: {len(all_keys)}")
+                print(f"JWT Token: {jwt_token[:20]}...")
 
-            assert auth_test_response.status_code == 201, f"API key authentication failed: {auth_test_response.text}"
+            assert auth_test_response.status_code == 201, f"JWT authentication failed: {auth_test_response.text}"
 
             # Test 1: Upload first file via client
             result = subprocess.run(
@@ -421,7 +436,8 @@ async def test_e2e_real_server_and_client_with_upload(worker_id):
                     "uv", "run", "python", "-m", "putplace.ppclient",
                     "--path", str(test_file1),
                     "--url", f"http://127.0.0.1:{server_port}/put_file",
-                    "--api-key", api_key,
+                    "--username", test_username,
+                    "--password", test_password,
                 ],
                 capture_output=True,
                 text=True,
@@ -459,7 +475,8 @@ async def test_e2e_real_server_and_client_with_upload(worker_id):
                     "uv", "run", "python", "-m", "putplace.ppclient",
                     "--path", str(test_file2),
                     "--url", f"http://127.0.0.1:{server_port}/put_file",
-                    "--api-key", api_key,
+                    "--username", test_username,
+                    "--password", test_password,
                 ],
                 capture_output=True,
                 text=True,
@@ -488,7 +505,8 @@ async def test_e2e_real_server_and_client_with_upload(worker_id):
                     "uv", "run", "python", "-m", "putplace.ppclient",
                     "--path", str(duplicate_file),
                     "--url", f"http://127.0.0.1:{server_port}/put_file",
-                    "--api-key", api_key,
+                    "--username", test_username,
+                    "--password", test_password,
                 ],
                 capture_output=True,
                 text=True,

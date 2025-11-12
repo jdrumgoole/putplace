@@ -6,13 +6,13 @@ from io import BytesIO
 
 
 @pytest.mark.asyncio
-async def test_get_file_endpoint(client: AsyncClient, test_api_key: str, sample_file_metadata):
+async def test_get_file_endpoint(client: AsyncClient, test_user_token: str, sample_file_metadata):
     """Test GET /get_file/{sha256} endpoint."""
     # First, store some metadata
     response = await client.post(
         "/put_file",
         json=sample_file_metadata,
-        headers={"X-API-Key": test_api_key}
+        headers={"Authorization": f"Bearer {test_user_token}"}
     )
     assert response.status_code == 201
 
@@ -20,7 +20,7 @@ async def test_get_file_endpoint(client: AsyncClient, test_api_key: str, sample_
     sha256 = sample_file_metadata["sha256"]
     response = await client.get(
         f"/get_file/{sha256}",
-        headers={"X-API-Key": test_api_key}
+        headers={"Authorization": f"Bearer {test_user_token}"}
     )
 
     assert response.status_code == 200
@@ -31,13 +31,13 @@ async def test_get_file_endpoint(client: AsyncClient, test_api_key: str, sample_
 
 
 @pytest.mark.asyncio
-async def test_get_file_not_found(client: AsyncClient, test_api_key: str):
+async def test_get_file_not_found(client: AsyncClient, test_user_token: str):
     """Test GET /get_file/{sha256} with nonexistent file."""
     nonexistent_sha = "0" * 64
 
     response = await client.get(
         f"/get_file/{nonexistent_sha}",
-        headers={"X-API-Key": test_api_key}
+        headers={"Authorization": f"Bearer {test_user_token}"}
     )
 
     assert response.status_code == 404
@@ -45,26 +45,26 @@ async def test_get_file_not_found(client: AsyncClient, test_api_key: str):
 
 
 @pytest.mark.asyncio
-async def test_get_file_invalid_sha256(client: AsyncClient, test_api_key: str):
+async def test_get_file_invalid_sha256(client: AsyncClient, test_user_token: str):
     """Test GET /get_file/{sha256} with invalid SHA256."""
     invalid_sha = "invalid"
 
     response = await client.get(
         f"/get_file/{invalid_sha}",
-        headers={"X-API-Key": test_api_key}
+        headers={"Authorization": f"Bearer {test_user_token}"}
     )
 
     assert response.status_code == 400  # Bad request for invalid SHA256
 
 
 @pytest.mark.asyncio
-async def test_upload_file_endpoint(client: AsyncClient, test_api_key: str, sample_file_metadata):
+async def test_upload_file_endpoint(client: AsyncClient, test_user_token: str, sample_file_metadata):
     """Test POST /upload_file/{sha256} endpoint."""
     # First register the file metadata and check if upload is required
     response = await client.post(
         "/put_file",
         json=sample_file_metadata,
-        headers={"X-API-Key": test_api_key}
+        headers={"Authorization": f"Bearer {test_user_token}"}
     )
     assert response.status_code == 201
     upload_required = response.json().get("upload_required", False)
@@ -83,7 +83,7 @@ async def test_upload_file_endpoint(client: AsyncClient, test_api_key: str, samp
         f"/upload_file/{sha256}",
         params={"hostname": hostname, "filepath": filepath},
         files={"file": ("test.txt", BytesIO(file_content), "text/plain")},
-        headers={"X-API-Key": test_api_key}
+        headers={"Authorization": f"Bearer {test_user_token}"}
     )
 
     # Might fail with 400 if metadata not found, which is expected
@@ -91,13 +91,13 @@ async def test_upload_file_endpoint(client: AsyncClient, test_api_key: str, samp
 
 
 @pytest.mark.asyncio
-async def test_api_my_files_endpoint(client: AsyncClient, test_user_token: str, test_api_key: str, sample_file_metadata):
+async def test_api_my_files_endpoint(client: AsyncClient, test_user_token: str, sample_file_metadata):
     """Test GET /api/my_files endpoint."""
     # Upload a file first
     response = await client.post(
         "/put_file",
         json=sample_file_metadata,
-        headers={"X-API-Key": test_api_key}
+        headers={"Authorization": f"Bearer {test_user_token}"}
     )
     assert response.status_code == 201
 
@@ -113,7 +113,7 @@ async def test_api_my_files_endpoint(client: AsyncClient, test_user_token: str, 
 
 
 @pytest.mark.asyncio
-async def test_api_clones_endpoint(client: AsyncClient, test_api_key: str, test_user_token: str, sample_file_metadata):
+async def test_api_clones_endpoint(client: AsyncClient, test_user_token: str, sample_file_metadata):
     """Test GET /api/clones/{sha256} endpoint - find duplicate files."""
     # Create multiple files with same SHA256
     sha256 = sample_file_metadata["sha256"]
@@ -122,7 +122,7 @@ async def test_api_clones_endpoint(client: AsyncClient, test_api_key: str, test_
     await client.post(
         "/put_file",
         json=sample_file_metadata,
-        headers={"X-API-Key": test_api_key}
+        headers={"Authorization": f"Bearer {test_user_token}"}
     )
 
     # Second file (different hostname/path, same SHA256)
@@ -133,7 +133,7 @@ async def test_api_clones_endpoint(client: AsyncClient, test_api_key: str, test_
     await client.post(
         "/put_file",
         json=duplicate_metadata,
-        headers={"X-API-Key": test_api_key}
+        headers={"Authorization": f"Bearer {test_user_token}"}
     )
 
     # Get clones
@@ -262,19 +262,27 @@ async def test_root_endpoint(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_api_register_endpoint(client: AsyncClient):
-    """Test POST /api/register endpoint."""
-    user_data = {
-        "username": "newapiuser",
-        "email": "newapiuser@example.com",
-        "password": "securepassword123"
-    }
+    """Test POST /api/register endpoint creates pending user."""
+    from unittest.mock import Mock, patch
 
-    response = await client.post("/api/register", json=user_data)
+    with patch('putplace.email_service.get_email_service') as mock_email:
+        email_service = Mock()
+        email_service.send_confirmation_email = Mock(return_value=True)
+        mock_email.return_value = email_service
 
-    assert response.status_code == 200
-    data = response.json()
-    assert "user_id" in data
-    assert data["message"] == "User registered successfully"
+        user_data = {
+            "username": "newapiuser",
+            "email": "newapiuser@example.com",
+            "password": "securepassword123"
+        }
+
+        response = await client.post("/api/register", json=user_data)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "email" in data
+        assert data["email"] == "newapiuser@example.com"
+        assert "check your email" in data["message"].lower()
 
 
 @pytest.mark.asyncio
@@ -340,12 +348,12 @@ async def test_api_oauth_config_endpoint(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_endpoint_requires_authentication(client: AsyncClient, sample_file_metadata):
     """Test that protected endpoints reject requests without authentication."""
-    # Try to access protected endpoint without API key
+    # Try to access protected endpoint without JWT token
     response = await client.post("/put_file", json=sample_file_metadata)
-    assert response.status_code == 401
+    assert response.status_code in [401, 403]
 
     response = await client.get(f"/get_file/{sample_file_metadata['sha256']}")
-    assert response.status_code == 401
+    assert response.status_code in [401, 403]
 
 
 @pytest.mark.asyncio

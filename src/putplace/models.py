@@ -195,3 +195,26 @@ class TokenData(BaseModel):
     """Data stored in JWT token."""
 
     username: Optional[str] = None
+
+
+class PendingUser(BaseModel):
+    """Pending user awaiting email confirmation."""
+
+    username: str = Field(..., description="Username")
+    email: str = Field(..., description="Email address")
+    hashed_password: str = Field(..., description="Hashed password")
+    full_name: Optional[str] = Field(None, description="Full name")
+    confirmation_token: str = Field(..., description="Email confirmation token")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="When pending user was created")
+    expires_at: datetime = Field(..., description="When confirmation expires (24 hours)")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class EmailConfirmationResponse(BaseModel):
+    """Response after successful email confirmation."""
+
+    message: str = Field(..., description="Success message")
+    user_id: str = Field(..., description="Created user ID")
+    username: str = Field(..., description="Username")
+    email: str = Field(..., description="Email address")

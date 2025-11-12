@@ -245,31 +245,30 @@ async def test_api_key_authentication_endpoint(client: AsyncClient, test_api_key
 
 
 @pytest.mark.asyncio
-async def test_protected_endpoint_requires_auth(client: AsyncClient, test_api_key: str, sample_file_metadata):
+async def test_protected_endpoint_requires_auth(client: AsyncClient, test_user_token: str, sample_file_metadata):
     """Test that protected endpoints require authentication."""
-    # Try without API key - should return 401 Unauthorized
+    # Try without JWT token - should return 401 or 403 Unauthorized
     response = await client.post("/put_file", json=sample_file_metadata)
-    assert response.status_code == 401
+    assert response.status_code in [401, 403]
 
-    # Try with valid API key
+    # Try with valid JWT token
     response = await client.post(
         "/put_file",
         json=sample_file_metadata,
-        headers={"X-API-Key": test_api_key}
+        headers={"Authorization": f"Bearer {test_user_token}"}
     )
     assert response.status_code == 201
 
 
 @pytest.mark.asyncio
 async def test_invalid_api_key_rejected(client: AsyncClient, sample_file_metadata):
-    """Test that invalid API keys are rejected."""
+    """Test that invalid JWT tokens are rejected."""
     response = await client.post(
         "/put_file",
         json=sample_file_metadata,
-        headers={"X-API-Key": "invalid_key_12345"}
+        headers={"Authorization": "Bearer invalid_token_12345"}
     )
     assert response.status_code == 401
-    assert "API key" in response.json()["detail"]
 
 
 @pytest.mark.asyncio

@@ -23,6 +23,7 @@ class MongoDB:
     client: Optional[AsyncMongoClient] = None
     collection: Optional[AsyncCollection] = None
     users_collection: Optional[AsyncCollection] = None
+    pending_users_collection: Optional[AsyncCollection] = None
 
     async def connect(self) -> None:
         """Connect to MongoDB.
@@ -46,6 +47,7 @@ class MongoDB:
             db = self.client[settings.mongodb_database]
             self.collection = db[settings.mongodb_collection]
             self.users_collection = db["users"]
+            self.pending_users_collection = db["pending_users"]
 
             # Create indexes on sha256 for efficient lookups
             await self.collection.create_index("sha256")
@@ -63,6 +65,12 @@ class MongoDB:
             await self.users_collection.create_index("username", unique=True)
             await self.users_collection.create_index("email", unique=True)
             logger.info("Users indexes created successfully")
+
+            # Create indexes for pending_users collection
+            await self.pending_users_collection.create_index("confirmation_token", unique=True)
+            await self.pending_users_collection.create_index("email", unique=True)
+            await self.pending_users_collection.create_index("expires_at")  # For cleanup queries
+            logger.info("Pending users indexes created successfully")
 
         except ServerSelectionTimeoutError as e:
             logger.error(f"MongoDB connection timeout: {e}")
@@ -381,6 +389,104 @@ class MongoDB:
             raise RuntimeError("Database not connected")
 
         return await self.users_collection.find_one({"email": email})
+
+    # Pending user methods
+
+    async def create_pending_user(
+        self,
+        username: str,
+        email: str,
+        hashed_password: str,
+        confirmation_token: str,
+        expires_at,
+        full_name: Optional[str] = None
+    ) -> str:
+        """Create a pending user awaiting email confirmation.
+
+        Args:
+            username: User's username
+            email: User's email
+            hashed_password: Hashed password
+            confirmation_token: Email confirmation token
+            expires_at: Expiration datetime
+            full_name: User's full name (optional)
+
+        Returns:
+            Inserted pending user document ID
+
+        Raises:
+            DuplicateKeyError: If username or email already exists
+        """
+        if self.pending_users_collection is None:
+            raise RuntimeError("Database not connected")
+
+        from datetime import datetime
+
+        pending_user_data = {
+            "username": username,
+            "email": email,
+            "hashed_password": hashed_password,
+            "full_name": full_name,
+            "confirmation_token": confirmation_token,
+            "created_at": datetime.utcnow(),
+            "expires_at": expires_at,
+        }
+
+        try:
+            result = await self.pending_users_collection.insert_one(pending_user_data)
+            return str(result.inserted_id)
+        except DuplicateKeyError as e:
+            if "email" in str(e):
+                raise DuplicateKeyError("Email already registered (pending or active)")
+            elif "confirmation_token" in str(e):
+                # This should be extremely rare
+                raise DuplicateKeyError("Token collision - please try again")
+            raise
+
+    async def get_pending_user_by_token(self, confirmation_token: str) -> Optional[dict]:
+        """Get pending user by confirmation token.
+
+        Args:
+            confirmation_token: Confirmation token
+
+        Returns:
+            Pending user document or None if not found
+        """
+        if self.pending_users_collection is None:
+            raise RuntimeError("Database not connected")
+
+        return await self.pending_users_collection.find_one({"confirmation_token": confirmation_token})
+
+    async def delete_pending_user(self, confirmation_token: str) -> bool:
+        """Delete a pending user by confirmation token.
+
+        Args:
+            confirmation_token: Confirmation token
+
+        Returns:
+            True if deleted, False if not found
+        """
+        if self.pending_users_collection is None:
+            raise RuntimeError("Database not connected")
+
+        result = await self.pending_users_collection.delete_one({"confirmation_token": confirmation_token})
+        return result.deleted_count > 0
+
+    async def cleanup_expired_pending_users(self) -> int:
+        """Delete all expired pending users.
+
+        Returns:
+            Number of deleted pending users
+        """
+        if self.pending_users_collection is None:
+            raise RuntimeError("Database not connected")
+
+        from datetime import datetime
+
+        result = await self.pending_users_collection.delete_many({
+            "expires_at": {"$lt": datetime.utcnow()}
+        })
+        return result.deleted_count
 
 
 # Global database instance
