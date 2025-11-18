@@ -24,6 +24,49 @@ Before deploying to production:
 - [ ] Domain name (for HTTPS)
 - [ ] SSL certificate (Let's Encrypt recommended)
 
+## Quick Deploy Options
+
+### Digital Ocean Droplets (Recommended for Quick Setup)
+
+PutPlace provides automated deployment to Digital Ocean with environment-specific shortcuts:
+
+```bash
+# Step 1: Configure environment (one-time)
+invoke configure-prod --mongodb-url="mongodb+srv://user:pass@cluster.mongodb.net/"
+
+# Step 2: Deploy to Digital Ocean
+invoke deploy-do-prod --create
+```
+
+**Features:**
+- ✅ Complete automation (5-minute setup)
+- ✅ Environment separation (dev/test/prod)
+- ✅ AWS S3 storage integration
+- ✅ MongoDB Atlas support
+- ✅ SSL/HTTPS ready
+- ✅ Starting at $6/month (1GB droplet)
+
+**Available shortcuts:**
+- `configure-dev` / `deploy-do-dev` - Development environment
+- `configure-test` / `deploy-do-test` - Testing environment
+- `configure-prod` / `deploy-do-prod` - Production environment
+
+**Full documentation:** See [DIGITALOCEAN_DEPLOYMENT.md](../DIGITALOCEAN_DEPLOYMENT.md) in the repository for complete Digital Ocean deployment guide including:
+- Detailed setup instructions
+- AWS S3 storage configuration
+- MongoDB Atlas integration
+- SSL certificate setup
+- Monitoring and backups
+- Troubleshooting
+
+### Other Deployment Options
+
+For other deployment platforms and methods, see the sections below:
+- [systemd Service](#method-1-systemd-service-recommended-for-vpsbare-metal) - Manual VPS setup
+- [Docker](#method-2-docker) - Container deployment
+- [Docker Compose](#method-3-docker-compose) - Multi-container setup
+- [Kubernetes](#kubernetes-k8s) - Orchestrated deployment
+
 ## Production Architecture
 
 ### Simple Deployment

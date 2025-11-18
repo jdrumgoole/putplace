@@ -115,11 +115,28 @@ nano ppserver.toml
 
 PutPlace searches for `ppserver.toml` in these locations (in order):
 
-1. `./ppserver.toml` - Current directory (project root)
-2. `~/.config/putplace/ppserver.toml` - User configuration
-3. `/etc/putplace/ppserver.toml` - System-wide configuration
+1. **`PUTPLACE_CONFIG` environment variable** - Highest priority, specify exact path
+2. `./ppserver.toml` - Current directory (project root)
+3. `~/.config/putplace/ppserver.toml` - User configuration
+4. `/etc/putplace/ppserver.toml` - System-wide configuration
 
 The first file found is used.
+
+**Using PUTPLACE_CONFIG:**
+
+```bash
+# Specify custom config file location
+export PUTPLACE_CONFIG=/opt/putplace/ppserver-prod.toml
+ppserver start
+
+# Or inline
+PUTPLACE_CONFIG=/path/to/custom.toml ppserver start
+```
+
+This is particularly useful for:
+- Running multiple PutPlace instances with different configs
+- Deployment environments (dev/test/prod)
+- CI/CD pipelines with environment-specific settings
 
 #### Complete ppserver.toml Example
 

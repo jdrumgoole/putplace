@@ -2931,6 +2931,7 @@ def deploy_do(
     aws_region="eu-west-1",
     aws_credentials_dir="./aws_credentials_output",
     aws_profile=None,
+    config_file=None,
 ):
     """Deploy PutPlace to Digital Ocean droplet from PyPI.
 
@@ -3061,6 +3062,9 @@ def deploy_do(
     if aws_profile:
         cmd += f" --aws-profile={aws_profile}"
 
+    if config_file:
+        cmd += f" --config-output={config_file}"
+
     c.run(cmd, pty=True)
 
 
@@ -3140,6 +3144,7 @@ def _deploy_with_config(
         aws_region=aws_region,
         aws_credentials_dir="./aws_credentials_output",
         aws_profile=aws_profile,
+        config_file=config_file,  # Pass the environment-specific config file
     )
 
 

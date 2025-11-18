@@ -29,13 +29,24 @@ def find_config_file() -> Optional[Path]:
     """Find ppserver.toml file in standard locations.
 
     Search order:
-    1. ./ppserver.toml (current directory)
-    2. ~/.config/putplace/ppserver.toml (user config)
-    3. /etc/putplace/ppserver.toml (system config)
+    1. PUTPLACE_CONFIG environment variable (if set)
+    2. ./ppserver.toml (current directory)
+    3. ~/.config/putplace/ppserver.toml (user config)
+    4. /etc/putplace/ppserver.toml (system config)
 
     Returns:
         Path to config file if found, None otherwise
     """
+    # Check environment variable first
+    env_config = os.environ.get("PUTPLACE_CONFIG")
+    if env_config:
+        env_path = Path(env_config)
+        if env_path.exists() and env_path.is_file():
+            return env_path
+        # If PUTPLACE_CONFIG is set but file doesn't exist, log warning but continue searching
+        import logging
+        logging.warning(f"PUTPLACE_CONFIG set to {env_config} but file not found, searching standard locations")
+
     search_paths = [
         Path.cwd() / "ppserver.toml",
         Path.home() / ".config" / "putplace" / "ppserver.toml",
@@ -150,8 +161,14 @@ class Settings(BaseSettings):
 
     Configuration is loaded in this priority order (highest to lowest):
     1. Environment variables (e.g., MONGODB_URL, STORAGE_BACKEND)
-    2. ppserver.toml file (./ppserver.toml, ~/.config/putplace/ppserver.toml, /etc/putplace/ppserver.toml)
+    2. ppserver.toml file (search order below)
     3. Default values defined below
+
+    Config file search order (PUTPLACE_CONFIG overrides):
+    - PUTPLACE_CONFIG environment variable (if set, takes highest priority)
+    - ./ppserver.toml (current directory)
+    - ~/.config/putplace/ppserver.toml (user config)
+    - /etc/putplace/ppserver.toml (system config)
     """
 
     mongodb_url: str

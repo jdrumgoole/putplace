@@ -799,15 +799,23 @@ systemctl reload nginx
         print(f"{'#'*60}\n")
 
         try:
-            # Step 0: Generate configuration locally
-            config_path = self.generate_local_config(
-                output_path=config_output,
-                mongodb_url=mongodb_url,
-                storage_backend=storage_backend,
-                storage_path=storage_path,
-                s3_bucket=s3_bucket,
-                aws_region=aws_region,
-            )
+            # Step 0: Generate or use existing configuration
+            from pathlib import Path
+            config_file = Path(config_output)
+
+            if config_file.exists():
+                print(f"→ Using existing config file: {config_output}")
+                config_path = config_file
+            else:
+                print(f"→ Generating new config file: {config_output}")
+                config_path = self.generate_local_config(
+                    output_path=config_output,
+                    mongodb_url=mongodb_url,
+                    storage_backend=storage_backend,
+                    storage_path=storage_path,
+                    s3_bucket=s3_bucket,
+                    aws_region=aws_region,
+                )
 
             # Get or create droplet
             if create_droplet:
