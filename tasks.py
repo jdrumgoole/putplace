@@ -2512,3 +2512,859 @@ def toggle_registration(c, action):
 
     # Run the Python script
     c.run(f"uv run python -m putplace.scripts.toggle_registration {action}")
+
+
+@task
+def atlas_clusters(c):
+    """List all MongoDB Atlas clusters.
+
+    Requires Atlas API credentials in environment or ~/.atlas/credentials file.
+
+    Examples:
+        invoke atlas-clusters
+    """
+    c.run("uv run python -m putplace.scripts.atlas_cluster_control list")
+
+
+@task
+def atlas_status(c, cluster):
+    """Get status of a MongoDB Atlas cluster.
+
+    Args:
+        cluster: Cluster name
+
+    Examples:
+        invoke atlas-status --cluster=testcluster
+    """
+    c.run(f"uv run python -m putplace.scripts.atlas_cluster_control status --cluster {cluster}")
+
+
+@task
+def atlas_pause(c, cluster):
+    """Pause a MongoDB Atlas cluster to save costs.
+
+    Paused clusters cost ~10% of running cost (storage only).
+    Great for dev/test environments.
+
+    Args:
+        cluster: Cluster name
+
+    Examples:
+        invoke atlas-pause --cluster=testcluster
+    """
+    c.run(f"uv run python -m putplace.scripts.atlas_cluster_control pause --cluster {cluster}")
+
+
+@task
+def setup_aws_iam(c, region="eu-west-1", skip_buckets=False):
+    """Setup AWS IAM users for dev, test, and prod environments.
+
+    Creates three IAM users with S3 and SES access:
+    - putplace-dev (access to putplace-dev bucket)
+    - putplace-test (access to putplace-test bucket)
+    - putplace-prod (access to putplace-prod bucket)
+
+    Args:
+        region: AWS region (default: eu-west-1)
+        skip_buckets: Skip S3 bucket creation if they already exist
+
+    Examples:
+        # Create all resources (users, policies, buckets, keys)
+        invoke setup-aws-iam
+
+        # Use different region
+        invoke setup-aws-iam --region=us-east-1
+
+        # Skip bucket creation (if buckets already exist)
+        invoke setup-aws-iam --skip-buckets
+
+    Output:
+        Creates aws_credentials_output/ directory with:
+        - .env.dev, .env.test, .env.prod (environment files)
+        - aws_credentials (AWS credentials file format)
+        - aws_config (AWS config file format)
+        - setup_summary.json (summary of created resources)
+
+    Prerequisites:
+        - AWS CLI configured with admin permissions
+        - boto3 installed (pip install boto3)
+    """
+    cmd = f"uv run python -m putplace.scripts.setup_aws_iam_users --region {region}"
+    if skip_buckets:
+        cmd += " --skip-buckets"
+    c.run(cmd)
+
+
+@task
+def configure(
+    c,
+    envtype=None,
+    mongodb_url="mongodb://localhost:27017",
+    storage_backend="local",
+    s3_bucket=None,
+    aws_region="eu-west-1",
+    admin_username="admin",
+    admin_email="admin@example.com",
+    config_file="ppserver.toml",
+    setup_iam=False,
+    skip_buckets=False,
+):
+    """Generate ppserver.toml configuration file with environment-specific settings.
+
+    Optionally creates AWS IAM users, policies, and S3 buckets in one command.
+
+    Args:
+        envtype: Environment type (dev, test, prod) - applies environment-specific defaults
+        mongodb_url: MongoDB connection string
+        storage_backend: Storage backend ('local' or 's3')
+        s3_bucket: S3 bucket name (required for s3 backend, auto-suffixed with -envtype)
+        aws_region: AWS region
+        admin_username: Admin username
+        admin_email: Admin email
+        config_file: Output configuration file path
+        setup_iam: Create AWS IAM users, policies, and S3 buckets
+        skip_buckets: Skip S3 bucket creation (use with --setup-iam if buckets exist)
+
+    Examples:
+        # ONE COMMAND SETUP: Create IAM users AND generate config for prod
+        invoke configure --envtype=prod --setup-iam \\
+            --mongodb-url="mongodb+srv://user:pass@cluster.mongodb.net/" \\
+            --storage-backend=s3 \\
+            --s3-bucket=putplace
+
+        # This creates:
+        # 1. IAM users (putplace-dev, putplace-test, putplace-prod)
+        # 2. S3 buckets (putplace-dev, putplace-test, putplace-prod)
+        # 3. Credentials in aws_credentials_output/
+        # 4. ppserver.toml with prod configuration (uses putplace-prod bucket)
+        #
+        # Note: The bucket name "putplace" is automatically suffixed with "-prod"
+        #       to create "putplace-prod" when --envtype=prod is specified
+
+        # Just configure dev environment (IAM already set up)
+        invoke configure --envtype=dev --storage-backend=s3 --s3-bucket=putplace
+        # Creates config using putplace-dev bucket
+
+        # Configure for test environment
+        invoke configure --envtype=test --storage-backend=s3 --s3-bucket=putplace
+        # Creates config using putplace-test bucket
+
+        # Configure for prod with MongoDB Atlas and S3
+        invoke configure --envtype=prod \\
+            --mongodb-url="mongodb+srv://user:pass@cluster.mongodb.net/" \\
+            --storage-backend=s3 \\
+            --s3-bucket=putplace
+        # Creates config using putplace-prod bucket
+
+        # Local storage (no S3, no envtype needed)
+        invoke configure --storage-backend=local
+
+    Workflow Option 1 (Recommended - One Command):
+        invoke configure --envtype=prod --setup-iam \\
+            --storage-backend=s3 --s3-bucket=putplace
+        # Bucket becomes: putplace-prod
+
+    Workflow Option 2 (Separate Steps):
+        1. invoke setup-aws-iam  # Creates putplace-dev, putplace-test, putplace-prod buckets
+        2. invoke configure --envtype=prod --storage-backend=s3 --s3-bucket=putplace
+        # Bucket becomes: putplace-prod
+
+    AWS Credentials:
+        Credentials are NOT stored in ppserver.toml. They are saved in:
+        - aws_credentials_output/.env.{envtype}
+        - aws_credentials_output/aws_credentials (profile format)
+
+        On the server, configure AWS credentials using:
+        - AWS_PROFILE environment variable
+        - ~/.aws/credentials file
+        - IAM instance role (recommended for EC2/ECS)
+
+    Output:
+        Generates ppserver.toml with:
+        - Environment-specific database name (e.g., putplace_prod)
+        - Environment-specific S3 bucket (e.g., putplace-prod)
+        - Instructions for AWS credential configuration
+        - Admin user creation
+    """
+    cmd = f"putplace_configure --non-interactive --skip-checks"
+    cmd += f" --mongodb-url='{mongodb_url}'"
+    cmd += f" --mongodb-database=putplace"
+    cmd += f" --admin-username={admin_username}"
+    cmd += f" --admin-email={admin_email}"
+    cmd += f" --storage-backend={storage_backend}"
+    cmd += f" --config-file={config_file}"
+    cmd += f" --aws-region={aws_region}"
+
+    if envtype:
+        cmd += f" --envtype={envtype}"
+
+    if setup_iam:
+        cmd += " --setup-iam"
+        if skip_buckets:
+            cmd += " --skip-buckets"
+
+    if storage_backend == "s3":
+        if not s3_bucket:
+            print("❌ Error: --s3-bucket required when --storage-backend=s3")
+            return
+        cmd += f" --s3-bucket={s3_bucket}"
+
+    c.run(cmd, pty=True)
+
+
+@task
+def configure_dev(c, mongodb_url):
+    """Configure development environment with S3 storage (shortcut).
+
+    Hardcoded settings for dev:
+    - Environment: dev
+    - Storage: S3 (putplace-dev bucket)
+    - AWS Region: eu-west-1
+    - Setup IAM: Yes (creates AWS resources)
+    - Config file: ppserver-dev.toml
+
+    Only requires MongoDB URL.
+
+    Args:
+        mongodb_url: MongoDB connection string (Atlas or other)
+
+    Examples:
+        # One command to set up everything for dev
+        invoke configure-dev --mongodb-url="mongodb+srv://user:pass@cluster.mongodb.net/"
+
+        # This creates:
+        # - IAM user: putplace-dev
+        # - S3 bucket: putplace-dev
+        # - Config: ppserver-dev.toml
+        # - Credentials: aws_credentials_output/
+
+    Then deploy with:
+        invoke deploy-do-prod --config-file=ppserver-dev.toml --create
+    """
+    configure(
+        c,
+        envtype="dev",
+        mongodb_url=mongodb_url,
+        storage_backend="s3",
+        s3_bucket="putplace",
+        aws_region="eu-west-1",
+        admin_username="admin",
+        admin_email="admin@example.com",
+        config_file="ppserver-dev.toml",
+        setup_iam=True,
+        skip_buckets=False,
+    )
+
+
+@task
+def configure_test(c, mongodb_url):
+    """Configure test environment with S3 storage (shortcut).
+
+    Hardcoded settings for test:
+    - Environment: test
+    - Storage: S3 (putplace-test bucket)
+    - AWS Region: eu-west-1
+    - Setup IAM: Yes (creates AWS resources)
+    - Config file: ppserver-test.toml
+
+    Only requires MongoDB URL.
+
+    Args:
+        mongodb_url: MongoDB connection string (Atlas or other)
+
+    Examples:
+        # One command to set up everything for test
+        invoke configure-test --mongodb-url="mongodb+srv://user:pass@cluster.mongodb.net/"
+
+        # This creates:
+        # - IAM user: putplace-test
+        # - S3 bucket: putplace-test
+        # - Config: ppserver-test.toml
+        # - Credentials: aws_credentials_output/
+
+    Then deploy with:
+        invoke deploy-do-prod --config-file=ppserver-test.toml --create
+    """
+    configure(
+        c,
+        envtype="test",
+        mongodb_url=mongodb_url,
+        storage_backend="s3",
+        s3_bucket="putplace",
+        aws_region="eu-west-1",
+        admin_username="admin",
+        admin_email="admin@example.com",
+        config_file="ppserver-test.toml",
+        setup_iam=True,
+        skip_buckets=False,
+    )
+
+
+@task
+def configure_prod(c, mongodb_url):
+    """Configure production environment with S3 storage (shortcut).
+
+    Hardcoded settings for prod:
+    - Environment: prod
+    - Storage: S3 (putplace-prod bucket)
+    - AWS Region: eu-west-1
+    - Setup IAM: Yes (creates AWS resources)
+    - Config file: ppserver-prod.toml
+
+    Only requires MongoDB URL.
+
+    Args:
+        mongodb_url: MongoDB connection string (Atlas or other)
+
+    Examples:
+        # One command to set up everything for production
+        invoke configure-prod --mongodb-url="mongodb+srv://user:pass@cluster.mongodb.net/"
+
+        # This creates:
+        # - IAM user: putplace-prod
+        # - S3 bucket: putplace-prod
+        # - Config: ppserver-prod.toml
+        # - Credentials: aws_credentials_output/
+
+    Then deploy with:
+        invoke deploy-do-prod  # Reads ppserver-prod.toml automatically
+        # Or:
+        invoke deploy-do-prod --create
+    """
+    configure(
+        c,
+        envtype="prod",
+        mongodb_url=mongodb_url,
+        storage_backend="s3",
+        s3_bucket="putplace",
+        aws_region="eu-west-1",
+        admin_username="admin",
+        admin_email="admin@example.com",
+        config_file="ppserver-prod.toml",
+        setup_iam=True,
+        skip_buckets=False,
+    )
+
+
+@task
+def atlas_resume(c, cluster):
+    """Resume a paused MongoDB Atlas cluster.
+
+    Takes 5-10 minutes for cluster to be fully operational.
+
+    Args:
+        cluster: Cluster name
+
+    Examples:
+        invoke atlas-resume --cluster=testcluster
+    """
+    c.run(f"uv run python -m putplace.scripts.atlas_cluster_control resume --cluster {cluster}")
+
+
+@task
+def setup_apprunner_fixed_ip(c, region="eu-west-1", project_name="putplace"):
+    """Setup fixed IP address for AppRunner instance (for MongoDB Atlas).
+
+    Creates VPC infrastructure with NAT Gateway to provide a static Elastic IP
+    for AppRunner egress traffic. This is required for MongoDB Atlas IP whitelisting.
+
+    Args:
+        region: AWS region (default: eu-west-1)
+        project_name: Project name for resource tagging (default: putplace)
+
+    Examples:
+        invoke setup-apprunner-fixed-ip
+        invoke setup-apprunner-fixed-ip --region=us-east-1
+        invoke setup-apprunner-fixed-ip --region=eu-west-1 --project-name=myapp
+
+    Cost: ~$32/month for NAT Gateway + data transfer costs
+
+    See: APPRUNNER_FIXED_IP.md for detailed documentation
+    """
+    c.run(f"uv run python -m putplace.scripts.setup_apprunner_fixed_ip --region {region} --project-name {project_name}")
+
+
+@task
+def update_apprunner_vpc(c, service, vpc_connector_arn, region="eu-west-1", wait=True):
+    """Update AppRunner service to use VPC Connector for fixed IP.
+
+    Args:
+        service: AppRunner service name or ARN
+        vpc_connector_arn: VPC Connector ARN to use
+        region: AWS region (default: eu-west-1)
+        wait: Wait for update to complete (default: True)
+
+    Examples:
+        invoke update-apprunner-vpc \\
+            --service=putplace-service \\
+            --vpc-connector-arn="arn:aws:apprunner:eu-west-1:xxx:vpcconnector/putplace-vpc-connector/1/xxx"
+
+        invoke update-apprunner-vpc \\
+            --service=putplace-service \\
+            --vpc-connector-arn="arn:..." \\
+            --region=us-east-1 \\
+            --wait=False
+
+    Prerequisites:
+        Run setup-apprunner-fixed-ip first to create VPC Connector
+
+    See: APPRUNNER_FIXED_IP.md for detailed documentation
+    """
+    wait_flag = "--wait" if wait else ""
+    c.run(f"uv run python -m putplace.scripts.update_apprunner_vpc {service} --vpc-connector-arn '{vpc_connector_arn}' --region {region} {wait_flag}")
+
+
+@task
+def deploy_do(
+    c,
+    droplet_name="putplace-droplet",
+    ip=None,
+    create=False,
+    region="fra1",
+    size="s-1vcpu-1gb",
+    domain=None,
+    version="latest",
+    mongodb_url="mongodb://localhost:27017",
+    storage_backend="local",
+    storage_path="/var/putplace/storage",
+    s3_bucket=None,
+    aws_region="eu-west-1",
+    aws_credentials_dir="./aws_credentials_output",
+    aws_profile=None,
+):
+    """Deploy PutPlace to Digital Ocean droplet from PyPI.
+
+    By default, updates existing 'putplace-droplet' if it exists.
+    Use --create to force new droplet creation.
+
+    Installs PutPlace from PyPI and uses a locally-generated ppserver.toml
+    configuration file. The configuration is generated based on the parameters
+    you provide.
+
+    Args:
+        droplet_name: Name for the droplet (for lookup or creation)
+        ip: Existing droplet IP address (skip creation)
+        create: Create a new droplet (requires droplet_name)
+        region: Digital Ocean region (default: fra1/Frankfurt)
+        size: Droplet size (default: s-1vcpu-1gb, $6/month)
+        domain: Domain name for nginx and SSL (optional)
+        version: PutPlace version from PyPI (default: latest)
+        mongodb_url: MongoDB connection string (default: mongodb://localhost:27017)
+        storage_backend: Storage backend - 'local' or 's3' (default: local)
+        storage_path: Path for local storage (default: /var/putplace/storage)
+        s3_bucket: S3 bucket name (required if storage_backend=s3)
+        aws_region: AWS region (default: eu-west-1)
+        aws_credentials_dir: Directory with AWS credentials (default: ./aws_credentials_output)
+        aws_profile: AWS profile name (e.g., putplace-prod)
+
+    Examples:
+        # FIRST TIME: Create new droplet with local storage
+        invoke deploy-do --create
+
+        # NORMAL USE: Deploy/update to existing droplet (default name)
+        invoke deploy-do
+
+        # Deploy with MongoDB Atlas and local storage
+        invoke deploy-do --mongodb-url="mongodb+srv://user:pass@cluster.mongodb.net/"
+
+        # Deploy with MongoDB Atlas and S3 storage
+        invoke deploy-do \\
+            --mongodb-url="mongodb+srv://user:pass@cluster.mongodb.net/" \\
+            --storage-backend=s3 \\
+            --s3-bucket=putplace-prod
+
+        # Deploy with S3 and AWS credentials
+        invoke deploy-do \\
+            --storage-backend=s3 \\
+            --s3-bucket=putplace-prod \\
+            --aws-profile=putplace-prod \\
+            --aws-credentials-dir=./aws_credentials_output
+
+        # Deploy specific version
+        invoke deploy-do --version=0.7.0
+
+        # Deploy with domain
+        invoke deploy-do --domain=api.example.com
+
+        # Create with custom name
+        invoke deploy-do --create --droplet-name=putplace-prod
+
+    Prerequisites:
+        - Digital Ocean API token in DIGITALOCEAN_TOKEN env var
+        - SSH key added to Digital Ocean account
+        - doctl CLI installed: brew install doctl
+        - putplace installed locally: pip install putplace
+        - For S3: AWS credentials configured (~/.aws/credentials or environment)
+
+    Pricing:
+        - Basic droplet (1GB RAM): $6/month
+        - Droplet with MongoDB: $12/month recommended (2GB RAM)
+
+    See: DIGITALOCEAN_DEPLOYMENT.md for detailed documentation
+    """
+    import sys
+
+    # Check for doctl
+    result = c.run("which doctl", warn=True, hide=True)
+    if result.failed:
+        print("❌ Error: doctl not found. Install with: brew install doctl")
+        sys.exit(1)
+
+    # Check for putplace_configure (needed to generate config)
+    result = c.run("which putplace_configure", warn=True, hide=True)
+    if result.failed:
+        print("❌ Error: putplace not installed. Install with: pip install putplace")
+        sys.exit(1)
+
+    # Build command
+    cmd = "uv run python -m putplace.scripts.deploy_digitalocean"
+
+    if create:
+        cmd += " --create-droplet"
+
+    if droplet_name:
+        cmd += f" --droplet-name={droplet_name}"
+
+    if ip:
+        cmd += f" --ip={ip}"
+
+    if region != "fra1":
+        cmd += f" --region={region}"
+
+    if size != "s-1vcpu-1gb":
+        cmd += f" --size={size}"
+
+    if domain:
+        cmd += f" --domain={domain}"
+
+    if version != "latest":
+        cmd += f" --version={version}"
+
+    if mongodb_url != "mongodb://localhost:27017":
+        cmd += f" --mongodb-url='{mongodb_url}'"
+
+    if storage_backend != "local":
+        cmd += f" --storage-backend={storage_backend}"
+
+    if storage_path != "/var/putplace/storage":
+        cmd += f" --storage-path={storage_path}"
+
+    if s3_bucket:
+        cmd += f" --s3-bucket={s3_bucket}"
+
+    if aws_region != "eu-west-1":
+        cmd += f" --aws-region={aws_region}"
+
+    if aws_credentials_dir != "./aws_credentials_output":
+        cmd += f" --aws-credentials-dir={aws_credentials_dir}"
+
+    if aws_profile:
+        cmd += f" --aws-profile={aws_profile}"
+
+    c.run(cmd, pty=True)
+
+
+def _deploy_with_config(
+    c,
+    config_file,
+    create=False,
+    domain=None,
+    version="latest",
+    droplet_name=None,
+):
+    """Internal helper to deploy using a config file.
+
+    This is used by deploy-do-dev, deploy-do-test, and deploy-do-prod shortcuts.
+    """
+    import sys
+    import tomllib
+    from pathlib import Path
+
+    # Read TOML config file
+    config_path = Path(config_file)
+    if not config_path.exists():
+        print(f"❌ Error: Config file not found: {config_file}")
+        print(f"\nGenerate it with:")
+        envtype = "prod" if "prod" in config_file else "dev" if "dev" in config_file else "test"
+        print(f"  invoke configure-{envtype} --mongodb-url='mongodb+srv://...'")
+        sys.exit(1)
+
+    print(f"→ Reading configuration from: {config_file}")
+    with open(config_path, "rb") as f:
+        config = tomllib.load(f)
+
+    # Extract configuration values
+    mongodb_url = config.get("mongodb", {}).get("url", "mongodb://localhost:27017")
+    storage_backend = config.get("storage", {}).get("backend", "local")
+    s3_bucket = config.get("storage", {}).get("s3_bucket")
+    aws_region = config.get("aws", {}).get("region", "eu-west-1")
+
+    # Infer environment from filename (ppserver-prod.toml -> prod)
+    if droplet_name is None:
+        if "prod" in config_file:
+            envtype = "prod"
+        elif "dev" in config_file:
+            envtype = "dev"
+        elif "test" in config_file:
+            envtype = "test"
+        else:
+            envtype = "prod"  # default
+        droplet_name = f"putplace-{envtype}"
+
+    # Infer AWS profile from droplet name
+    aws_profile = droplet_name  # putplace-prod -> putplace-prod profile
+
+    print(f"✓ Configuration loaded:")
+    print(f"  Droplet: {droplet_name}")
+    print(f"  MongoDB: {mongodb_url.split('@')[1] if '@' in mongodb_url else 'localhost'}")
+    print(f"  Storage: {storage_backend}")
+    if storage_backend == "s3":
+        print(f"  S3 Bucket: {s3_bucket}")
+        print(f"  AWS Profile: {aws_profile}")
+    print()
+
+    # Validate required settings for S3
+    if storage_backend == "s3" and not s3_bucket:
+        print(f"❌ Error: S3 backend specified but no s3_bucket in config")
+        sys.exit(1)
+
+    deploy_do(
+        c,
+        droplet_name=droplet_name,
+        create=create,
+        domain=domain,
+        version=version,
+        mongodb_url=mongodb_url,
+        storage_backend=storage_backend,
+        s3_bucket=s3_bucket,
+        aws_region=aws_region,
+        aws_credentials_dir="./aws_credentials_output",
+        aws_profile=aws_profile,
+    )
+
+
+@task
+def deploy_do_dev(c, create=False, domain=None, version="latest"):
+    """Deploy to development environment (reads ppserver-dev.toml).
+
+    Shortcut for deploying to dev with all config from ppserver-dev.toml.
+
+    Args:
+        create: Create new droplet (default: False)
+        domain: Optional domain name for SSL
+        version: PutPlace version from PyPI (default: latest)
+
+    Examples:
+        # Deploy to existing dev droplet
+        invoke deploy-do-dev
+
+        # Create new dev droplet
+        invoke deploy-do-dev --create
+
+        # With domain
+        invoke deploy-do-dev --create --domain=dev.example.com
+
+    Prerequisites:
+        - Run: invoke configure-dev --mongodb-url="..."
+        - This creates: ppserver-dev.toml and AWS resources
+    """
+    _deploy_with_config(c, "ppserver-dev.toml", create, domain, version)
+
+
+@task
+def deploy_do_test(c, create=False, domain=None, version="latest"):
+    """Deploy to test environment (reads ppserver-test.toml).
+
+    Shortcut for deploying to test with all config from ppserver-test.toml.
+
+    Args:
+        create: Create new droplet (default: False)
+        domain: Optional domain name for SSL
+        version: PutPlace version from PyPI (default: latest)
+
+    Examples:
+        # Deploy to existing test droplet
+        invoke deploy-do-test
+
+        # Create new test droplet
+        invoke deploy-do-test --create
+
+        # With domain
+        invoke deploy-do-test --create --domain=test.example.com
+
+    Prerequisites:
+        - Run: invoke configure-test --mongodb-url="..."
+        - This creates: ppserver-test.toml and AWS resources
+    """
+    _deploy_with_config(c, "ppserver-test.toml", create, domain, version)
+
+
+@task
+def deploy_do_prod(c, create=False, domain=None, version="latest"):
+    """Deploy to production environment (reads ppserver-prod.toml).
+
+    Shortcut for deploying to prod with all config from ppserver-prod.toml.
+
+    Args:
+        create: Create new droplet (default: False)
+        domain: Optional domain name for SSL
+        version: PutPlace version from PyPI (default: latest)
+
+    Examples:
+        # Deploy to existing prod droplet
+        invoke deploy-do-prod
+
+        # Create new prod droplet
+        invoke deploy-do-prod --create
+
+        # With domain
+        invoke deploy-do-prod --create --domain=api.example.com
+
+    Prerequisites:
+        - Run: invoke configure-prod --mongodb-url="..."
+        - This creates: ppserver-prod.toml and AWS resources
+    """
+    _deploy_with_config(c, "ppserver-prod.toml", create, domain, version)
+
+
+@task
+def deploy(c, version="latest"):
+    """Quick deploy to existing putplace-droplet (most common usage).
+
+    This is a shortcut for: invoke deploy-do --droplet-name=putplace-droplet
+
+    Args:
+        version: PutPlace version from PyPI (default: latest)
+
+    Examples:
+        # Deploy latest version to existing droplet
+        invoke deploy
+
+        # Deploy specific version
+        invoke deploy --version=0.7.0
+
+    First time setup:
+        invoke deploy-do --create
+    """
+    deploy_do(c, droplet_name="putplace-droplet", version=version)
+
+
+@task
+def update_do(c, droplet_name=None, ip=None, branch="main"):
+    """Quick update of PutPlace code on Digital Ocean droplet.
+
+    Pulls latest code and restarts service. Much faster than full deployment.
+    Use this for regular updates after initial deployment.
+
+    Args:
+        droplet_name: Droplet name (will lookup IP)
+        ip: Droplet IP address
+        branch: Git branch to deploy (default: main)
+
+    Examples:
+        # Update by droplet name (default)
+        invoke update-do --droplet-name=putplace-droplet
+
+        # Update by IP
+        invoke update-do --ip=165.22.xxx.xxx
+
+        # Update with specific branch
+        invoke update-do --ip=165.22.xxx.xxx --branch=develop
+
+    See: DIGITALOCEAN_DEPLOYMENT.md for detailed documentation
+    """
+    import sys
+
+    if not droplet_name and not ip:
+        print("❌ Error: Must provide either --droplet-name or --ip")
+        sys.exit(1)
+
+    cmd = "uv run python -m putplace.scripts.update_deployment"
+
+    if droplet_name:
+        cmd += f" --droplet-name={droplet_name}"
+    elif ip:
+        cmd += f" --ip={ip}"
+
+    if branch != "main":
+        cmd += f" --branch={branch}"
+
+    c.run(cmd, pty=True)
+
+
+@task
+def ssh_do(c, droplet_name=None, ip=None):
+    """SSH into Digital Ocean droplet.
+
+    Args:
+        droplet_name: Droplet name (will lookup IP)
+        ip: Droplet IP address
+
+    Examples:
+        invoke ssh-do --droplet-name=putplace-droplet
+        invoke ssh-do --ip=165.22.xxx.xxx
+    """
+    import sys
+
+    if not droplet_name and not ip:
+        print("❌ Error: Must provide either --droplet-name or --ip")
+        sys.exit(1)
+
+    if droplet_name:
+        # Look up IP using doctl
+        result = c.run(
+            f"doctl compute droplet list --format Name,PublicIPv4 --no-header | grep '^{droplet_name}' | awk '{{print $NF}}'",
+            hide=True,
+        )
+        ip = result.stdout.strip()
+        if not ip:
+            print(f"❌ Error: Could not find IP for droplet: {droplet_name}")
+            sys.exit(1)
+        print(f"Connecting to {droplet_name} ({ip})...")
+
+    c.run(f"ssh -o StrictHostKeyChecking=no root@{ip}", pty=True)
+
+
+@task
+def logs_do(c, droplet_name=None, ip=None, follow=False, error=False):
+    """View PutPlace logs on Digital Ocean droplet.
+
+    Args:
+        droplet_name: Droplet name (will lookup IP)
+        ip: Droplet IP address
+        follow: Follow log output (tail -f)
+        error: Show error log instead of access log
+
+    Examples:
+        # View access logs
+        invoke logs-do --droplet-name=putplace-droplet
+
+        # Follow error logs
+        invoke logs-do --ip=165.22.xxx.xxx --error --follow
+
+        # View last 50 lines of access log
+        invoke logs-do --ip=165.22.xxx.xxx
+    """
+    import sys
+
+    if not droplet_name and not ip:
+        print("❌ Error: Must provide either --droplet-name or --ip")
+        sys.exit(1)
+
+    if droplet_name:
+        result = c.run(
+            f"doctl compute droplet list --format Name,PublicIPv4 --no-header | grep '^{droplet_name}' | awk '{{print $NF}}'",
+            hide=True,
+        )
+        ip = result.stdout.strip()
+        if not ip:
+            print(f"❌ Error: Could not find IP for droplet: {droplet_name}")
+            sys.exit(1)
+
+    log_file = "/var/log/putplace/error.log" if error else "/var/log/putplace/access.log"
+    tail_cmd = "tail -f" if follow else "tail -50"
+
+    c.run(
+        f"ssh -o StrictHostKeyChecking=no root@{ip} '{tail_cmd} {log_file}'",
+        pty=True,
+    )
