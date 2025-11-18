@@ -69,9 +69,17 @@ dmypy.json
 
 # Configuration files (actual config files, not templates)
 ppserver.toml
+ppserver-*.toml
+*-config.toml
 
 # Client configuration
 ppclient.conf
+
+# AWS credentials and configuration output
+aws_credentials_output/
+.env
+.env.*
+!.env.example
 
 # Documentation
 docs/_build/

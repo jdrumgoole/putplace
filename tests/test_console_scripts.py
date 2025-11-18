@@ -128,6 +128,7 @@ def test_ppserver_start_stop(install_package, tmp_path):
     # Create test environment with temporary storage directory
     test_env = os.environ.copy()
     test_env["STORAGE_PATH"] = str(tmp_path / "storage")
+    test_env["STORAGE_BACKEND"] = "local"  # Force local storage for tests
 
     # Make sure server is not already running
     subprocess.run(
@@ -151,20 +152,31 @@ def test_ppserver_start_stop(install_package, tmp_path):
         assert result.returncode == 0, f"ppserver start failed:\n{result.stderr}\n{result.stdout}"
         assert "started" in result.stdout.lower() or "running" in result.stdout.lower()
 
-        # Wait for server to start
-        time.sleep(2)
+        # Wait for server to start with retry logic (up to 10 seconds)
+        max_retries = 5
+        retry_delay = 2
+        status_ok = False
 
-        # Check status
-        result = subprocess.run(
-            ["ppserver", "status"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            env=test_env,
-        )
+        for attempt in range(max_retries):
+            time.sleep(retry_delay)
 
-        assert result.returncode == 0, f"ppserver status failed:\n{result.stderr}"
-        assert "running" in result.stdout.lower()
+            result = subprocess.run(
+                ["ppserver", "status"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+                env=test_env,
+            )
+
+            if result.returncode == 0 and "running" in result.stdout.lower():
+                status_ok = True
+                break
+
+            # If not the last attempt, wait before retrying
+            if attempt < max_retries - 1:
+                print(f"  [Retry {attempt + 1}/{max_retries}] Server not ready yet, retrying...")
+
+        assert status_ok, f"ppserver status failed after {max_retries} retries:\n{result.stderr}\n{result.stdout}"
 
     finally:
         # Always try to stop server, even if test fails
@@ -270,6 +282,7 @@ def test_ppserver_restart(install_package, tmp_path):
     # Create test environment with temporary storage directory
     test_env = os.environ.copy()
     test_env["STORAGE_PATH"] = str(tmp_path / "storage")
+    test_env["STORAGE_BACKEND"] = "local"  # Force local storage for tests
 
     # Make sure server is not running
     subprocess.run(

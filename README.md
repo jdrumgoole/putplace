@@ -98,6 +98,17 @@ putplace_configure --non-interactive \
   --s3-bucket my-putplace-bucket \
   --aws-region us-west-2
 
+# Environment-specific configuration (auto-suffixes bucket name)
+# User provides: --s3-bucket=putplace --envtype=prod
+# System creates: putplace-prod bucket
+putplace_configure --non-interactive \
+  --envtype prod \
+  --admin-username admin \
+  --admin-email admin@example.com \
+  --storage-backend s3 \
+  --s3-bucket putplace \
+  --aws-region us-west-2
+
 # Skip validation checks (useful for testing)
 putplace_configure --skip-checks
 

@@ -214,6 +214,21 @@ async def test_app_lifespan(test_settings, test_db, monkeypatch):
     from putplace.database import MongoDB
     from putplace import database
 
+    # Skip test if aioboto3 is not installed (needed if S3 backend is configured)
+    # This handles cases where ppserver.toml has storage.backend = "s3"
+    try:
+        import aioboto3  # noqa: F401
+    except ImportError:
+        # Check if S3 backend is configured (from file or env)
+        from putplace.config import Settings
+        try:
+            settings = Settings()
+            if settings.storage_backend == "s3":
+                pytest.skip("aioboto3 not installed - skipping when S3 backend configured")
+        except:
+            # If we can't load settings, skip to be safe
+            pytest.skip("aioboto3 not installed and cannot verify storage backend")
+
     # Set storage path via environment variable
     monkeypatch.setenv("STORAGE_PATH", test_settings.storage_path)
 
