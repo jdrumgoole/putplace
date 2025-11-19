@@ -23,22 +23,32 @@ PutPlace allows you to:
 
 ### Configuration
 - [Configuration Reference](configuration.md) - All configuration options
-- [Authentication Guide](AUTHENTICATION.md) - Setting up API keys
+- [Authentication Guide](AUTHENTICATION.md) - Setting up JWT and API keys
+- [AWS Credentials Setup](AWS_CREDENTIALS_SETUP.md) - AWS IAM and S3 configuration
 - [Storage Backends](storage.md) - Local and S3 storage configuration
+- [OAuth Setup](OAUTH_SETUP.md) - General OAuth configuration
+- [Google OAuth Setup](GOOGLE_OAUTH_SETUP.md) - Google Sign-In integration
 
 ### Usage
 - [Client Guide](client-guide.md) - Complete client documentation
 - [API Reference](api-reference.md) - REST API documentation
 - [File Upload Workflow](FILE_UPLOAD_WORKFLOW.md) - Understanding the upload process
 
-### Security & Deployment
-- [Security Guide](SECURITY.md) - AWS credentials and security best practices
-- [Deployment Guide](deployment.md) - Production deployment strategies
+### Deployment
+- [Deployment Overview](deployment.md) - Production deployment strategies
+- [Digital Ocean Deployment](DIGITALOCEAN_DEPLOYMENT.md) - Automated Digital Ocean setup
+- [AWS App Runner Deployment](AWS_APPRUNNER_DEPLOYMENT.md) - AWS App Runner guide
+- [App Runner Quick Start](APPRUNNER_QUICKSTART.md) - Quick AWS deployment
+- [Static Website Setup](STATIC_WEBSITE_SETUP.md) - Static file serving
+
+### Operations
+- [Security Guide](SECURITY.md) - Security best practices and credentials
 - [Troubleshooting](troubleshooting.md) - Common issues and solutions
 
 ### Development
 - [Development Guide](development.md) - Contributing to PutPlace
 - [Architecture](architecture.md) - System architecture and design
+- [Changelog](CHANGELOG.md) - Version history and release notes
 
 ## Features
 
@@ -203,7 +213,10 @@ CLIENT_QUICKSTART
 
 configuration
 AUTHENTICATION
+AWS_CREDENTIALS_SETUP
 storage
+OAUTH_SETUP
+GOOGLE_OAUTH_SETUP
 ```
 
 ```{toctree}
@@ -217,9 +230,19 @@ FILE_UPLOAD_WORKFLOW
 
 ```{toctree}
 :maxdepth: 2
-:caption: Operations
+:caption: Deployment
 
 deployment
+DIGITALOCEAN_DEPLOYMENT
+AWS_APPRUNNER_DEPLOYMENT
+APPRUNNER_QUICKSTART
+STATIC_WEBSITE_SETUP
+```
+
+```{toctree}
+:maxdepth: 2
+:caption: Operations
+
 SECURITY
 troubleshooting
 ```
@@ -230,6 +253,7 @@ troubleshooting
 
 development
 architecture
+CHANGELOG
 ```
 
 ## Indices and Tables
