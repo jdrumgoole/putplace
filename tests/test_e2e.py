@@ -299,16 +299,15 @@ async def test_e2e_real_server_and_client_with_upload(worker_id):
         # Important: Use "users" collection (not "users_test") - this is what the server will use
         test_db.users_collection = test_db_instance["users"]
 
-        # Create a test user with username/password
+        # Create a test user with email/password
         from putplace.user_auth import get_password_hash
         from datetime import datetime
-        test_username = "e2e_test_user"
+        test_email = "e2e_test@example.com"
         test_password = "e2e_test_password"
         hashed_password = get_password_hash(test_password)
 
         await test_db.users_collection.insert_one({
-            "username": test_username,
-            "email": "e2e_test@example.com",
+            "email": test_email,
             "hashed_password": hashed_password,
             "full_name": "E2E Test User",
             "is_active": True,
@@ -316,7 +315,7 @@ async def test_e2e_real_server_and_client_with_upload(worker_id):
         })
 
         # Verify user was created
-        user_doc = await test_db.users_collection.find_one({"username": test_username})
+        user_doc = await test_db.users_collection.find_one({"email": test_email})
         assert user_doc is not None, "Test user not found in database after creation"
 
         # Start uvicorn server in subprocess
@@ -383,10 +382,10 @@ async def test_e2e_real_server_and_client_with_upload(worker_id):
             print(f"\n=== SERVER INFO ===")
             print(f"Health check response: {settings_response.json()}")
 
-            # Test username/password authentication with server - login to get JWT token
+            # Test email/password authentication with server - login to get JWT token
             login_response = httpx.post(
                 f"http://127.0.0.1:{server_port}/api/login",
-                json={"username": test_username, "password": test_password},
+                json={"email": test_email, "password": test_password},
                 timeout=5.0,
             )
             if login_response.status_code != 200:
@@ -394,7 +393,7 @@ async def test_e2e_real_server_and_client_with_upload(worker_id):
                 print(f"Status: {login_response.status_code}")
                 print(f"Response: {login_response.text}")
                 # Check if user is still in database
-                check_user = await test_db.users_collection.find_one({"username": test_username})
+                check_user = await test_db.users_collection.find_one({"email": test_email})
                 print(f"User still in DB: {check_user is not None}")
                 if check_user:
                     print(f"User doc: {check_user}")
@@ -436,7 +435,7 @@ async def test_e2e_real_server_and_client_with_upload(worker_id):
                     "uv", "run", "python", "-m", "putplace.ppclient",
                     "--path", str(test_file1),
                     "--url", f"http://127.0.0.1:{server_port}/put_file",
-                    "--username", test_username,
+                    "--email", test_email,
                     "--password", test_password,
                 ],
                 capture_output=True,
@@ -475,7 +474,7 @@ async def test_e2e_real_server_and_client_with_upload(worker_id):
                     "uv", "run", "python", "-m", "putplace.ppclient",
                     "--path", str(test_file2),
                     "--url", f"http://127.0.0.1:{server_port}/put_file",
-                    "--username", test_username,
+                    "--email", test_email,
                     "--password", test_password,
                 ],
                 capture_output=True,
@@ -505,7 +504,7 @@ async def test_e2e_real_server_and_client_with_upload(worker_id):
                     "uv", "run", "python", "-m", "putplace.ppclient",
                     "--path", str(duplicate_file),
                     "--url", f"http://127.0.0.1:{server_port}/put_file",
-                    "--username", test_username,
+                    "--email", test_email,
                     "--password", test_password,
                 ],
                 capture_output=True,

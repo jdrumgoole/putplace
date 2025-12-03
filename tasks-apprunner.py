@@ -10,6 +10,8 @@ Usage:
     invoke trigger-apprunner-deploy
 """
 
+import os
+
 from invoke import task
 
 
@@ -350,7 +352,16 @@ def deploy_apprunner(
 
     try:
         # Get or create instance role ARN
-        instance_role_arn = "arn:aws:iam::230950121080:role/AppRunnerPutPlaceInstanceRole"
+        # Get AWS account ID from environment or use AWS CLI
+        aws_account_id = os.getenv("AWS_ACCOUNT_ID")
+        if not aws_account_id:
+            result = c.run("aws sts get-caller-identity --query Account --output text", hide=True, warn=True)
+            if result.ok:
+                aws_account_id = result.stdout.strip()
+            else:
+                print("Error: Could not determine AWS account ID. Set AWS_ACCOUNT_ID environment variable.")
+                return
+        instance_role_arn = f"arn:aws:iam::{aws_account_id}:role/AppRunnerPutPlaceInstanceRole"
 
         create_cmd = f"""aws apprunner create-service \\
             --service-name {service_name} \\

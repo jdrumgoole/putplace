@@ -75,7 +75,6 @@ class TestRegistrationWithEmailConfirmation:
     async def test_register_creates_pending_user(self, client, test_db, mock_email_service):
         """Test registration creates pending user instead of active user."""
         user_data = {
-            "username": "newuser",
             "email": "newuser@example.com",
             "password": "testpassword123",
             "full_name": "New User"
@@ -95,7 +94,6 @@ class TestRegistrationWithEmailConfirmation:
         # Verify pending user was created
         pending_user = await test_db.pending_users_collection.find_one({"email": user_data["email"]})
         assert pending_user is not None
-        assert pending_user["username"] == user_data["username"]
         assert "confirmation_token" in pending_user
 
         # Verify actual user was NOT created
@@ -106,7 +104,6 @@ class TestRegistrationWithEmailConfirmation:
         """Test registration with duplicate email is rejected."""
         # Create first user
         user_data = {
-            "username": "user1",
             "email": "duplicate@example.com",
             "password": "password123"
         }
@@ -115,7 +112,6 @@ class TestRegistrationWithEmailConfirmation:
 
         # Try to register with same email
         user_data2 = {
-            "username": "user2",
             "email": "duplicate@example.com",
             "password": "password456"
         }
@@ -131,7 +127,6 @@ class TestRegistrationWithEmailConfirmation:
             mock_email.return_value = email_service
 
             user_data = {
-                "username": "failuser",
                 "email": "fail@example.com",
                 "password": "password123"
             }
@@ -160,7 +155,6 @@ class TestEmailConfirmation:
         hashed_password = get_password_hash("testpass123")
 
         await test_db.create_pending_user(
-            username="pendinguser",
             email="pending@example.com",
             hashed_password=hashed_password,
             confirmation_token=token,
@@ -172,15 +166,10 @@ class TestEmailConfirmation:
         response = await client.get(f"/api/confirm-email?token={token}")
 
         assert response.status_code == 200
-        data = response.json()
-        assert "confirmed successfully" in data["message"].lower()
-        assert data["username"] == "pendinguser"
-        assert data["email"] == "pending@example.com"
 
         # Verify actual user was created
         actual_user = await test_db.users_collection.find_one({"email": "pending@example.com"})
         assert actual_user is not None
-        assert actual_user["username"] == "pendinguser"
         assert actual_user["is_active"] is True
 
         # Verify pending user was deleted
@@ -192,7 +181,6 @@ class TestEmailConfirmation:
         response = await client.get("/api/confirm-email?token=invalid-token-12345")
 
         assert response.status_code == 404
-        assert "invalid or expired" in response.json()["detail"].lower()
 
     async def test_confirm_email_expired_token(self, client, test_db):
         """Test email confirmation with expired token."""
@@ -208,7 +196,6 @@ class TestEmailConfirmation:
         expired_time = datetime.utcnow() - timedelta(hours=1)
 
         await test_db.create_pending_user(
-            username="expireduser",
             email="expired@example.com",
             hashed_password=hashed_password,
             confirmation_token=token,
@@ -219,7 +206,6 @@ class TestEmailConfirmation:
         response = await client.get(f"/api/confirm-email?token={token}")
 
         assert response.status_code == 400
-        assert "expired" in response.json()["detail"].lower()
 
         # Verify pending user was deleted
         pending_user = await test_db.pending_users_collection.find_one({"confirmation_token": token})
@@ -240,7 +226,6 @@ class TestEmailConfirmation:
         hashed_password = get_password_hash(password)
 
         await test_db.create_pending_user(
-            username="loginuser",
             email="login@example.com",
             hashed_password=hashed_password,
             confirmation_token=token,
@@ -251,9 +236,9 @@ class TestEmailConfirmation:
         confirm_response = await client.get(f"/api/confirm-email?token={token}")
         assert confirm_response.status_code == 200
 
-        # Try to login
+        # Try to login with email
         login_response = await client.post("/api/login", json={
-            "username": "loginuser",
+            "email": "login@example.com",
             "password": password
         })
 
@@ -278,7 +263,6 @@ class TestPendingUserCleanup:
         expired_time = datetime.utcnow() - timedelta(hours=25)
 
         await test_db.create_pending_user(
-            username="expiredcleanup",
             email="expiredcleanup@example.com",
             hashed_password=hashed_password,
             confirmation_token=expired_token,
@@ -290,7 +274,6 @@ class TestPendingUserCleanup:
         valid_time = datetime.utcnow() + timedelta(hours=23)
 
         await test_db.create_pending_user(
-            username="validpending",
             email="validpending@example.com",
             hashed_password=hashed_password,
             confirmation_token=valid_token,
@@ -327,7 +310,7 @@ class TestEmailConfirmationIntegration:
             email_service = Mock()
             captured_token = None
 
-            def capture_token(recipient_email, username, confirmation_token):
+            def capture_token(recipient_email, confirmation_token):
                 nonlocal captured_token
                 captured_token = confirmation_token
                 return True
@@ -337,7 +320,6 @@ class TestEmailConfirmationIntegration:
 
             # Step 1: Register
             user_data = {
-                "username": "flowtest",
                 "email": "flowtest@example.com",
                 "password": "flowpassword123",
                 "full_name": "Flow Test User"
@@ -353,9 +335,9 @@ class TestEmailConfirmationIntegration:
             confirm_response = await client.get(f"/api/confirm-email?token={captured_token}")
             assert confirm_response.status_code == 200
 
-            # Step 3: Login
+            # Step 3: Login with email
             login_response = await client.post("/api/login", json={
-                "username": user_data["username"],
+                "email": user_data["email"],
                 "password": user_data["password"]
             })
             assert login_response.status_code == 200

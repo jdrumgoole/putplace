@@ -43,8 +43,8 @@ This guide explains the static website infrastructure for putplace.org.
   - Error document: `error.html`
 
 ### 2. CloudFront Distribution
-- **Distribution ID**: `E1HNPSKP2YEUNY`
-- **Domain**: `d293jmofsozqjv.cloudfront.net`
+- **Distribution ID**: `YOUR_DISTRIBUTION_ID`
+- **Domain**: `YOUR_CLOUDFRONT_DOMAIN.cloudfront.net`
 - **Purpose**: CDN with SSL/TLS
 - **Configuration**:
   - HTTPS only (redirect HTTP to HTTPS)
@@ -54,13 +54,13 @@ This guide explains the static website infrastructure for putplace.org.
 
 ### 3. SSL/TLS Certificate
 - **Service**: AWS Certificate Manager (ACM)
-- **ARN**: `arn:aws:acm:us-east-1:230950121080:certificate/2c313e33-db37-46a1-920b-9c76d7e7e641`
+- **ARN**: `arn:aws:acm:us-east-1:YOUR_AWS_ACCOUNT_ID:certificate/YOUR_CERTIFICATE_ID`
 - **Domains**: `putplace.org`, `www.putplace.org`
 - **Validation**: DNS (automatic via Route 53)
 - **Region**: us-east-1 (required for CloudFront)
 
 ### 4. Route 53 DNS
-- **Hosted Zone**: `Z0368516WAMZPIIC7ZI` (putplace.org)
+- **Hosted Zone**: `YOUR_HOSTED_ZONE_ID` (putplace.org)
 - **Records**:
   - `putplace.org` → Alias A record to CloudFront
   - `www.putplace.org` → Alias A record to CloudFront
@@ -183,7 +183,7 @@ aws iam create-role \
     "Statement": [{
       "Effect": "Allow",
       "Principal": {
-        "Federated": "arn:aws:iam::230950121080:oidc-provider/token.actions.githubusercontent.com"
+        "Federated": "arn:aws:iam::YOUR_AWS_ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
       },
       "Action": "sts:AssumeRoleWithWebIdentity",
       "Condition": {
@@ -210,7 +210,7 @@ aws iam attach-role-policy \
 3. **Add GitHub Secret**:
 ```bash
 # Add AWS_DEPLOY_ROLE_ARN to GitHub repository secrets
-# Value: arn:aws:iam::230950121080:role/GitHubActionsDeployWebsite
+# Value: arn:aws:iam::YOUR_AWS_ACCOUNT_ID:role/GitHubActionsDeployWebsite
 ```
 
 ## Website Content
@@ -263,11 +263,11 @@ python -m http.server 8080
 
 ```bash
 # View distribution status
-aws cloudfront get-distribution --id E1HNPSKP2YEUNY
+aws cloudfront get-distribution --id YOUR_DISTRIBUTION_ID
 
 # Check if deployed
 aws cloudfront get-distribution \
-  --id E1HNPSKP2YEUNY \
+  --id YOUR_DISTRIBUTION_ID \
   --query 'Distribution.Status' \
   --output text
 # Output: Deployed (ready) or InProgress (deploying)
@@ -289,12 +289,12 @@ aws s3api put-bucket-logging \
 ```bash
 # Invalidate specific files
 aws cloudfront create-invalidation \
-  --distribution-id E1HNPSKP2YEUNY \
+  --distribution-id YOUR_DISTRIBUTION_ID \
   --paths '/index.html' '/about.html'
 
 # Invalidate everything
 aws cloudfront create-invalidation \
-  --distribution-id E1HNPSKP2YEUNY \
+  --distribution-id YOUR_DISTRIBUTION_ID \
   --paths '/*'
 ```
 
@@ -305,7 +305,7 @@ aws cloudfront create-invalidation \
 aws cloudwatch get-metric-statistics \
   --namespace AWS/CloudFront \
   --metric-name Requests \
-  --dimensions Name=DistributionId,Value=E1HNPSKP2YEUNY \
+  --dimensions Name=DistributionId,Value=YOUR_DISTRIBUTION_ID \
   --start-time 2024-01-01T00:00:00Z \
   --end-time 2024-01-02T00:00:00Z \
   --period 3600 \
@@ -319,7 +319,7 @@ aws cloudwatch get-metric-statistics \
 ```bash
 # View all DNS records for putplace.org
 aws route53 list-resource-record-sets \
-  --hosted-zone-id Z0368516WAMZPIIC7ZI \
+  --hosted-zone-id YOUR_HOSTED_ZONE_ID \
   --query "ResourceRecordSets[?contains(Name, 'putplace.org')]"
 ```
 
@@ -362,7 +362,7 @@ dig @1.1.1.1 putplace.org A +short
 
 **Check CloudFront status:**
 ```bash
-aws cloudfront get-distribution --id E1HNPSKP2YEUNY
+aws cloudfront get-distribution --id YOUR_DISTRIBUTION_ID
 ```
 - Status should be "Deployed"
 - Initial deployment takes 15-20 minutes
@@ -385,7 +385,7 @@ aws s3 ls s3://putplace.org/
 ```bash
 # Check certificate status
 aws acm describe-certificate \
-  --certificate-arn arn:aws:acm:us-east-1:230950121080:certificate/2c313e33-db37-46a1-920b-9c76d7e7e641 \
+  --certificate-arn arn:aws:acm:us-east-1:YOUR_AWS_ACCOUNT_ID:certificate/YOUR_CERTIFICATE_ID \
   --region us-east-1
 
 # Should show Status: ISSUED
@@ -407,12 +407,12 @@ aws s3 cp website/error.html s3://putplace.org/
 ```bash
 # Create manual invalidation
 aws cloudfront create-invalidation \
-  --distribution-id E1HNPSKP2YEUNY \
+  --distribution-id YOUR_DISTRIBUTION_ID \
   --paths '/*'
 
 # Check invalidation status
 aws cloudfront list-invalidations \
-  --distribution-id E1HNPSKP2YEUNY
+  --distribution-id YOUR_DISTRIBUTION_ID
 ```
 
 ## Security Best Practices
@@ -435,7 +435,7 @@ To remove the static website infrastructure:
 ```bash
 # 1. Delete CloudFront distribution
 aws cloudfront delete-distribution \
-  --id E1HNPSKP2YEUNY \
+  --id YOUR_DISTRIBUTION_ID \
   --if-match <ETag>
 
 # 2. Delete S3 bucket contents and bucket
@@ -444,7 +444,7 @@ aws s3api delete-bucket --bucket putplace.org
 
 # 3. Delete ACM certificate
 aws acm delete-certificate \
-  --certificate-arn arn:aws:acm:us-east-1:230950121080:certificate/2c313e33-db37-46a1-920b-9c76d7e7e641 \
+  --certificate-arn arn:aws:acm:us-east-1:YOUR_AWS_ACCOUNT_ID:certificate/YOUR_CERTIFICATE_ID \
   --region us-east-1
 
 # 4. Remove Route 53 DNS records
@@ -470,6 +470,6 @@ invoke deploy-website                    # Deploy from website/ directory
 invoke deploy-website --source-dir=docs  # Deploy from custom directory
 
 # Monitoring tasks
-aws cloudfront get-distribution --id E1HNPSKP2YEUNY  # Check status
+aws cloudfront get-distribution --id YOUR_DISTRIBUTION_ID  # Check status
 aws s3 ls s3://putplace.org/                         # List files
 ```

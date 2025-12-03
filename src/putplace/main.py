@@ -42,7 +42,7 @@ async def ensure_admin_exists(db: MongoDB) -> None:
 
     This function implements a hybrid approach:
     1. If users exist, do nothing
-    2. If PUTPLACE_ADMIN_USERNAME and PUTPLACE_ADMIN_PASSWORD are set, use them
+    2. If PUTPLACE_ADMIN_EMAIL and PUTPLACE_ADMIN_PASSWORD are set, use them
     3. Otherwise, generate a random password and display it once
 
     Args:
@@ -58,11 +58,10 @@ async def ensure_admin_exists(db: MongoDB) -> None:
             return  # Users exist, nothing to do
 
         # Method 1: Try environment variables (best for production/containers)
-        admin_user = os.getenv("PUTPLACE_ADMIN_USERNAME")
-        admin_pass = os.getenv("PUTPLACE_ADMIN_PASSWORD")
         admin_email = os.getenv("PUTPLACE_ADMIN_EMAIL", "admin@localhost")
+        admin_pass = os.getenv("PUTPLACE_ADMIN_PASSWORD")
 
-        if admin_user and admin_pass:
+        if admin_pass:
             # Validate password strength
             if len(admin_pass) < 8:
                 logger.error(
@@ -108,15 +107,14 @@ async def ensure_admin_exists(db: MongoDB) -> None:
         logger.warning("=" * 80)
         logger.warning("🔐 INITIAL ADMIN CREDENTIALS GENERATED")
         logger.warning("=" * 80)
-        logger.warning(f"   Username: admin")
+        logger.warning(f"   Email: admin@localhost")
         logger.warning(f"   Password: {random_password}")
         logger.warning("")
         logger.warning("⚠️  SAVE THESE CREDENTIALS NOW - They won't be shown again!")
         logger.warning("")
         logger.warning("For production, set environment variables instead:")
-        logger.warning("   PUTPLACE_ADMIN_USERNAME=your-admin")
-        logger.warning("   PUTPLACE_ADMIN_PASSWORD=your-secure-password")
         logger.warning("   PUTPLACE_ADMIN_EMAIL=admin@example.com")
+        logger.warning("   PUTPLACE_ADMIN_PASSWORD=your-secure-password")
         logger.warning("=" * 80)
 
         # Also write to a temporary file
@@ -130,7 +128,7 @@ async def ensure_admin_exists(db: MongoDB) -> None:
             creds_file.write_text(
                 f"PutPlace Initial Admin Credentials\n"
                 f"{'=' * 40}\n"
-                f"Username: admin\n"
+                f"Email: admin@localhost\n"
                 f"Password: {random_password}\n"
                 f"Created: {datetime.utcnow()}\n\n"
                 f"⚠️  DELETE THIS FILE after saving credentials!\n"

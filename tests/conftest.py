@@ -22,13 +22,14 @@ def run_configure(
     db_name: str,
     storage_path: Path,
     config_path: Path,
-    admin_username: str = "test_admin",
     admin_email: str = "test@test.local",
     admin_password: str = "test_password_123",
     storage_backend: str = "local",
     s3_bucket: str | None = None,
     aws_region: str = "eu-west-1",
     skip_checks: bool = True,
+    # Keep admin_username parameter for backwards compatibility but ignore it
+    admin_username: str | None = None,
 ) -> tuple[bool, str]:
     """Run putplace_configure in non-interactive mode.
 
@@ -38,13 +39,13 @@ def run_configure(
         db_name: MongoDB database name
         storage_path: Path to storage directory
         config_path: Path to output configuration file
-        admin_username: Admin username (default: test_admin)
         admin_email: Admin email (default: test@test.local)
         admin_password: Admin password (default: test_password_123)
         storage_backend: Storage backend ('local' or 's3', default: local)
         s3_bucket: S3 bucket name (required if storage_backend='s3')
         aws_region: AWS region (default: eu-west-1)
         skip_checks: Skip MongoDB/AWS validation checks (default: True)
+        admin_username: Deprecated, ignored (kept for backwards compatibility)
 
     Returns:
         Tuple of (success: bool, message: str)
@@ -68,7 +69,6 @@ def run_configure(
         "--non-interactive",
         "--mongodb-url", "mongodb://localhost:27017",
         "--mongodb-database", db_name,
-        "--admin-username", admin_username,
         "--admin-email", admin_email,
         "--admin-password", admin_password,
         "--storage-backend", storage_backend,
@@ -217,7 +217,6 @@ async def test_db(test_settings: Settings) -> AsyncGenerator[MongoDB, None]:
     await db.collection.create_index([("hostname", 1), ("filepath", 1)])
 
     # Create indexes for users collection
-    await db.users_collection.create_index("username", unique=True)
     await db.users_collection.create_index("email", unique=True)
 
     # Create indexes for pending users collection

@@ -25,7 +25,7 @@ def sample_config_content():
     """Sample config file content."""
     return """[DEFAULT]
 url = http://config-server:9000/put_file
-username = config-user
+email = config-user@example.com
 password = config-pass
 hostname = config-hostname
 ip = 10.0.0.99
@@ -62,8 +62,8 @@ def test_main_with_config_file(temp_test_dir, temp_config_file, sample_config_co
                 # Verify login was called with credentials from config
                 assert mock_login.called
                 login_call_args = mock_login.call_args[0]
-                base_url, username, password = login_call_args
-                assert username == "config-user"
+                base_url, email, password = login_call_args
+                assert email == "config-user@example.com"
                 assert password == "config-pass"
 
                 # Verify process_path was called with config values
@@ -104,7 +104,7 @@ def test_command_line_overrides_config_file(temp_test_dir, temp_config_file, sam
         "--path", str(temp_test_dir),
         "--config", str(temp_config_file),
         "--url", "http://cli-server:8080/put_file",  # Override URL
-        "--username", "cli-user",  # Override username
+        "--email", "cli-user@example.com",  # Override email
         "--password", "cli-pass",  # Override password
         "--hostname", "cli-hostname",  # Override hostname
         "--dry-run",
@@ -120,8 +120,8 @@ def test_command_line_overrides_config_file(temp_test_dir, temp_config_file, sam
 
                 # Verify CLI credentials were used
                 login_call_args = mock_login.call_args[0]
-                base_url, username, password = login_call_args
-                assert username == "cli-user"
+                base_url, email, password = login_call_args
+                assert email == "cli-user@example.com"
                 assert password == "cli-pass"
 
                 # Verify command line values were used instead of config
@@ -141,7 +141,7 @@ def test_command_line_overrides_config_file(temp_test_dir, temp_config_file, sam
 
 
 def test_environment_variable_api_key(temp_test_dir):
-    """Test that username/password from environment variables are used."""
+    """Test that email/password from environment variables are used."""
     test_args = [
         "ppclient.py",
         "--path", str(temp_test_dir),
@@ -149,11 +149,11 @@ def test_environment_variable_api_key(temp_test_dir):
     ]
 
     # Set environment variables
-    env_username = "env-user"
+    env_email = "env-user@example.com"
     env_password = "env-pass"
 
     with patch("sys.argv", test_args):
-        with patch.dict(os.environ, {"PUTPLACE_USERNAME": env_username, "PUTPLACE_PASSWORD": env_password}):
+        with patch.dict(os.environ, {"PUTPLACE_EMAIL": env_email, "PUTPLACE_PASSWORD": env_password}):
             with patch("putplace.ppclient.process_path") as mock_scan:
                 with patch("putplace.ppclient.login_and_get_token") as mock_login:
                     mock_login.return_value = "mock-jwt-token"
@@ -163,30 +163,30 @@ def test_environment_variable_api_key(temp_test_dir):
 
                     # Verify environment variables were used
                     login_call_args = mock_login.call_args[0]
-                    base_url, username, password = login_call_args
-                    assert username == env_username
+                    base_url, email, password = login_call_args
+                    assert email == env_email
                     assert password == env_password
 
                     assert exit_code == 0
 
 
 def test_cli_overrides_environment_variable(temp_test_dir):
-    """Test that CLI username/password overrides environment variables."""
-    cli_username = "cli-user"
+    """Test that CLI email/password overrides environment variables."""
+    cli_email = "cli-user@example.com"
     cli_password = "cli-pass"
-    env_username = "env-user-should-not-be-used"
+    env_email = "env-user-should-not-be-used@example.com"
     env_password = "env-pass-should-not-be-used"
 
     test_args = [
         "ppclient.py",
         "--path", str(temp_test_dir),
-        "--username", cli_username,
+        "--email", cli_email,
         "--password", cli_password,
         "--dry-run",
     ]
 
     with patch("sys.argv", test_args):
-        with patch.dict(os.environ, {"PUTPLACE_USERNAME": env_username, "PUTPLACE_PASSWORD": env_password}):
+        with patch.dict(os.environ, {"PUTPLACE_EMAIL": env_email, "PUTPLACE_PASSWORD": env_password}):
             with patch("putplace.ppclient.process_path") as mock_scan:
                 with patch("putplace.ppclient.login_and_get_token") as mock_login:
                     mock_login.return_value = "mock-jwt-token"
@@ -196,10 +196,10 @@ def test_cli_overrides_environment_variable(temp_test_dir):
 
                     # Verify CLI values were used, not environment
                     login_call_args = mock_login.call_args[0]
-                    base_url, username, password = login_call_args
-                    assert username == cli_username
+                    base_url, email, password = login_call_args
+                    assert email == cli_email
                     assert password == cli_password
-                    assert username != env_username
+                    assert email != env_email
                     assert password != env_password
 
                     assert exit_code == 0
@@ -207,9 +207,9 @@ def test_cli_overrides_environment_variable(temp_test_dir):
 
 def test_priority_order_cli_env_config(temp_test_dir, temp_config_file):
     """Test configuration priority: CLI > Environment > Config File."""
-    # Config file with username/password
+    # Config file with email/password
     config_content = """[DEFAULT]
-username = config-user
+email = config-user@example.com
 password = config-pass
 url = http://config-server:9000/put_file
 """
@@ -230,36 +230,36 @@ url = http://config-server:9000/put_file
                 mock_scan.return_value = (0, 0, 0, 0)
                 ppclient.main()
                 login_call_args = mock_login.call_args[0]
-                base_url, username, password = login_call_args
-                assert username == "config-user"
+                base_url, email, password = login_call_args
+                assert email == "config-user@example.com"
                 assert password == "config-pass"
 
     # Test 2: Environment overrides config
     with patch("sys.argv", test_args):
-        with patch.dict(os.environ, {"PUTPLACE_USERNAME": "env-user", "PUTPLACE_PASSWORD": "env-pass"}):
+        with patch.dict(os.environ, {"PUTPLACE_EMAIL": "env-user@example.com", "PUTPLACE_PASSWORD": "env-pass"}):
             with patch("putplace.ppclient.process_path") as mock_scan:
                 with patch("putplace.ppclient.login_and_get_token") as mock_login:
                     mock_login.return_value = "mock-jwt-token"
                     mock_scan.return_value = (0, 0, 0, 0)
                     ppclient.main()
                     login_call_args = mock_login.call_args[0]
-                    base_url, username, password = login_call_args
-                    assert username == "env-user"
+                    base_url, email, password = login_call_args
+                    assert email == "env-user@example.com"
                     assert password == "env-pass"
 
     # Test 3: CLI overrides both
-    test_args_with_cli = test_args + ["--username", "cli-user", "--password", "cli-pass"]
+    test_args_with_cli = test_args + ["--email", "cli-user@example.com", "--password", "cli-pass"]
 
     with patch("sys.argv", test_args_with_cli):
-        with patch.dict(os.environ, {"PUTPLACE_USERNAME": "env-user", "PUTPLACE_PASSWORD": "env-pass"}):
+        with patch.dict(os.environ, {"PUTPLACE_EMAIL": "env-user@example.com", "PUTPLACE_PASSWORD": "env-pass"}):
             with patch("putplace.ppclient.process_path") as mock_scan:
                 with patch("putplace.ppclient.login_and_get_token") as mock_login:
                     mock_login.return_value = "mock-jwt-token"
                     mock_scan.return_value = (0, 0, 0, 0)
                     ppclient.main()
                     login_call_args = mock_login.call_args[0]
-                    base_url, username, password = login_call_args
-                    assert username == "cli-user"
+                    base_url, email, password = login_call_args
+                    assert email == "cli-user@example.com"
                     assert password == "cli-pass"
 
 
@@ -388,7 +388,7 @@ def test_default_config_file_locations(temp_test_dir, monkeypatch):
     # Create a config in "current directory"
     current_dir_config = Path("ppclient.conf")
     config_content = """[DEFAULT]
-username = default-location-user
+email = default-location-user@example.com
 password = default-location-pass
 """
 
@@ -428,7 +428,7 @@ def test_without_dry_run_mode(temp_test_dir):
     test_args = [
         "ppclient.py",
         "--path", str(temp_test_dir),
-        "--username", "test-user",
+        "--email", "test-user@example.com",
         "--password", "test-pass",
     ]
 

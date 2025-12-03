@@ -80,7 +80,6 @@ class TestAdminUserCreation:
         # Test that calling with invalid URL returns proper error
         success, message = await create_admin_user(
             mongodb_url="mongodb://nonexistent:27017",
-            username="test",
             email="test@test.com",
             password="pass"
         )
