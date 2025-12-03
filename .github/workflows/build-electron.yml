@@ -38,9 +38,7 @@ jobs:
         run: npm ci
 
       - name: Build and package
-        run: npm run package -- --mac
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run package -- --mac --publish never
 
       - name: List build artifacts
         run: ls -la release/
@@ -76,9 +74,7 @@ jobs:
         run: npm ci
 
       - name: Build and package
-        run: npm run package -- --win
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run package -- --win --publish never
 
       - name: List build artifacts
         run: dir release
@@ -114,9 +110,7 @@ jobs:
         run: npm ci
 
       - name: Build and package
-        run: npm run package -- --linux
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run package -- --linux --publish never
 
       - name: List build artifacts
         run: ls -la release/

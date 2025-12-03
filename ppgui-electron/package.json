@@ -48,10 +48,6 @@
     "directories": {
       "output": "release"
     },
-    "publish": {
-      "provider": "github",
-      "owner": "jdrumgoole",
-      "repo": "putplace"
-    }
+    "publish": null
   }
 }
