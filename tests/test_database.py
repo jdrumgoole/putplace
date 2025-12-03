@@ -460,7 +460,6 @@ async def test_get_files_by_sha256_without_connection():
 async def test_create_user(test_db: MongoDB):
     """Test creating a new user."""
     user_id = await test_db.create_user(
-        username="testuser",
         email="test@example.com",
         hashed_password="hashed_password_123",
         full_name="Test User"
@@ -470,34 +469,12 @@ async def test_create_user(test_db: MongoDB):
     assert isinstance(user_id, str)
 
     # Verify user was created
-    user = await test_db.get_user_by_username("testuser")
+    user = await test_db.get_user_by_email("test@example.com")
     assert user is not None
-    assert user["username"] == "testuser"
     assert user["email"] == "test@example.com"
     assert user["full_name"] == "Test User"
     assert user["is_active"] is True
     assert "created_at" in user
-
-
-@pytest.mark.asyncio
-async def test_create_user_duplicate_username(test_db: MongoDB):
-    """Test that creating a user with duplicate username fails."""
-    from pymongo.errors import DuplicateKeyError
-
-    # Create first user
-    await test_db.create_user(
-        username="duplicate",
-        email="user1@example.com",
-        hashed_password="pass1"
-    )
-
-    # Try to create another user with same username
-    with pytest.raises(DuplicateKeyError, match="Username already exists"):
-        await test_db.create_user(
-            username="duplicate",
-            email="user2@example.com",
-            hashed_password="pass2"
-        )
 
 
 @pytest.mark.asyncio
@@ -507,7 +484,6 @@ async def test_create_user_duplicate_email(test_db: MongoDB):
 
     # Create first user
     await test_db.create_user(
-        username="user1",
         email="duplicate@example.com",
         hashed_password="pass1"
     )
@@ -515,7 +491,6 @@ async def test_create_user_duplicate_email(test_db: MongoDB):
     # Try to create another user with same email
     with pytest.raises(DuplicateKeyError, match="Email already exists"):
         await test_db.create_user(
-            username="user2",
             email="duplicate@example.com",
             hashed_password="pass2"
         )
@@ -526,38 +501,7 @@ async def test_create_user_without_connection():
     """Test that create_user fails without database connection."""
     db = MongoDB()
     with pytest.raises(RuntimeError, match="Database not connected"):
-        await db.create_user("user", "email@test.com", "pass")
-
-
-@pytest.mark.asyncio
-async def test_get_user_by_username(test_db: MongoDB):
-    """Test getting user by username."""
-    # Create a user
-    await test_db.create_user(
-        username="findme",
-        email="findme@example.com",
-        hashed_password="pass123"
-    )
-
-    # Find by username
-    user = await test_db.get_user_by_username("findme")
-    assert user is not None
-    assert user["username"] == "findme"
-
-
-@pytest.mark.asyncio
-async def test_get_user_by_username_not_found(test_db: MongoDB):
-    """Test getting user by username when not found."""
-    user = await test_db.get_user_by_username("nonexistent")
-    assert user is None
-
-
-@pytest.mark.asyncio
-async def test_get_user_by_username_without_connection():
-    """Test that get_user_by_username fails without database connection."""
-    db = MongoDB()
-    with pytest.raises(RuntimeError, match="Database not connected"):
-        await db.get_user_by_username("user")
+        await db.create_user("email@test.com", "pass")
 
 
 @pytest.mark.asyncio
@@ -565,16 +509,14 @@ async def test_get_user_by_email(test_db: MongoDB):
     """Test getting user by email."""
     # Create a user
     await test_db.create_user(
-        username="emailuser",
-        email="find@example.com",
+        email="findme@example.com",
         hashed_password="pass123"
     )
 
     # Find by email
-    user = await test_db.get_user_by_email("find@example.com")
+    user = await test_db.get_user_by_email("findme@example.com")
     assert user is not None
-    assert user["email"] == "find@example.com"
-    assert user["username"] == "emailuser"
+    assert user["email"] == "findme@example.com"
 
 
 @pytest.mark.asyncio

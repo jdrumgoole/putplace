@@ -14,7 +14,6 @@ async def test_register_new_user(client: AsyncClient):
         mock_email.return_value = email_service
 
         user_data = {
-            "username": "testuser",
             "email": "test@example.com",
             "password": "testpassword123",
             "full_name": "Test User"
@@ -39,7 +38,6 @@ async def test_register_user_minimal_data(client: AsyncClient):
         mock_email.return_value = email_service
 
         user_data = {
-            "username": "minimaluser",
             "email": "minimal@example.com",
             "password": "password123"
         }
@@ -53,79 +51,39 @@ async def test_register_user_minimal_data(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_register_duplicate_username(client: AsyncClient, test_db):
-    """Test that duplicate username is rejected (even for pending users)."""
+async def test_register_duplicate_email(client: AsyncClient, test_db):
+    """Test that duplicate email is rejected."""
     from putplace.user_auth import get_password_hash
-    from putplace.email_tokens import generate_confirmation_token, calculate_expiration_time
 
-    # Create a confirmed user with this username first
+    # Create a confirmed user with this email first
     await test_db.create_user(
-        username="duplicateuser",
         email="existing@example.com",
         hashed_password=get_password_hash("password123")
     )
 
-    # Try to register with same username
+    # Try to register with same email
     with patch('putplace.email_service.get_email_service') as mock_email:
         email_service = Mock()
         email_service.send_confirmation_email = Mock(return_value=True)
         mock_email.return_value = email_service
 
         user_data = {
-            "username": "duplicateuser",
-            "email": "user2@example.com",
+            "email": "existing@example.com",
             "password": "password123"
         }
 
-        response2 = await client.post("/api/register", json=user_data)
-        assert response2.status_code == 400
+        response = await client.post("/api/register", json=user_data)
+        assert response.status_code == 400
 
-        data = response2.json()
+        data = response.json()
         assert "detail" in data
-        assert "username" in data["detail"].lower()
-
-
-@pytest.mark.asyncio
-async def test_register_duplicate_email(client: AsyncClient):
-    """Test that duplicate email is rejected."""
-    user_data = {
-        "username": "user1",
-        "email": "duplicate@example.com",
-        "password": "password123"
-    }
-
-    # Register first user
-    response1 = await client.post("/api/register", json=user_data)
-    assert response1.status_code == 200
-
-    # Try to register with same email but different username
-    user_data["username"] = "user2"
-    response2 = await client.post("/api/register", json=user_data)
-    assert response2.status_code == 400
-
-    data = response2.json()
-    assert "detail" in data
-    assert "email" in data["detail"].lower()
-
-
-@pytest.mark.asyncio
-async def test_register_invalid_username_too_short(client: AsyncClient):
-    """Test that username must be at least 3 characters."""
-    user_data = {
-        "username": "ab",  # Too short
-        "email": "test@example.com",
-        "password": "password123"
-    }
-
-    response = await client.post("/api/register", json=user_data)
-    assert response.status_code == 422  # Validation error
+        assert "email" in data["detail"].lower()
 
 
 @pytest.mark.asyncio
 async def test_register_invalid_password_too_short(client: AsyncClient):
     """Test that password must be at least 8 characters."""
     user_data = {
-        "username": "testuser",
         "email": "test@example.com",
         "password": "short"  # Too short
     }
@@ -135,27 +93,26 @@ async def test_register_invalid_password_too_short(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_register_invalid_email(client: AsyncClient):
+async def test_register_valid_email(client: AsyncClient):
     """Test that email field is validated."""
-    # Note: pydantic's email validation is lenient
-    # It will accept strings without @ as long as they're valid
-    # For now, we just verify that a user can be created with an email field
-    # To add stricter email validation, use EmailStr type in models
-    user_data = {
-        "username": "testuser",
-        "email": "test@example.com",  # Valid email
-        "password": "password123"
-    }
+    with patch('putplace.email_service.get_email_service') as mock_email:
+        email_service = Mock()
+        email_service.send_confirmation_email = Mock(return_value=True)
+        mock_email.return_value = email_service
 
-    response = await client.post("/api/register", json=user_data)
-    assert response.status_code == 200  # Should succeed with valid email
+        user_data = {
+            "email": "valid@example.com",
+            "password": "password123"
+        }
+
+        response = await client.post("/api/register", json=user_data)
+        assert response.status_code == 200  # Should succeed with valid email
 
 
 @pytest.mark.asyncio
 async def test_register_missing_required_field(client: AsyncClient):
     """Test that missing required fields are rejected."""
     user_data = {
-        "username": "testuser",
         "email": "test@example.com"
         # Missing password
     }
@@ -172,14 +129,13 @@ async def test_login_success(client: AsyncClient, test_db):
     # Create a confirmed user directly
     password = "loginpassword123"
     await test_db.create_user(
-        username="loginuser",
         email="login@example.com",
         hashed_password=get_password_hash(password)
     )
 
-    # Now try to login
+    # Now try to login with email
     login_data = {
-        "username": "loginuser",
+        "email": "login@example.com",
         "password": password
     }
 
@@ -195,19 +151,19 @@ async def test_login_success(client: AsyncClient, test_db):
 
 
 @pytest.mark.asyncio
-async def test_login_wrong_password(client: AsyncClient):
+async def test_login_wrong_password(client: AsyncClient, test_db):
     """Test login with wrong password."""
-    # First register a user
-    register_data = {
-        "username": "wrongpwuser",
-        "email": "wrongpw@example.com",
-        "password": "correctpassword123"
-    }
-    await client.post("/api/register", json=register_data)
+    from putplace.user_auth import get_password_hash
+
+    # Create confirmed user
+    await test_db.create_user(
+        email="wrongpw@example.com",
+        hashed_password=get_password_hash("correctpassword123")
+    )
 
     # Try to login with wrong password
     login_data = {
-        "username": "wrongpwuser",
+        "email": "wrongpw@example.com",
         "password": "wrongpassword123"
     }
 
@@ -220,9 +176,9 @@ async def test_login_wrong_password(client: AsyncClient):
 
 @pytest.mark.asyncio
 async def test_login_nonexistent_user(client: AsyncClient):
-    """Test login with nonexistent username."""
+    """Test login with nonexistent email."""
     login_data = {
-        "username": "nonexistentuser",
+        "email": "nonexistent@example.com",
         "password": "password123"
     }
 
@@ -237,7 +193,7 @@ async def test_login_nonexistent_user(client: AsyncClient):
 async def test_login_missing_fields(client: AsyncClient):
     """Test login with missing fields."""
     login_data = {
-        "username": "testuser"
+        "email": "test@example.com"
         # Missing password
     }
 
@@ -256,7 +212,7 @@ async def test_login_page_renders(client: AsyncClient):
     html = response.text
     assert "Login" in html
     assert "<form" in html
-    assert "username" in html.lower()
+    assert "email" in html.lower()
     assert "password" in html.lower()
 
 
@@ -271,7 +227,6 @@ async def test_register_page_renders(client: AsyncClient):
     html = response.text
     assert "Register" in html
     assert "<form" in html
-    assert "username" in html.lower()
     assert "email" in html.lower()
     assert "password" in html.lower()
 
@@ -285,13 +240,12 @@ async def test_password_is_hashed(client: AsyncClient, test_db):
 
     # Create confirmed user directly
     await test_db.create_user(
-        username="hasheduser",
         email="hashed@example.com",
         hashed_password=get_password_hash(password)
     )
 
     # Check database directly
-    user = await test_db.get_user_by_username("hasheduser")
+    user = await test_db.get_user_by_email("hashed@example.com")
     assert user is not None
     assert "hashed_password" in user
 
@@ -309,7 +263,6 @@ async def test_user_registration_and_login_flow(client: AsyncClient, test_db):
     # Create confirmed user directly (simulating post-confirmation state)
     password = "flowpassword123"
     await test_db.create_user(
-        username="flowuser",
         email="flow@example.com",
         hashed_password=get_password_hash(password),
         full_name="Flow Test User"
@@ -317,7 +270,7 @@ async def test_user_registration_and_login_flow(client: AsyncClient, test_db):
 
     # Login with credentials
     login_data = {
-        "username": "flowuser",
+        "email": "flow@example.com",
         "password": password
     }
 
@@ -329,26 +282,25 @@ async def test_user_registration_and_login_flow(client: AsyncClient, test_db):
 
     # Verify token can be decoded
     from putplace.user_auth import decode_access_token
-    username = decode_access_token(token_data["access_token"])
-    assert username == "flowuser"
+    email = decode_access_token(token_data["access_token"])
+    assert email == "flow@example.com"
 
 
 @pytest.mark.asyncio
-async def test_jwt_token_contains_username(client: AsyncClient, test_db):
-    """Test that JWT token contains the username in 'sub' claim."""
+async def test_jwt_token_contains_email(client: AsyncClient, test_db):
+    """Test that JWT token contains the email in 'sub' claim."""
     from putplace.user_auth import get_password_hash
 
     # Create confirmed user directly
     password = "jwtpassword123"
     await test_db.create_user(
-        username="jwtuser",
         email="jwt@example.com",
         hashed_password=get_password_hash(password)
     )
 
     # Login
     login_data = {
-        "username": "jwtuser",
+        "email": "jwt@example.com",
         "password": password
     }
     response = await client.post("/api/login", json=login_data)
@@ -356,8 +308,8 @@ async def test_jwt_token_contains_username(client: AsyncClient, test_db):
 
     # Decode and verify
     from putplace.user_auth import decode_access_token
-    username = decode_access_token(token)
-    assert username == "jwtuser"
+    email = decode_access_token(token)
+    assert email == "jwt@example.com"
 
 
 @pytest.mark.asyncio

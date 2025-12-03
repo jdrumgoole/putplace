@@ -43,10 +43,10 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 
 def decode_access_token(token: str) -> Optional[str]:
-    """Decode a JWT token and return the username."""
+    """Decode a JWT token and return the email."""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        return username
+        email: str = payload.get("sub")
+        return email
     except JWTError:
         return None

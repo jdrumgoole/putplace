@@ -76,7 +76,6 @@ async def ensure_admin_exists(db: MongoDB) -> None:
 
             hashed_password = get_password_hash(admin_pass)
             user_doc = {
-                "username": admin_user,
                 "email": admin_email,
                 "hashed_password": hashed_password,
                 "full_name": "Administrator",
@@ -85,7 +84,7 @@ async def ensure_admin_exists(db: MongoDB) -> None:
             }
 
             await db.users_collection.insert_one(user_doc)
-            logger.info(f"✅ Created admin user from environment: {admin_user}")
+            logger.info(f"✅ Created admin user from environment: {admin_email}")
             return
 
         # Method 2: Generate random password (fallback for development)
@@ -96,7 +95,6 @@ async def ensure_admin_exists(db: MongoDB) -> None:
 
         hashed_password = get_password_hash(random_password)
         user_doc = {
-            "username": "admin",
             "email": "admin@localhost",
             "hashed_password": hashed_password,
             "full_name": "Administrator",
@@ -185,10 +183,10 @@ async def get_current_user(
     # Extract token
     token = credentials.credentials
 
-    # Decode token to get username
-    username = decode_access_token(token)
+    # Decode token to get email
+    email = decode_access_token(token)
 
-    if username is None:
+    if email is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
@@ -196,7 +194,7 @@ async def get_current_user(
         )
 
     # Get user from database
-    user = await db.get_user_by_username(username)
+    user = await db.get_user_by_email(email)
 
     if user is None:
         raise HTTPException(
@@ -361,6 +359,7 @@ async def root() -> str:
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>PutPlace - File Metadata Storage</title>
+        <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
         <style>
             * {
                 margin: 0;
@@ -738,7 +737,7 @@ async def put_file(
 
         # Track which user uploaded this file
         data["uploaded_by_user_id"] = str(current_user.get("_id"))
-        data["uploaded_by_username"] = current_user.get("username")
+        data["uploaded_by_email"] = current_user.get("email")
 
         # Insert into MongoDB
         doc_id = await db.insert_file_metadata(data)
@@ -1111,6 +1110,7 @@ async def api_keys_page() -> str:
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>API Keys - PutPlace</title>
+        <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
         <style>
             * {
                 margin: 0;
@@ -1612,6 +1612,7 @@ async def login_page() -> str:
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Login - PutPlace</title>
+        <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
         <style>
             * {
                 margin: 0;
@@ -1744,8 +1745,8 @@ async def login_page() -> str:
 
                 <form id="loginForm">
                     <div class="form-group">
-                        <label for="username">Username</label>
-                        <input type="text" id="username" name="username" required autofocus>
+                        <label for="email">Email</label>
+                        <input type="email" id="email" name="email" required autofocus>
                     </div>
 
                     <div class="form-group">
@@ -1770,7 +1771,7 @@ async def login_page() -> str:
             form.addEventListener('submit', async (e) => {
                 e.preventDefault();
 
-                const username = document.getElementById('username').value;
+                const email = document.getElementById('email').value;
                 const password = document.getElementById('password').value;
                 const submitBtn = form.querySelector('button[type="submit"]');
 
@@ -1787,7 +1788,7 @@ async def login_page() -> str:
                         headers: {
                             'Content-Type': 'application/json',
                         },
-                        body: JSON.stringify({ username, password })
+                        body: JSON.stringify({ email, password })
                     });
 
                     const data = await response.json();
@@ -1840,6 +1841,7 @@ async def register_page() -> str:
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Register - PutPlace</title>
+        <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
         <style>
             * {
                 margin: 0;
@@ -1978,14 +1980,8 @@ async def register_page() -> str:
 
                 <form id="registerForm">
                     <div class="form-group">
-                        <label for="username">Username *</label>
-                        <input type="text" id="username" name="username" required autofocus minlength="3" maxlength="50">
-                        <small>3-50 characters</small>
-                    </div>
-
-                    <div class="form-group">
                         <label for="email">Email *</label>
-                        <input type="email" id="email" name="email" required>
+                        <input type="email" id="email" name="email" required autofocus>
                     </div>
 
                     <div class="form-group">
@@ -2022,7 +2018,6 @@ async def register_page() -> str:
             form.addEventListener('submit', async (e) => {
                 e.preventDefault();
 
-                const username = document.getElementById('username').value;
                 const email = document.getElementById('email').value;
                 const full_name = document.getElementById('full_name').value;
                 const password = document.getElementById('password').value;
@@ -2046,7 +2041,6 @@ async def register_page() -> str:
 
                 try {
                     const requestBody = {
-                        username,
                         email,
                         password
                     };
@@ -2129,14 +2123,6 @@ async def register_user(user_data: UserCreate, db: MongoDB = Depends(get_db)) ->
                 detail="Email already registered"
             )
 
-        # Check if username already exists
-        existing_username = await db.get_user_by_username(user_data.username)
-        if existing_username:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username already taken"
-            )
-
         # Hash the password
         hashed_password = get_password_hash(user_data.password)
 
@@ -2146,7 +2132,6 @@ async def register_user(user_data: UserCreate, db: MongoDB = Depends(get_db)) ->
 
         # Create pending user in database
         pending_user_id = await db.create_pending_user(
-            username=user_data.username,
             email=user_data.email,
             hashed_password=hashed_password,
             confirmation_token=confirmation_token,
@@ -2158,7 +2143,6 @@ async def register_user(user_data: UserCreate, db: MongoDB = Depends(get_db)) ->
         email_service = get_email_service()
         email_sent = email_service.send_confirmation_email(
             recipient_email=user_data.email,
-            username=user_data.username,
             confirmation_token=confirmation_token
         )
 
@@ -2172,8 +2156,10 @@ async def register_user(user_data: UserCreate, db: MongoDB = Depends(get_db)) ->
 
         return {
             "message": "Registration successful! Please check your email to confirm your account.",
+            "detail": "You must confirm your email address before you can log in. Check your inbox for a confirmation link.",
             "email": user_data.email,
-            "expires_in_hours": 24
+            "expires_in_hours": 24,
+            "next_step": "Check your email and click the confirmation link to activate your account"
         }
 
     except DuplicateKeyError as e:
@@ -2193,34 +2179,34 @@ async def login_user(user_login: UserLogin, db: MongoDB = Depends(get_db)) -> To
     """Login and get access token."""
     from .user_auth import verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
     from datetime import timedelta
-    
-    # Get user from database
-    user = await db.get_user_by_username(user_login.username)
-    
+
+    # Get user from database by email
+    user = await db.get_user_by_email(user_login.email)
+
     if not user or not verify_password(user_login.password, user["hashed_password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
+            detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
+
     if not user.get("is_active", True):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Inactive user account"
         )
-    
-    # Create access token
+
+    # Create access token with email as subject
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user["username"]}, expires_delta=access_token_expires
+        data={"sub": user["email"]}, expires_delta=access_token_expires
     )
 
     return Token(access_token=access_token)
 
 
-@app.get("/api/confirm-email", tags=["users"])
-async def confirm_email(token: str, db: MongoDB = Depends(get_db)) -> dict:
+@app.get("/api/confirm-email", tags=["users"], response_class=HTMLResponse)
+async def confirm_email(token: str, db: MongoDB = Depends(get_db)):
     """
     Confirm user email and activate account.
 
@@ -2228,32 +2214,143 @@ async def confirm_email(token: str, db: MongoDB = Depends(get_db)) -> dict:
         token: Email confirmation token from the confirmation link
 
     Returns:
-        Success message with user details
+        HTML page with confirmation result
     """
     from .email_tokens import is_token_expired
+
+    def render_confirmation_page(success: bool, title: str, message: str):
+        """Render a styled confirmation result page."""
+        icon = "✓" if success else "✗"
+        icon_color = "#28a745" if success else "#dc3545"
+        button_text = "Login to Your Account" if success else "Register Again"
+        button_link = "/login" if success else "/register"
+
+        return f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>{title} - PutPlace</title>
+            <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
+            <style>
+                * {{
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }}
+                body {{
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                    line-height: 1.6;
+                    color: #333;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    min-height: 100vh;
+                    padding: 20px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                }}
+                .container {{
+                    max-width: 500px;
+                    width: 100%;
+                    background: white;
+                    border-radius: 10px;
+                    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                    overflow: hidden;
+                    text-align: center;
+                }}
+                .header {{
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 30px;
+                }}
+                .header h1 {{
+                    font-size: 1.8em;
+                    margin-bottom: 5px;
+                }}
+                .content {{
+                    padding: 40px 30px;
+                }}
+                .icon {{
+                    font-size: 4em;
+                    color: {icon_color};
+                    margin-bottom: 20px;
+                }}
+                .message {{
+                    font-size: 1.1em;
+                    color: #555;
+                    margin-bottom: 30px;
+                }}
+                .button {{
+                    display: inline-block;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 15px 30px;
+                    text-decoration: none;
+                    border-radius: 5px;
+                    font-weight: bold;
+                    transition: transform 0.2s, box-shadow 0.2s;
+                }}
+                .button:hover {{
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+                }}
+                .footer {{
+                    padding: 20px;
+                    background: #f8f9fa;
+                    font-size: 0.9em;
+                    color: #666;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>PutPlace</h1>
+                </div>
+                <div class="content">
+                    <div class="icon">{icon}</div>
+                    <h2 style="margin-bottom: 15px;">{title}</h2>
+                    <p class="message">{message}</p>
+                    <a href="{button_link}" class="button">{button_text}</a>
+                </div>
+                <div class="footer">
+                    <p>Need help? Contact support@putplace.org</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
 
     # Get pending user by token
     pending_user = await db.get_pending_user_by_token(token)
 
     if not pending_user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Invalid or expired confirmation link"
+        return HTMLResponse(
+            content=render_confirmation_page(
+                success=False,
+                title="Invalid Link",
+                message="This confirmation link is invalid or has already been used. If you haven't confirmed your account yet, please register again."
+            ),
+            status_code=404
         )
 
     # Check if token is expired
     if is_token_expired(pending_user["expires_at"]):
         # Delete expired pending user
         await db.delete_pending_user(token)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Confirmation link has expired. Please register again."
+        return HTMLResponse(
+            content=render_confirmation_page(
+                success=False,
+                title="Link Expired",
+                message="This confirmation link has expired. Confirmation links are valid for 24 hours. Please register again to receive a new confirmation email."
+            ),
+            status_code=400
         )
 
     # Create actual user account
     try:
         user_id = await db.create_user(
-            username=pending_user["username"],
             email=pending_user["email"],
             hashed_password=pending_user["hashed_password"],
             full_name=pending_user.get("full_name")
@@ -2262,19 +2359,24 @@ async def confirm_email(token: str, db: MongoDB = Depends(get_db)) -> dict:
         # Delete pending user after successful creation
         await db.delete_pending_user(token)
 
-        return {
-            "message": "Email confirmed successfully! Your account is now active.",
-            "user_id": user_id,
-            "username": pending_user["username"],
-            "email": pending_user["email"]
-        }
+        return HTMLResponse(
+            content=render_confirmation_page(
+                success=True,
+                title="Email Confirmed!",
+                message=f"Welcome! Your email has been confirmed and your account is now active. You can now log in to start using PutPlace."
+            )
+        )
 
     except Exception as e:
         # Log error and return generic message
         logger.error(f"Error creating user from pending: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to activate account. Please contact support."
+        return HTMLResponse(
+            content=render_confirmation_page(
+                success=False,
+                title="Activation Failed",
+                message="We encountered an error while activating your account. Please try again or contact support if the problem persists."
+            ),
+            status_code=500
         )
 
 
@@ -2338,7 +2440,7 @@ async def google_oauth_login(
         # User exists - update OAuth info if needed
         if existing_user.get("auth_provider") != "google":
             # Update user to use Google OAuth
-            await db.users.update_one(
+            await db.users_collection.update_one(
                 {"email": email},
                 {
                     "$set": {
@@ -2348,23 +2450,9 @@ async def google_oauth_login(
                     }
                 }
             )
-
-        username = existing_user["username"]
     else:
         # Create new user with Google OAuth
-        # Generate username from email
-        username_base = email.split('@')[0]
-        username = username_base
-        counter = 1
-
-        # Ensure username is unique
-        while await db.get_user_by_username(username):
-            username = f"{username_base}{counter}"
-            counter += 1
-
-        # Create user document
         user_doc = {
-            "username": username,
             "email": email,
             "full_name": name,
             "is_active": True,
@@ -2376,17 +2464,17 @@ async def google_oauth_login(
         }
 
         try:
-            await db.users.insert_one(user_doc)
+            await db.users_collection.insert_one(user_doc)
         except Exception as e:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to create user: {str(e)}"
             )
 
-    # Create access token
+    # Create access token with email as subject
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": username}, expires_delta=access_token_expires
+        data={"sub": email}, expires_delta=access_token_expires
     )
 
     return Token(access_token=access_token)
@@ -2500,6 +2588,7 @@ async def my_files_page() -> str:
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>My Files - PutPlace</title>
+        <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
         <style>
             * {
                 margin: 0;

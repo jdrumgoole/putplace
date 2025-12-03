@@ -118,9 +118,11 @@ class APIKeyInfo(BaseModel):
 
 
 class UserCreate(BaseModel):
-    """Request model for user registration."""
+    """Request model for user registration.
 
-    username: str = Field(..., description="Username", min_length=3, max_length=50)
+    Email and password are required. Full name is optional.
+    """
+
     email: str = Field(..., description="Email address")
     password: str = Field(..., description="Password", min_length=8)
     full_name: Optional[str] = Field(None, description="Full name")
@@ -128,7 +130,6 @@ class UserCreate(BaseModel):
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "username": "johndoe",
                 "email": "john@example.com",
                 "password": "securepassword123",
                 "full_name": "John Doe"
@@ -138,15 +139,18 @@ class UserCreate(BaseModel):
 
 
 class UserLogin(BaseModel):
-    """Request model for user login."""
+    """Request model for user login.
 
-    username: str = Field(..., description="Username")
+    Users can log in with their email address and password.
+    """
+
+    email: str = Field(..., description="Email address")
     password: str = Field(..., description="Password")
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "username": "johndoe",
+                "email": "john@example.com",
                 "password": "securepassword123"
             }
         }
@@ -171,7 +175,6 @@ class User(BaseModel):
     """User model (without password)."""
 
     id: Optional[str] = Field(None, alias="_id", description="User ID")
-    username: str = Field(..., description="Username")
     email: str = Field(..., description="Email address")
     full_name: Optional[str] = Field(None, description="Full name")
     is_active: bool = Field(default=True, description="Whether the user account is active")
@@ -194,13 +197,12 @@ class Token(BaseModel):
 class TokenData(BaseModel):
     """Data stored in JWT token."""
 
-    username: Optional[str] = None
+    email: Optional[str] = None
 
 
 class PendingUser(BaseModel):
     """Pending user awaiting email confirmation."""
 
-    username: str = Field(..., description="Username")
     email: str = Field(..., description="Email address")
     hashed_password: str = Field(..., description="Hashed password")
     full_name: Optional[str] = Field(None, description="Full name")
@@ -216,5 +218,4 @@ class EmailConfirmationResponse(BaseModel):
 
     message: str = Field(..., description="Success message")
     user_id: str = Field(..., description="Created user ID")
-    username: str = Field(..., description="Username")
     email: str = Field(..., description="Email address")

@@ -62,7 +62,6 @@ class MongoDB:
             logger.info("API keys indexes created successfully")
 
             # Create indexes for users collection
-            await self.users_collection.create_index("username", unique=True)
             await self.users_collection.create_index("email", unique=True)
             logger.info("Users indexes created successfully")
 
@@ -322,11 +321,10 @@ class MongoDB:
 
     # User authentication methods
 
-    async def create_user(self, username: str, email: str, hashed_password: str, full_name: Optional[str] = None) -> str:
+    async def create_user(self, email: str, hashed_password: str, full_name: Optional[str] = None) -> str:
         """Create a new user.
 
         Args:
-            username: User's username
             email: User's email
             hashed_password: Hashed password
             full_name: User's full name (optional)
@@ -336,7 +334,7 @@ class MongoDB:
 
         Raises:
             RuntimeError: If database not connected
-            DuplicateKeyError: If username or email already exists
+            DuplicateKeyError: If email already exists
         """
         if self.users_collection is None:
             raise RuntimeError("Database not connected")
@@ -344,7 +342,6 @@ class MongoDB:
         from datetime import datetime
 
         user_data = {
-            "username": username,
             "email": email,
             "hashed_password": hashed_password,
             "full_name": full_name,
@@ -356,25 +353,9 @@ class MongoDB:
             result = await self.users_collection.insert_one(user_data)
             return str(result.inserted_id)
         except DuplicateKeyError as e:
-            if "username" in str(e):
-                raise DuplicateKeyError("Username already exists")
-            elif "email" in str(e):
+            if "email" in str(e):
                 raise DuplicateKeyError("Email already exists")
             raise
-
-    async def get_user_by_username(self, username: str) -> Optional[dict]:
-        """Get user by username.
-
-        Args:
-            username: Username to search for
-
-        Returns:
-            User document or None if not found
-        """
-        if self.users_collection is None:
-            raise RuntimeError("Database not connected")
-
-        return await self.users_collection.find_one({"username": username})
 
     async def get_user_by_email(self, email: str) -> Optional[dict]:
         """Get user by email.
@@ -394,7 +375,6 @@ class MongoDB:
 
     async def create_pending_user(
         self,
-        username: str,
         email: str,
         hashed_password: str,
         confirmation_token: str,
@@ -404,7 +384,6 @@ class MongoDB:
         """Create a pending user awaiting email confirmation.
 
         Args:
-            username: User's username
             email: User's email
             hashed_password: Hashed password
             confirmation_token: Email confirmation token
@@ -415,7 +394,7 @@ class MongoDB:
             Inserted pending user document ID
 
         Raises:
-            DuplicateKeyError: If username or email already exists
+            DuplicateKeyError: If email already exists
         """
         if self.pending_users_collection is None:
             raise RuntimeError("Database not connected")
@@ -423,7 +402,6 @@ class MongoDB:
         from datetime import datetime
 
         pending_user_data = {
-            "username": username,
             "email": email,
             "hashed_password": hashed_password,
             "full_name": full_name,

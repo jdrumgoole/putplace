@@ -21,12 +21,12 @@ console = Console()
 interrupted = False
 
 
-def login_and_get_token(base_url: str, username: str, password: str) -> Optional[str]:
+def login_and_get_token(base_url: str, email: str, password: str) -> Optional[str]:
     """Login to the server and get JWT access token.
 
     Args:
         base_url: Base URL of the API server
-        username: Username for authentication
+        email: Email for authentication
         password: Password for authentication
 
     Returns:
@@ -38,7 +38,7 @@ def login_and_get_token(base_url: str, username: str, password: str) -> Optional
         with httpx.Client(timeout=30.0) as client:
             response = client.post(
                 login_url,
-                json={"username": username, "password": password}
+                json={"email": email, "password": password}
             )
 
             if response.status_code == 200:
@@ -47,7 +47,7 @@ def login_and_get_token(base_url: str, username: str, password: str) -> Optional
             else:
                 console.print(f"[red]✗ Login failed: {response.status_code}[/red]")
                 if response.status_code == 401:
-                    console.print("[yellow]  Incorrect username or password[/yellow]")
+                    console.print("[yellow]  Incorrect email or password[/yellow]")
                 else:
                     console.print(f"[dim]  {response.text}[/dim]")
                 return None
@@ -452,7 +452,7 @@ Examples:
 Config file format (INI style):
   [DEFAULT]
   url = http://remote-server:8000/put_file
-  username = your-username
+  email = your-email@example.com
   password = your-password
   exclude = .git
   exclude = *.log
@@ -460,15 +460,15 @@ Config file format (INI style):
 
 Authentication:
   # Option 1: Command line
-  %(prog)s --path /var/log --username admin --password secret
+  %(prog)s --path /var/log --email admin@example.com --password secret
 
   # Option 2: Environment variables
-  export PUTPLACE_USERNAME=admin
+  export PUTPLACE_EMAIL=admin@example.com
   export PUTPLACE_PASSWORD=secret
   %(prog)s --path /var/log
 
   # Option 3: Config file (~/ppclient.conf)
-  echo "username = admin" >> ~/ppclient.conf
+  echo "email = admin@example.com" >> ~/ppclient.conf
   echo "password = secret" >> ~/ppclient.conf
   %(prog)s --path /var/log
         """,
@@ -531,13 +531,13 @@ Authentication:
     )
 
     parser.add_argument(
-        "--username",
+        "--email",
         "-u",
-        env_var="PUTPLACE_USERNAME",
+        env_var="PUTPLACE_EMAIL",
         default=None,
-        help="Username for authentication. "
-        "Can be specified via: 1) --username flag, 2) PUTPLACE_USERNAME environment variable, "
-        "or 3) 'username' in config file.",
+        help="Email for authentication. "
+        "Can be specified via: 1) --email flag, 2) PUTPLACE_EMAIL environment variable, "
+        "or 3) 'email' in config file.",
     )
 
     parser.add_argument(
@@ -551,21 +551,21 @@ Authentication:
 
     args = parser.parse_args()
 
-    # Get username and password
-    username = args.username
+    # Get email and password
+    email = args.email
     password = args.password
 
     # Login and get access token if credentials provided
     access_token = None
-    if username and password:
-        console.print(f"[cyan]Logging in as {username}...[/cyan]")
-        access_token = login_and_get_token(args.url.rsplit('/', 1)[0], username, password)
+    if email and password:
+        console.print(f"[cyan]Logging in as {email}...[/cyan]")
+        access_token = login_and_get_token(args.url.rsplit('/', 1)[0], email, password)
         if not access_token:
             console.print("[red]✗ Login failed. Exiting.[/red]")
             sys.exit(1)
         console.print("[green]✓ Login successful[/green]")
-    elif username or password:
-        console.print("[red]✗ Both username and password are required for authentication[/red]")
+    elif email or password:
+        console.print("[red]✗ Both email and password are required for authentication[/red]")
         sys.exit(1)
 
     # Get hostname and IP

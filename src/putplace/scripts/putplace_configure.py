@@ -252,7 +252,6 @@ async def check_ses_access(aws_region: Optional[str] = None) -> tuple[bool, str]
 
 async def create_admin_user(
     mongodb_url: str,
-    username: str,
     email: str,
     password: str
 ) -> tuple[bool, str]:
@@ -279,19 +278,18 @@ async def create_admin_user(
         db = client.get_database("putplace")
         users_collection = db.users
 
-        # Check if user already exists
-        existing_user = await users_collection.find_one({"username": username})
+        # Check if user already exists by email
+        existing_user = await users_collection.find_one({"email": email})
         if existing_user:
             await client.close()
-            return False, f"User '{username}' already exists"
+            return False, f"User with email '{email}' already exists"
 
         # Create user document
         user_doc = {
-            "username": username,
             "email": email,
-            "password_hash": get_password_hash(password),
+            "hashed_password": get_password_hash(password),
             "full_name": "Administrator",
-            "is_admin": True,
+            "is_active": True,
             "created_at": datetime.utcnow()
         }
 
@@ -299,7 +297,7 @@ async def create_admin_user(
         await users_collection.insert_one(user_doc)
         await client.close()
 
-        return True, f"Admin user '{username}' created successfully"
+        return True, f"Admin user '{email}' created successfully"
     except ImportError as e:
         return False, f"Required libraries not installed: {e}"
     except Exception as e:
@@ -363,6 +361,16 @@ def write_toml_file(config: dict, toml_path: Path) -> tuple[bool, str]:
             toml_config["aws"] = {
                 "region": config['aws_region']
             }
+
+        # Email configuration section
+        if config.get('base_url') or config.get('sender_email'):
+            toml_config["email"] = {}
+            if config.get('base_url'):
+                toml_config["email"]["base_url"] = config['base_url']
+            if config.get('sender_email'):
+                toml_config["email"]["sender_email"] = config['sender_email']
+            if config.get('aws_region'):
+                toml_config["email"]["aws_region"] = config['aws_region']
 
         # Write TOML file with header comment
         envtype = config.get('envtype', '')
@@ -429,7 +437,6 @@ def create_aws_secrets(config: dict, aws_region: str = 'eu-west-1') -> tuple[boo
                 'MONGODB_COLLECTION': 'file_metadata'
             },
             'putplace/admin': {
-                'PUTPLACE_ADMIN_USERNAME': config.get('admin_username', 'admin'),
                 'PUTPLACE_ADMIN_EMAIL': config.get('admin_email', 'admin@localhost'),
                 'PUTPLACE_ADMIN_PASSWORD': config.get('admin_password', '')
             },
@@ -589,11 +596,9 @@ async def run_interactive_config() -> dict:
     print_panel("Admin User Configuration", title="Step 2/5", style="cyan")
 
     if RICH_AVAILABLE:
-        admin_username = Prompt.ask("Admin username", default="admin")
         admin_email = Prompt.ask("Admin email", default="admin@localhost")
         generate_pwd = Confirm.ask("Generate secure password?", default=True)
     else:
-        admin_username = input("Admin username [admin]: ").strip() or "admin"
         admin_email = input("Admin email [admin@localhost]: ").strip() or "admin@localhost"
         generate_pwd_input = input("Generate secure password? [Y/n]: ").strip().lower()
         generate_pwd = generate_pwd_input != 'n'
@@ -609,13 +614,12 @@ async def run_interactive_config() -> dict:
             import getpass
             admin_password = getpass.getpass("Admin password: ")
 
-    config['admin_username'] = admin_username
     config['admin_email'] = admin_email
     config['admin_password'] = admin_password
 
     # Create admin user
     print_message("Creating admin user...", "yellow")
-    success, message = await create_admin_user(mongodb_url, admin_username, admin_email, admin_password)
+    success, message = await create_admin_user(mongodb_url, admin_email, admin_password)
     print_message(f"{'✓' if success else '✗'} {message}", "green" if success else "red")
 
     # AWS Configuration
@@ -718,11 +722,16 @@ async def run_noninteractive_config(args) -> dict:
     config = {
         'mongodb_url': args.mongodb_url,
         'mongodb_database': mongodb_database,
-        'admin_username': args.admin_username,
         'admin_email': args.admin_email,
         'storage_backend': args.storage_backend,
         'config_path': Path(args.config_file),
     }
+
+    # Add email settings
+    if args.base_url:
+        config['base_url'] = args.base_url
+    if args.sender_email:
+        config['sender_email'] = args.sender_email
 
     # Add envtype to config for TOML header
     if envtype:
@@ -775,7 +784,6 @@ async def run_noninteractive_config(args) -> dict:
     print_message("Creating admin user...", "yellow")
     success, message = await create_admin_user(
         config['mongodb_url'],
-        config['admin_username'],
         config['admin_email'],
         config['admin_password']
     )
@@ -808,7 +816,6 @@ def print_summary(config: dict):
         table.add_column("Value", style="green")
 
         table.add_row("MongoDB URL", config.get('mongodb_url', 'N/A'))
-        table.add_row("Admin Username", config.get('admin_username', 'N/A'))
         table.add_row("Admin Email", config.get('admin_email', 'N/A'))
         table.add_row("Storage Backend", config.get('storage_backend', 'N/A'))
 
@@ -824,7 +831,6 @@ def print_summary(config: dict):
     else:
         print("\n=== Configuration Summary ===")
         print(f"MongoDB URL: {config.get('mongodb_url', 'N/A')}")
-        print(f"Admin Username: {config.get('admin_username', 'N/A')}")
         print(f"Admin Email: {config.get('admin_email', 'N/A')}")
         print(f"Storage Backend: {config.get('storage_backend', 'N/A')}")
 
@@ -850,13 +856,11 @@ Examples:
 
   # Non-interactive with local storage
   putplace-configure --non-interactive \\
-    --admin-username admin \\
     --admin-email admin@example.com \\
     --storage-backend local
 
   # Non-interactive with S3 storage
   putplace-configure --non-interactive \\
-    --admin-username admin \\
     --admin-email admin@example.com \\
     --storage-backend s3 \\
     --s3-bucket my-putplace-bucket \\
@@ -867,7 +871,6 @@ Examples:
   # System creates: putplace-prod bucket
   putplace-configure --non-interactive \\
     --envtype prod \\
-    --admin-username admin \\
     --admin-email admin@example.com \\
     --storage-backend s3 \\
     --s3-bucket putplace \\
@@ -934,11 +937,6 @@ Examples:
 
     # Admin user options
     parser.add_argument(
-        '--admin-username',
-        default='admin',
-        help='Admin username (default: admin)'
-    )
-    parser.add_argument(
         '--admin-email',
         default='admin@localhost',
         help='Admin email (default: admin@localhost)'
@@ -946,6 +944,17 @@ Examples:
     parser.add_argument(
         '--admin-password',
         help='Admin password (will be generated if not provided)'
+    )
+
+    # Email settings
+    parser.add_argument(
+        '--base-url',
+        help='Base URL for email links (e.g., https://app.putplace.org)'
+    )
+    parser.add_argument(
+        '--sender-email',
+        default='registration@putplace.org',
+        help='Sender email for notifications (default: registration@putplace.org)'
     )
 
     # Storage options
@@ -1076,7 +1085,7 @@ Examples:
             print_message("  Example: putplace_configure --envtype=prod --aws-profile=putplace-prod", "cyan")
 
             # If not continuing with configuration, exit here
-            if not args.non_interactive and not any([args.admin_username, args.mongodb_url]):
+            if not args.non_interactive and not any([args.admin_email, args.mongodb_url]):
                 sys.exit(0)
 
         except ImportError as e:
@@ -1128,9 +1137,8 @@ Next steps:
 3. Start the PutPlace server: invoke serve
 
 Admin credentials:
-  Username: {config['admin_username']}
-  Password: {config['admin_password']}
   Email: {config['admin_email']}
+  Password: {config['admin_password']}
 
 IMPORTANT: Save the admin password securely!
 """

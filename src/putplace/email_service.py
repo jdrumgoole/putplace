@@ -27,7 +27,6 @@ class EmailService:
     def send_confirmation_email(
         self,
         recipient_email: str,
-        username: str,
         confirmation_token: str
     ) -> bool:
         """
@@ -35,7 +34,6 @@ class EmailService:
 
         Args:
             recipient_email: Email address to send to
-            username: Username for personalization
             confirmation_token: Confirmation token for the link
 
         Returns:
@@ -108,12 +106,12 @@ class EmailService:
                     <h1>Welcome to PutPlace!</h1>
                 </div>
                 <div class="content">
-                    <p>Hi {username},</p>
+                    <p>Hi there,</p>
 
                     <p>Thank you for registering with PutPlace! To complete your registration and activate your account, please confirm your email address by clicking the button below:</p>
 
                     <div style="text-align: center;">
-                        <a href="{confirmation_url}" class="button">Confirm Email Address</a>
+                        <a href="{confirmation_url}" class="button" style="display: inline-block; background-color: #4169E1; color: #ffffff !important; padding: 15px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">Confirm Email Address</a>
                     </div>
 
                     <p>Or copy and paste this link into your browser:</p>
@@ -139,7 +137,7 @@ class EmailService:
         text_body = f"""
         Welcome to PutPlace!
 
-        Hi {username},
+        Hi there,
 
         Thank you for registering with PutPlace! To complete your registration and activate your account, please confirm your email address by clicking the link below:
 

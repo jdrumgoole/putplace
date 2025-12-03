@@ -21,9 +21,8 @@ async def test_ensure_admin_no_users_generates_random_password(test_db: MongoDB)
     await ensure_admin_exists(test_db)
 
     # Verify admin user was created
-    admin_user = await test_db.get_user_by_username("admin")
+    admin_user = await test_db.get_user_by_email("admin@localhost")
     assert admin_user is not None
-    assert admin_user["username"] == "admin"
     assert admin_user["email"] == "admin@localhost"
     assert admin_user["is_active"] is True
     assert "hashed_password" in admin_user
@@ -37,7 +36,6 @@ async def test_ensure_admin_with_env_vars(test_db: MongoDB):
     with patch.dict(
         os.environ,
         {
-            "PUTPLACE_ADMIN_USERNAME": "customadmin",
             "PUTPLACE_ADMIN_PASSWORD": "securepass123",
             "PUTPLACE_ADMIN_EMAIL": "admin@example.com",
         },
@@ -46,38 +44,13 @@ async def test_ensure_admin_with_env_vars(test_db: MongoDB):
         await ensure_admin_exists(test_db)
 
     # Verify custom admin user was created
-    admin_user = await test_db.get_user_by_username("customadmin")
+    admin_user = await test_db.get_user_by_email("admin@example.com")
     assert admin_user is not None
-    assert admin_user["username"] == "customadmin"
     assert admin_user["email"] == "admin@example.com"
     assert admin_user["is_active"] is True
 
     # Verify password works
     assert verify_password("securepass123", admin_user["hashed_password"]) is True
-
-
-@pytest.mark.asyncio
-async def test_ensure_admin_with_env_vars_default_email(test_db: MongoDB):
-    """Test that default email is used when PUTPLACE_ADMIN_EMAIL not set."""
-    # Set environment variables without email
-    with patch.dict(
-        os.environ,
-        {
-            "PUTPLACE_ADMIN_USERNAME": "customadmin",
-            "PUTPLACE_ADMIN_PASSWORD": "securepass123",
-        },
-        clear=False,
-    ):
-        # Remove PUTPLACE_ADMIN_EMAIL if it exists
-        if "PUTPLACE_ADMIN_EMAIL" in os.environ:
-            del os.environ["PUTPLACE_ADMIN_EMAIL"]
-
-        await ensure_admin_exists(test_db)
-
-    # Verify admin created with default email
-    admin_user = await test_db.get_user_by_username("customadmin")
-    assert admin_user is not None
-    assert admin_user["email"] == "admin@localhost"
 
 
 @pytest.mark.asyncio
@@ -87,14 +60,14 @@ async def test_ensure_admin_with_weak_password_rejected(test_db: MongoDB):
     with patch.dict(
         os.environ,
         {
-            "PUTPLACE_ADMIN_USERNAME": "weakadmin",
             "PUTPLACE_ADMIN_PASSWORD": "weak",  # Only 4 characters
+            "PUTPLACE_ADMIN_EMAIL": "weakadmin@example.com",
         },
     ):
         await ensure_admin_exists(test_db)
 
     # Verify admin user was NOT created
-    admin_user = await test_db.get_user_by_username("weakadmin")
+    admin_user = await test_db.get_user_by_email("weakadmin@example.com")
     assert admin_user is None
 
     # No users should exist
@@ -111,7 +84,6 @@ async def test_ensure_admin_skips_if_users_exist(test_db: MongoDB):
     from putplace.user_auth import get_password_hash
 
     existing_user = {
-        "username": "existinguser",
         "email": "existing@example.com",
         "hashed_password": get_password_hash("password123"),
         "is_active": True,
@@ -123,14 +95,14 @@ async def test_ensure_admin_skips_if_users_exist(test_db: MongoDB):
     with patch.dict(
         os.environ,
         {
-            "PUTPLACE_ADMIN_USERNAME": "shouldnotcreate",
             "PUTPLACE_ADMIN_PASSWORD": "password123",
+            "PUTPLACE_ADMIN_EMAIL": "shouldnotcreate@example.com",
         },
     ):
         await ensure_admin_exists(test_db)
 
     # Verify no new admin was created
-    admin_user = await test_db.get_user_by_username("shouldnotcreate")
+    admin_user = await test_db.get_user_by_email("shouldnotcreate@example.com")
     assert admin_user is None
 
     # Only the existing user should be there
@@ -162,13 +134,13 @@ async def test_ensure_admin_password_hashing(test_db: MongoDB):
     with patch.dict(
         os.environ,
         {
-            "PUTPLACE_ADMIN_USERNAME": "testadmin",
             "PUTPLACE_ADMIN_PASSWORD": "mypassword123",
+            "PUTPLACE_ADMIN_EMAIL": "testadmin@example.com",
         },
     ):
         await ensure_admin_exists(test_db)
 
-    admin_user = await test_db.get_user_by_username("testadmin")
+    admin_user = await test_db.get_user_by_email("testadmin@example.com")
     assert admin_user is not None
 
     # Password should be hashed with Argon2
@@ -207,11 +179,10 @@ async def test_ensure_admin_creates_full_user_document(test_db: MongoDB):
     """Test that all required user fields are populated."""
     await ensure_admin_exists(test_db)
 
-    admin_user = await test_db.get_user_by_username("admin")
+    admin_user = await test_db.get_user_by_email("admin@localhost")
     assert admin_user is not None
 
     # Check all required fields
-    assert "username" in admin_user
     assert "email" in admin_user
     assert "hashed_password" in admin_user
     assert "full_name" in admin_user
@@ -219,7 +190,6 @@ async def test_ensure_admin_creates_full_user_document(test_db: MongoDB):
     assert "created_at" in admin_user
 
     # Check field values
-    assert admin_user["username"] == "admin"
     assert admin_user["full_name"] == "Administrator"
     assert admin_user["is_active"] is True
     assert admin_user["created_at"] is not None

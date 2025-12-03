@@ -291,11 +291,10 @@ async def test_api_login_endpoint(client: AsyncClient, test_db):
     from putplace.user_auth import get_password_hash
 
     # Create a test user
-    username = "logintest"
+    email = "logintest@example.com"
     password = "testpass123"
     await test_db.create_user(
-        username=username,
-        email="logintest@example.com",
+        email=email,
         hashed_password=get_password_hash(password),
         full_name="Login Test User"
     )
@@ -303,7 +302,7 @@ async def test_api_login_endpoint(client: AsyncClient, test_db):
     # Try to log in with JSON
     response = await client.post(
         "/api/login",
-        json={"username": username, "password": password}
+        json={"email": email, "password": password}
     )
 
     assert response.status_code == 200
@@ -319,7 +318,6 @@ async def test_api_login_wrong_password(client: AsyncClient, test_db):
 
     # Create a test user
     await test_db.create_user(
-        username="wrongpasstest",
         email="wrongpass@example.com",
         hashed_password=get_password_hash("correctpass"),
         full_name="Wrong Pass Test"
@@ -328,7 +326,7 @@ async def test_api_login_wrong_password(client: AsyncClient, test_db):
     # Try to log in with wrong password
     response = await client.post(
         "/api/login",
-        json={"username": "wrongpasstest", "password": "wrongpass"}
+        json={"email": "wrongpass@example.com", "password": "wrongpass"}
     )
 
     assert response.status_code == 401

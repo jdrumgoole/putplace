@@ -301,15 +301,14 @@ async def test_user_token(test_db: MongoDB) -> str:
 
     # Create test user
     user_id = await test_db.create_user(
-        username="testuser",
         email="testuser@example.com",
         hashed_password=get_password_hash("testpassword123"),
         full_name="Test User"
     )
 
-    # Generate JWT token for the user
+    # Generate JWT token for the user (using email as subject)
     access_token = create_access_token(
-        data={"sub": "testuser"},
+        data={"sub": "testuser@example.com"},
         expires_delta=timedelta(minutes=30)
     )
 
