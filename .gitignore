@@ -91,3 +91,7 @@ storage/
 # PutPlace server runtime files
 .ppserver.pid
 ppserver.log
+
+# Backup directories from package split
+src_old/
+tests_old/

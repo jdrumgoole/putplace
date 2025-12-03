@@ -6,7 +6,8 @@ PutPlace supports **two authentication methods**: JWT tokens (recommended for mo
 
 - [Overview](#overview)
 - [Initial Setup](#initial-setup)
-- [Quick Start (Recommended: Username/Password)](#quick-start-recommended-usernamepassword)
+- [Quick Start (Recommended: Email/Password)](#quick-start-recommended-emailpassword)
+- [Admin Dashboard](#admin-dashboard)
 - [Advanced: API Key Authentication](#advanced-api-key-authentication)
 - [API Key Management](#api-key-management)
 - [Security Best Practices](#security-best-practices)
@@ -16,7 +17,7 @@ PutPlace supports **two authentication methods**: JWT tokens (recommended for mo
 ## Overview
 
 **Authentication Methods:**
-- **JWT Token Authentication** (username/password login) - **Recommended** for client and web interface
+- **JWT Token Authentication** (email/password login) - **Recommended** for client and web interface
 - **API Key Authentication** (via `X-API-Key` header) - Advanced use cases and backwards compatibility
 
 **Protected Endpoints:**
@@ -27,6 +28,7 @@ PutPlace supports **two authentication methods**: JWT tokens (recommended for mo
 - `GET /api_keys` - List API keys
 - `DELETE /api_keys/{key_id}` - Delete API key
 - `PUT /api_keys/{key_id}/revoke` - Revoke API key
+- `GET /admin/dashboard` - Admin dashboard (requires admin privileges)
 
 **Public Endpoints** (no authentication required):
 - `GET /` - Root endpoint
@@ -49,51 +51,48 @@ PutPlace automatically creates an initial admin user on first startup using a **
 Set these environment variables before starting the server:
 
 ```bash
-export PUTPLACE_ADMIN_USERNAME="admin"
-export PUTPLACE_ADMIN_PASSWORD="your-secure-password-here"
 export PUTPLACE_ADMIN_EMAIL="admin@example.com"
+export PUTPLACE_ADMIN_PASSWORD="your-secure-password-here"
 ```
 
 **Requirements:**
 - Password must be at least 8 characters
-- Username and password are required
-- Email is optional (defaults to `admin@localhost`)
+- Email is used as the unique identifier for login
 
 **Docker/Docker Compose:**
 ```yaml
 services:
   putplace:
     environment:
-      - PUTPLACE_ADMIN_USERNAME=admin
-      - PUTPLACE_ADMIN_PASSWORD=${ADMIN_PASSWORD}  # From .env file
       - PUTPLACE_ADMIN_EMAIL=admin@example.com
+      - PUTPLACE_ADMIN_PASSWORD=${ADMIN_PASSWORD}  # From .env file
 ```
 
 #### Option 2: Random Password Generation (Development)
 
 If no environment variables are set, PutPlace will:
 1. Generate a secure random password
-2. Create an admin user with username `admin`
+2. Create an admin user with email `admin@localhost`
 3. Display the credentials **once** in the server logs:
 
 ```
 ================================================================================
 🔐 INITIAL ADMIN CREDENTIALS GENERATED
 ================================================================================
-   Username: admin
+   Email: admin@localhost
    Password: AbCdEf1234567890XyZ
 
 ⚠️  SAVE THESE CREDENTIALS NOW - They won't be shown again!
 
 For production, set environment variables instead:
-   PUTPLACE_ADMIN_USERNAME=your-admin
-   PUTPLACE_ADMIN_PASSWORD=your-secure-password
    PUTPLACE_ADMIN_EMAIL=admin@example.com
+   PUTPLACE_ADMIN_PASSWORD=your-secure-password
 ================================================================================
 ```
 
 **Important Notes:**
 - ✅ Admin is only created if **no users exist**
+- ✅ Admin user has `is_admin=True` flag for admin dashboard access
 - ✅ Credentials are also written to `/tmp/putplace_initial_creds.txt`
 - ⚠️ Delete the credentials file after saving the password
 - ⚠️ Use environment variables in production for security
@@ -102,12 +101,13 @@ For production, set environment variables instead:
 
 Once the admin user exists:
 1. Log in to the web interface at `http://localhost:8000`
-2. Create additional users via `/api/register` endpoint
-3. Generate API keys for programmatic access
+2. Access the admin dashboard at `http://localhost:8000/admin/dashboard`
+3. Create additional users via `/api/register` endpoint
+4. Generate API keys for programmatic access
 
 ---
 
-## Quick Start (Recommended: Username/Password)
+## Quick Start (Recommended: Email/Password)
 
 ### 1. Get Admin Credentials
 
@@ -118,7 +118,7 @@ The admin user is automatically created on first server startup:
 cat /tmp/putplace_initial_creds.txt
 
 # Example output:
-# Username: admin
+# Email: admin@localhost
 # Password: Xy9K3mP#vL2nQ@8sW4tR
 ```
 
@@ -128,17 +128,17 @@ cat /tmp/putplace_initial_creds.txt
 
 ```bash
 # Option 1: Command line arguments
-python ppclient.py /var/log --username "admin" --password "your-password"
+python ppclient.py /var/log --email "admin@localhost" --password "your-password"
 
 # Option 2: Environment variables (recommended)
-export PUTPLACE_USERNAME="admin"
+export PUTPLACE_EMAIL="admin@localhost"
 export PUTPLACE_PASSWORD="your-password"
 python ppclient.py /var/log
 
 # Option 3: Config file (most secure)
 cat > ~/ppclient.conf << EOF
 [DEFAULT]
-username = admin
+email = admin@localhost
 password = your-password
 EOF
 chmod 600 ~/ppclient.conf
@@ -151,7 +151,7 @@ python ppclient.py /var/log
 # Get JWT token
 curl -X POST http://localhost:8000/api/login \
   -H "Content-Type: application/json" \
-  -d '{"username": "admin", "password": "your-password"}'
+  -d '{"email": "admin@localhost", "password": "your-password"}'
 
 # Returns:
 # {"access_token": "eyJ0eXAiOiJKV1QiLCJhbGc...", "token_type": "bearer"}
@@ -175,6 +175,67 @@ curl -X POST http://localhost:8000/put_file \
     "file_ctime": 1609459200.0
   }'
 ```
+
+---
+
+## Admin Dashboard
+
+The admin dashboard provides a comprehensive view of all users and system statistics.
+
+### Access Requirements
+
+- Must be authenticated with a valid JWT token
+- User must have `is_admin=True` flag in their profile
+- The initial admin user is automatically created with admin privileges
+
+### Dashboard URL
+
+```
+http://localhost:8000/admin/dashboard
+```
+
+### Dashboard Features
+
+The admin dashboard displays:
+
+1. **System Statistics:**
+   - Total registered users
+   - Active users
+   - Admin users
+   - Pending registrations (awaiting email confirmation)
+   - Total files in system
+   - Files with uploaded content
+
+2. **Registered Users Table:**
+   - Email address
+   - Full name
+   - Status (Active/Inactive)
+   - Admin flag
+   - Number of files uploaded
+   - Account creation date
+
+3. **Pending Registrations Table:**
+   - Email address
+   - Full name
+   - Registration date
+   - Expiration date
+
+### Accessing via curl
+
+```bash
+# Get JWT token for admin user
+TOKEN=$(curl -s -X POST http://localhost:8000/api/login \
+  -H "Content-Type: application/json" \
+  -d '{"email": "admin@localhost", "password": "your-password"}' | jq -r '.access_token')
+
+# Access admin dashboard
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/admin/dashboard
+```
+
+### Error Responses
+
+- **401 Unauthorized**: No authentication token provided
+- **403 Forbidden**: User is not an admin
 
 ---
 
@@ -472,14 +533,14 @@ graph TD
 
 ## Example Workflows
 
-### Single Server Setup (Username/Password - Recommended)
+### Single Server Setup (Email/Password - Recommended)
 
 ```bash
 # 1. Get admin credentials from first startup
 cat /tmp/putplace_initial_creds.txt
 
 # 2. Save to environment
-echo 'export PUTPLACE_USERNAME="admin"' >> ~/.bashrc
+echo 'export PUTPLACE_EMAIL="admin@localhost"' >> ~/.bashrc
 echo 'export PUTPLACE_PASSWORD="your-password-here"' >> ~/.bashrc
 source ~/.bashrc
 

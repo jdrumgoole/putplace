@@ -13,14 +13,31 @@ def setup_venv(c):
 
 @task
 def install(c):
-    """Install the project dependencies using uv."""
-    c.run("uv pip install -e '.[dev]'")
-    print("\n✓ Package and dependencies installed")
+    """Install both packages in development mode using uv."""
+    c.run("uv pip install -e './packages/putplace-client[dev]'")
+    c.run("uv pip install -e './packages/putplace-server[dev]'")
+    print("\n✓ Both packages installed")
     print("\nIMPORTANT: Activate the virtual environment to use console scripts:")
     print("  source .venv/bin/activate")
     print("\nThen you can use:")
     print("  ppclient --help")
     print("  ppserver --help")
+
+
+@task
+def install_client(c):
+    """Install putplace-client package in development mode."""
+    c.run("uv pip install -e './packages/putplace-client[dev]'")
+    print("\n✓ putplace-client installed")
+    print("Use: ppclient --help")
+
+
+@task
+def install_server(c):
+    """Install putplace-server package in development mode."""
+    c.run("uv pip install -e './packages/putplace-server[dev]'")
+    print("\n✓ putplace-server installed")
+    print("Use: ppserver --help")
 
 
 @task
@@ -36,36 +53,53 @@ def test(c, verbose=False, coverage=True):
 
 @task
 def test_all(c, verbose=True, coverage=True, parallel=True, workers=4):
-    """Run all tests with proper PYTHONPATH setup.
+    """Run all tests for both client and server packages.
 
     Tests include:
-        - Python unit tests (models, API, database, auth, storage)
-        - Integration tests (end-to-end, admin creation)
-        - Electron GUI tests (packaging, installation, launch/quit) - macOS only
+        - Client tests (ppclient functionality)
+        - Server tests (API, database, auth, storage, integration)
 
     Args:
         verbose: Show verbose test output (default: True)
         coverage: Generate coverage report (default: True)
         parallel: Run tests in parallel (default: True, ~40% faster)
-        workers: Number of parallel workers (default: 4, balanced speed/reliability)
+        workers: Number of parallel workers (default: 4)
 
     Examples:
-        invoke test-all                     # Run in parallel with 4 workers (default)
-        invoke test-all --workers=8         # Use 8 workers (faster, may be less stable)
-        invoke test-all --parallel=False    # Run serially (slower but most stable)
-
-    Note: Each test worker gets its own isolated database to prevent race conditions.
-          Default of 4 workers provides good balance between speed and reliability.
-          Electron GUI tests require 'invoke gui-electron-package' to be run first.
+        invoke test-all                     # Run all tests
+        invoke test-all --workers=8         # Use 8 workers
+        invoke test-all --parallel=False    # Run serially
     """
+    print("Testing putplace-client...")
+    test_client(c, verbose=verbose, coverage=False)
+
+    print("\nTesting putplace-server...")
+    test_server(c, verbose=verbose, coverage=coverage, parallel=parallel, workers=workers)
+
+    if coverage:
+        print("\n✓ All tests passed!")
+        print("Coverage report: packages/putplace-server/htmlcov/index.html")
+
+
+@task
+def test_client(c, verbose=True, coverage=False):
+    """Run tests for putplace-client package."""
+    cmd = "uv run python -m pytest packages/putplace-client/tests/ -v --tb=short"
+    if not coverage:
+        cmd += " --no-cov"
+    c.run(cmd)
+    print("\n✓ Client tests passed!")
+
+
+@task
+def test_server(c, verbose=True, coverage=True, parallel=True, workers=4):
+    """Run tests for putplace-server package."""
     import os
-    pythonpath = f"{os.getcwd()}/src:{os.environ.get('PYTHONPATH', '')}"
+    # Add both package src directories to PYTHONPATH
+    pythonpath = f"{os.getcwd()}/packages/putplace-client/src:{os.getcwd()}/packages/putplace-server/src:{os.environ.get('PYTHONPATH', '')}"
 
-    cmd = f"PYTHONPATH={pythonpath} uv run python -m pytest tests/ -v --tb=short"
+    cmd = f"PYTHONPATH={pythonpath} uv run python -m pytest packages/putplace-server/tests/ -v --tb=short"
 
-    # Add parallel execution if enabled
-    # Use --dist loadscope to run tests in the same module/class in the same worker
-    # This prevents database race conditions between related tests
     if parallel:
         cmd += f" -n {workers} --dist loadscope"
 
@@ -73,10 +107,7 @@ def test_all(c, verbose=True, coverage=True, parallel=True, workers=4):
         cmd += " --no-cov"
 
     c.run(cmd)
-
-    if coverage:
-        print("\n✓ All tests passed!")
-        print("Coverage report: htmlcov/index.html")
+    print("\n✓ Server tests passed!")
 
 
 @task
@@ -92,8 +123,8 @@ def test_one(c, path):
 
 @task
 def lint(c, fix=False):
-    """Run ruff linter on the codebase."""
-    cmd = "uv run ruff check src tests"
+    """Run ruff linter on both packages."""
+    cmd = "uv run ruff check packages/putplace-client/src packages/putplace-client/tests packages/putplace-server/src packages/putplace-server/tests"
     if fix:
         cmd += " --fix"
     c.run(cmd)
@@ -101,8 +132,8 @@ def lint(c, fix=False):
 
 @task
 def format(c, check=False):
-    """Format code with ruff."""
-    cmd = "uv run ruff format src tests"
+    """Format code with ruff for both packages."""
+    cmd = "uv run ruff format packages/putplace-client/src packages/putplace-client/tests packages/putplace-server/src packages/putplace-server/tests"
     if check:
         cmd += " --check"
     c.run(cmd)
@@ -110,8 +141,8 @@ def format(c, check=False):
 
 @task
 def typecheck(c):
-    """Run mypy type checker."""
-    c.run("uv run mypy src")
+    """Run mypy type checker on both packages."""
+    c.run("uv run mypy packages/putplace-client/src packages/putplace-server/src")
 
 
 @task
@@ -144,11 +175,27 @@ def clean(c):
 
 @task
 def build(c):
-    """Build the package."""
+    """Build both packages."""
     clean(c)
-    c.run("uv build")
-    print("\n✓ Package built successfully")
-    print("  Distribution files in: dist/")
+    build_client(c)
+    build_server(c)
+    print("\n✓ Both packages built successfully")
+
+
+@task
+def build_client(c):
+    """Build putplace-client package."""
+    c.run("cd packages/putplace-client && uv build")
+    print("\n✓ putplace-client built")
+    print("  Distribution files in: packages/putplace-client/dist/")
+
+
+@task
+def build_server(c):
+    """Build putplace-server package."""
+    c.run("cd packages/putplace-server && uv build")
+    print("\n✓ putplace-server built")
+    print("  Distribution files in: packages/putplace-server/dist/")
 
 
 @task
@@ -711,6 +758,43 @@ def quickstart(c):
     This is equivalent to: invoke ppserver-start --dev
     """
     ppserver_start(c, dev=True)
+
+
+@task
+def reset_password(c, email=None, password=None, mongodb_url=None, database=None, list_users=False):
+    """Reset a user's password in the database.
+
+    If email and password are not provided, runs in interactive mode
+    with password confirmation.
+
+    Args:
+        email: User's email address
+        password: New password (will prompt if not provided)
+        mongodb_url: MongoDB URL (default: mongodb://localhost:27017)
+        database: Database name (default: putplace)
+        list_users: List all users and exit
+
+    Examples:
+        invoke reset-password --list-users
+        invoke reset-password --email admin@localhost
+        invoke reset-password --email admin@localhost --password newpass123
+    """
+    cmd = "uv run python -m putplace.scripts.reset_password"
+
+    if list_users:
+        cmd += " --list-users"
+    else:
+        if email:
+            cmd += f" --email {email}"
+        if password:
+            cmd += f" --password {password}"
+
+    if mongodb_url:
+        cmd += f" --mongodb-url {mongodb_url}"
+    if database:
+        cmd += f" --database {database}"
+
+    c.run(cmd, pty=True)
 
 
 # PutPlace server management
