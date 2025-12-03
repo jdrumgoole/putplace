@@ -1,0 +1,217 @@
+name: Build Electron App
+
+on:
+  # Trigger on electron version tags
+  push:
+    tags:
+      - 'electron-v*'
+
+  # Allow manual triggering
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a GitHub release'
+        required: true
+        default: true
+        type: boolean
+
+jobs:
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: ppgui-electron
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ppgui-electron/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and package
+        run: npm run package -- --mac
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: List build artifacts
+        run: ls -la release/
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-builds
+          path: |
+            ppgui-electron/release/*.dmg
+            ppgui-electron/release/*.zip
+          if-no-files-found: error
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: ppgui-electron
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ppgui-electron/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and package
+        run: npm run package -- --win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: List build artifacts
+        run: dir release
+        shell: cmd
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-builds
+          path: |
+            ppgui-electron/release/*.exe
+          if-no-files-found: error
+
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ppgui-electron
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ppgui-electron/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and package
+        run: npm run package -- --linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: List build artifacts
+        run: ls -la release/
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-builds
+          path: |
+            ppgui-electron/release/*.AppImage
+            ppgui-electron/release/*.deb
+          if-no-files-found: error
+
+  create-release:
+    name: Create GitHub Release
+    needs: [build-macos, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/electron-v') || (github.event_name == 'workflow_dispatch' && github.event.inputs.create_release == 'true')
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: List all artifacts
+        run: find artifacts -type f -name "*"
+
+      - name: Get version from tag
+        id: get_version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/electron-v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/electron-v}"
+          else
+            VERSION="manual-$(date +%Y%m%d-%H%M%S)"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: PutPlace Client v${{ steps.get_version.outputs.version }}
+          tag_name: ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            artifacts/macos-builds/*
+            artifacts/windows-builds/*
+            artifacts/linux-builds/*
+          body: |
+            ## PutPlace Desktop Client v${{ steps.get_version.outputs.version }}
+
+            ### Downloads
+
+            **macOS:**
+            - `.dmg` - Disk image installer (recommended)
+            - `.zip` - Portable zip archive
+
+            **Windows:**
+            - `.exe` (NSIS) - Windows installer
+            - `.exe` (Portable) - Portable executable
+
+            **Linux:**
+            - `.AppImage` - Universal Linux package (recommended)
+            - `.deb` - Debian/Ubuntu package
+
+            ### Installation
+
+            #### macOS
+            1. Download the `.dmg` file
+            2. Open the disk image
+            3. Drag PutPlace Client to your Applications folder
+
+            #### Windows
+            1. Download the installer `.exe`
+            2. Run the installer and follow the prompts
+
+            #### Linux
+            1. Download the `.AppImage` file
+            2. Make it executable: `chmod +x PutPlace*.AppImage`
+            3. Run it: `./PutPlace*.AppImage`
+
+            Or for Debian/Ubuntu:
+            ```bash
+            sudo dpkg -i putplace-client_*.deb
+            ```
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Success message
+        run: |
+          echo "Release created successfully!"
+          echo "View at: https://github.com/jdrumgoole/putplace/releases"
