@@ -1,7 +1,7 @@
 [project]
 name = "putplace-server"
 # IMPORTANT: Keep this version in sync with src/putplace_server/version.py!
-version = "0.8.1"
+version = "0.8.2"
 description = "PutPlace FastAPI server for file metadata storage"
 readme = "README.md"
 license = {text = "Apache-2.0"}
