@@ -294,6 +294,7 @@ class TestS3StorageWithMethods:
         """Test S3 initialization with AWS profile."""
         try:
             from putplace.storage import S3Storage
+            from botocore.exceptions import ProfileNotFound
 
             # This will create the session but not actually connect
             storage = S3Storage(
@@ -306,8 +307,8 @@ class TestS3StorageWithMethods:
             assert storage.bucket_name == "test-bucket"
             assert storage.region_name == "us-west-2"
             assert storage.prefix == "custom/"
-        except RuntimeError:
-            # aioboto3 not installed, skip
+        except (RuntimeError, ProfileNotFound):
+            # aioboto3 not installed or profile doesn't exist, skip
             pass
 
     def test_s3_with_explicit_credentials(self) -> None:
