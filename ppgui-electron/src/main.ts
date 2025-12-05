@@ -73,7 +73,7 @@ function createMenu() {
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
-    height: 800,
+    height: 920,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -390,7 +390,7 @@ ipcMain.handle('upload-file-content', async (
   token: string
 ) => {
   try {
-    const uploadUrl = `${serverUrl.replace(/\/$/, '')}/upload_file/${sha256}?hostname=${encodeURIComponent(hostname)}`;
+    const uploadUrl = `${serverUrl.replace(/\/$/, '')}/upload_file/${sha256}?hostname=${encodeURIComponent(hostname)}&filepath=${encodeURIComponent(filePath)}`;
 
     // Stream file instead of loading into memory
     const fileStream = fs.createReadStream(filePath);
