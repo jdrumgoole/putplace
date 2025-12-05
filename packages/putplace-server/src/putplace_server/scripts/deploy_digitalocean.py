@@ -464,8 +464,8 @@ systemctl start mongod
             )
         except FileNotFoundError:
             raise DeploymentError(
-                "putplace_configure command not found. Install putplace first:\n"
-                "  pip install putplace"
+                "putplace_configure command not found. Install putplace-server first:\n"
+                "  pip install putplace-server"
             )
 
     def copy_file_to_droplet(self, ip: str, local_path: str, remote_path: str) -> None:
@@ -584,24 +584,24 @@ systemctl start mongod
         print(f"Installing from: PyPI")
         print(f"Version: {version}\n")
 
-        # Install putplace from pip
+        # Install putplace-server from pip
         install_cmd = """
 set -e
 export PATH="/root/.local/bin:/root/.cargo/bin:$PATH"
 """
         if version == "latest":
-            install_cmd += "uv pip install --system putplace\n"
+            install_cmd += "uv pip install --system putplace-server\n"
         else:
-            install_cmd += f"uv pip install --system putplace=={version}\n"
+            install_cmd += f"uv pip install --system putplace-server=={version}\n"
 
-        if not self.run_ssh_realtime(ip, install_cmd, f"Install putplace {version} from PyPI"):
-            raise DeploymentError("Failed to install putplace from pip")
+        if not self.run_ssh_realtime(ip, install_cmd, f"Install putplace-server {version} from PyPI"):
+            raise DeploymentError("Failed to install putplace-server from pip")
 
         # Validate installation
         success, output = self.run_ssh_quiet(ip, "which ppserver")
         self.validate_step(
             success,
-            "putplace installed successfully",
+            "putplace-server installed successfully",
             "ppserver command not found after installation"
         )
 
