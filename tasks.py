@@ -711,7 +711,7 @@ def configure(c, non_interactive=False, admin_username=None, admin_email=None,
         invoke configure --test-mode=S3 --aws-region=us-west-2
     """
     # Run script directly from source (no installation needed)
-    cmd = "uv run python -m putplace.scripts.putplace_configure"
+    cmd = "uv run python -m putplace_server.scripts.putplace_configure"
 
     # Handle standalone test mode
     if test_mode:
@@ -779,7 +779,7 @@ def reset_password(c, email=None, password=None, mongodb_url=None, database=None
         invoke reset-password --email admin@localhost
         invoke reset-password --email admin@localhost --password newpass123
     """
-    cmd = "uv run python -m putplace.scripts.reset_password"
+    cmd = "uv run python -m putplace_server.scripts.reset_password"
 
     if list_users:
         cmd += " --list-users"
@@ -1002,7 +1002,7 @@ def send_test_email(c, to="joe@joedrumgoole.com", verbose=False):
 
     cmd = [
         "uv", "run", "python", "-m",
-        "putplace.scripts.send_ses_email",
+        "putplace_server.scripts.send_ses_email",
         "--from", "Joe.Drumgoole@putplace.org",
         "--to", to,
         "--subject", "TestSES",
@@ -1618,7 +1618,7 @@ def toggle_registration(c, action):
         sys.exit(1)
 
     # Run the Python script
-    c.run(f"uv run python -m putplace.scripts.toggle_registration {action}")
+    c.run(f"uv run python -m putplace_server.scripts.toggle_registration {action}")
 
 
 @task
@@ -1630,7 +1630,7 @@ def atlas_clusters(c):
     Examples:
         invoke atlas-clusters
     """
-    c.run("uv run python -m putplace.scripts.atlas_cluster_control list")
+    c.run("uv run python -m putplace_server.scripts.atlas_cluster_control list")
 
 
 @task
@@ -1643,7 +1643,7 @@ def atlas_status(c, cluster):
     Examples:
         invoke atlas-status --cluster=testcluster
     """
-    c.run(f"uv run python -m putplace.scripts.atlas_cluster_control status --cluster {cluster}")
+    c.run(f"uv run python -m putplace_server.scripts.atlas_cluster_control status --cluster {cluster}")
 
 
 @task
@@ -1659,7 +1659,7 @@ def atlas_pause(c, cluster):
     Examples:
         invoke atlas-pause --cluster=testcluster
     """
-    c.run(f"uv run python -m putplace.scripts.atlas_cluster_control pause --cluster {cluster}")
+    c.run(f"uv run python -m putplace_server.scripts.atlas_cluster_control pause --cluster {cluster}")
 
 
 @task
@@ -1696,7 +1696,7 @@ def setup_aws_iam(c, region="eu-west-1", skip_buckets=False):
         - AWS CLI configured with admin permissions
         - boto3 installed (pip install boto3)
     """
-    cmd = f"uv run python -m putplace.scripts.setup_aws_iam_users --region {region}"
+    cmd = f"uv run python -m putplace_server.scripts.setup_aws_iam_users --region {region}"
     if skip_buckets:
         cmd += " --skip-buckets"
     c.run(cmd)
@@ -1965,7 +1965,7 @@ def atlas_resume(c, cluster):
     Examples:
         invoke atlas-resume --cluster=testcluster
     """
-    c.run(f"uv run python -m putplace.scripts.atlas_cluster_control resume --cluster {cluster}")
+    c.run(f"uv run python -m putplace_server.scripts.atlas_cluster_control resume --cluster {cluster}")
 
 
 @task
@@ -2072,7 +2072,7 @@ def deploy_do(
         sys.exit(1)
 
     # Build command
-    cmd = "uv run python -m putplace.scripts.deploy_digitalocean"
+    cmd = "uv run python -m putplace_server.scripts.deploy_digitalocean"
 
     if create:
         cmd += " --create-droplet"
@@ -2338,7 +2338,7 @@ def update_do(c, droplet_name=None, ip=None, branch="main"):
         print("❌ Error: Must provide either --droplet-name or --ip")
         sys.exit(1)
 
-    cmd = "uv run python -m putplace.scripts.update_deployment"
+    cmd = "uv run python -m putplace_server.scripts.update_deployment"
 
     if droplet_name:
         cmd += f" --droplet-name={droplet_name}"
