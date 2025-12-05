@@ -666,7 +666,7 @@ Type=simple
 User=root
 WorkingDirectory=/opt/putplace
 {env_section}
-ExecStart=/root/.local/bin/ppserver start --config /opt/putplace/ppserver.toml --port 8000
+ExecStart=/usr/bin/python3 -m uvicorn putplace_server.main:app --host 127.0.0.1 --port 8000
 Restart=always
 RestartSec=10
 StandardOutput=append:/var/log/putplace/access.log
