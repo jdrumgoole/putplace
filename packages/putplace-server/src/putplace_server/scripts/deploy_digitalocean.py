@@ -832,6 +832,7 @@ systemctl reload nginx
                 if not droplets:
                     raise DeploymentError("Could not list droplets")
 
+                ip = None  # Initialize before loop
                 for droplet in droplets:
                     if droplet["name"] == droplet_name:
                         self.droplet_id = droplet["id"]

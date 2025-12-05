@@ -2065,10 +2065,10 @@ def deploy_do(
         print("❌ Error: doctl not found. Install with: brew install doctl")
         sys.exit(1)
 
-    # Check for putplace_configure (needed to generate config)
-    result = c.run("which putplace_configure", warn=True, hide=True)
+    # Check for putplace-server (needed to generate config)
+    result = c.run("uv run python -c 'import putplace_server'", warn=True, hide=True)
     if result.failed:
-        print("❌ Error: putplace not installed. Install with: pip install putplace")
+        print("❌ Error: putplace-server not installed. Install with: pip install putplace-server")
         sys.exit(1)
 
     # Build command
@@ -2135,7 +2135,10 @@ def _deploy_with_config(
     This is used by deploy-do-dev, deploy-do-test, and deploy-do-prod shortcuts.
     """
     import sys
-    import tomllib
+    try:
+        import tomllib
+    except ImportError:
+        import tomli as tomllib  # Python < 3.11 fallback
     from pathlib import Path
 
     # Read TOML config file
