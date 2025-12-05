@@ -52,6 +52,9 @@ const eyeOffIcon = document.getElementById('eye-off-icon') as HTMLElement;
 const showRegisterLink = document.getElementById('show-register') as HTMLAnchorElement;
 const showLoginLink = document.getElementById('show-login') as HTMLAnchorElement;
 
+// Remember email checkbox
+const rememberEmailCheckbox = document.getElementById('remember-email') as HTMLInputElement;
+
 // Register elements
 const registerUsername = document.getElementById('register-username') as HTMLInputElement;
 const registerEmail = document.getElementById('register-email') as HTMLInputElement;
@@ -99,10 +102,18 @@ async function init() {
   const savedUsername = localStorage.getItem('username');
   const savedServer = localStorage.getItem('serverUrl');
   const savedPatterns = localStorage.getItem('excludePatterns');
+  const savedEmail = localStorage.getItem('rememberedEmail');
+  const rememberEmail = localStorage.getItem('rememberEmail') === 'true';
 
   if (savedServer) {
     serverUrl = savedServer;
     loginServer.value = savedServer;
+  }
+
+  // Restore remembered email if enabled
+  if (rememberEmail && savedEmail) {
+    loginUsername.value = savedEmail;
+    rememberEmailCheckbox.checked = true;
   }
 
   if (savedPatterns) {
@@ -188,6 +199,15 @@ async function handleLogin() {
     localStorage.setItem('accessToken', accessToken!);
     localStorage.setItem('username', username);
     localStorage.setItem('serverUrl', server);
+
+    // Save or clear remembered email based on checkbox
+    if (rememberEmailCheckbox.checked) {
+      localStorage.setItem('rememberedEmail', username);
+      localStorage.setItem('rememberEmail', 'true');
+    } else {
+      localStorage.removeItem('rememberedEmail');
+      localStorage.setItem('rememberEmail', 'false');
+    }
 
     showAuthMessage('Login successful!', 'success');
     setTimeout(() => {
