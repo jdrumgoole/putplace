@@ -433,13 +433,39 @@ function stopUpload() {
   stopBtn.disabled = true;
 }
 
+// Check if error indicates authentication failure
+function isAuthError(error: string): boolean {
+  return error.includes('401') || error.toLowerCase().includes('unauthorized');
+}
+
+// Prompt user to re-authenticate
+async function promptReauthentication(): Promise<boolean> {
+  return new Promise((resolve) => {
+    // Stop the upload
+    shouldStop = true;
+
+    // Show auth section with a message
+    log('Session expired. Please log in again to continue.', 'warning');
+    showAuthSection();
+    showLoginForm();
+    showAuthMessage('Your session has expired. Please log in again to continue uploading.', 'error');
+
+    // Clear the stored token
+    accessToken = null;
+    localStorage.removeItem('accessToken');
+
+    // The user will need to manually restart the upload after logging in
+    resolve(false);
+  });
+}
+
 // Process a single file (metadata + optional content)
 async function processAndUploadFile(
   filePath: string,
   hostname: string,
   ipAddress: string,
   uploadContent: boolean
-): Promise<{ success: boolean; fileName: string; error?: string }> {
+): Promise<{ success: boolean; fileName: string; error?: string; authRequired?: boolean }> {
   const fileName = filePath.split(/[/\\]/).pop() || filePath;
 
   // Process file to get metadata
@@ -457,6 +483,10 @@ async function processAndUploadFile(
   );
 
   if (!uploadResult.success) {
+    // Check for authentication error
+    if (isAuthError(uploadResult.error)) {
+      return { success: false, fileName, error: 'Session expired', authRequired: true };
+    }
     return { success: false, fileName, error: `Metadata upload failed: ${uploadResult.error}` };
   }
 
@@ -471,6 +501,10 @@ async function processAndUploadFile(
     );
 
     if (!contentResult.success) {
+      // Check for authentication error
+      if (isAuthError(contentResult.error)) {
+        return { success: false, fileName, error: 'Session expired', authRequired: true };
+      }
       return { success: false, fileName, error: `Content upload failed: ${contentResult.error}` };
     }
   }
@@ -612,6 +646,9 @@ async function startUpload() {
   let success = 0;
   let failed = 0;
 
+  // Track if we hit an auth error
+  let authErrorOccurred = false;
+
   // Process files in parallel batches
   const processBatch = async (batch: string[]) => {
     const promises = batch.map(async (filePath) => {
@@ -626,6 +663,13 @@ async function startUpload() {
     for (const result of results) {
       if (shouldStop && result.error === 'Cancelled') {
         continue;
+      }
+
+      // Check for authentication error
+      if (result.authRequired) {
+        authErrorOccurred = true;
+        await promptReauthentication();
+        return; // Stop processing this batch
       }
 
       if (result.success) {
@@ -654,7 +698,11 @@ async function startUpload() {
   // Summary
   log('---', 'info');
   const contentMode = uploadContent ? 'with content' : 'metadata only';
-  log(`Upload complete (${contentMode}): ${success} uploaded, ${failed} failed, ${completed} total`, 'info');
+  if (authErrorOccurred) {
+    log(`Upload paused due to session expiration. ${success} uploaded, ${failed} failed. Please log in and restart.`, 'warning');
+  } else {
+    log(`Upload complete (${contentMode}): ${success} uploaded, ${failed} failed, ${completed} total`, 'info');
+  }
 
   resetUploadState();
 }
