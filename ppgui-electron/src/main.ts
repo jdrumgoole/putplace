@@ -286,9 +286,18 @@ ipcMain.handle('login', async (
 
     return { success: true, token: response.data.access_token };
   } catch (error: any) {
+    let errorMsg = 'Unknown error';
+    if (error.response?.data?.detail) {
+      const detail = error.response.data.detail;
+      errorMsg = typeof detail === 'string' ? detail : JSON.stringify(detail);
+    } else if (error.message) {
+      errorMsg = error.message;
+    } else if (error.code) {
+      errorMsg = `Connection error: ${error.code}`;
+    }
     return {
       success: false,
-      error: error.response?.data?.detail || error.message,
+      error: errorMsg,
     };
   }
 });
@@ -323,9 +332,18 @@ ipcMain.handle('register', async (
 
     return { success: true };
   } catch (error: any) {
+    let errorMsg = 'Unknown error';
+    if (error.response?.data?.detail) {
+      const detail = error.response.data.detail;
+      errorMsg = typeof detail === 'string' ? detail : JSON.stringify(detail);
+    } else if (error.message) {
+      errorMsg = error.message;
+    } else if (error.code) {
+      errorMsg = `Connection error: ${error.code}`;
+    }
     return {
       success: false,
-      error: error.response?.data?.detail || error.message,
+      error: errorMsg,
     };
   }
 });
