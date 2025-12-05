@@ -758,6 +758,7 @@ ln -sf /snap/bin/certbot /usr/bin/certbot 2>/dev/null || true
         nginx_config = f"""server {{
     listen 80;
     server_name {server_name};
+    client_max_body_size 500M;
 
     location / {{
         proxy_pass http://localhost:8000;
@@ -765,6 +766,8 @@ ln -sf /snap/bin/certbot /usr/bin/certbot 2>/dev/null || true
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 75s;
     }}
 }}
 """

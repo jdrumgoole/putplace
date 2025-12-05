@@ -392,6 +392,11 @@ ipcMain.handle('upload-file-content', async (
   try {
     const uploadUrl = `${serverUrl.replace(/\/$/, '')}/upload_file/${sha256}?hostname=${encodeURIComponent(hostname)}&filepath=${encodeURIComponent(filePath)}`;
 
+    // Get file size for progress tracking
+    const stats = fs.statSync(filePath);
+    const fileSize = stats.size;
+    const fileName = path.basename(filePath);
+
     // Stream file instead of loading into memory
     const fileStream = fs.createReadStream(filePath);
 
@@ -399,7 +404,7 @@ ipcMain.handle('upload-file-content', async (
     const FormData = require('form-data');
     const formData = new FormData();
     formData.append('file', fileStream, {
-      filename: path.basename(filePath),
+      filename: fileName,
       contentType: 'application/octet-stream',
     });
 
@@ -411,6 +416,19 @@ ipcMain.handle('upload-file-content', async (
       timeout: 300000, // 5 minutes for large files
       maxContentLength: Infinity,
       maxBodyLength: Infinity,
+      onUploadProgress: (progressEvent) => {
+        const loaded = progressEvent.loaded || 0;
+        const total = progressEvent.total || fileSize;
+        const percentage = total > 0 ? Math.round((loaded / total) * 100) : 0;
+        // Send progress to renderer
+        event.sender.send('upload-progress', {
+          fileName,
+          filePath,
+          loaded,
+          total,
+          percentage,
+        });
+      },
     });
 
     return { success: true, data: response.data, status: response.status };

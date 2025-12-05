@@ -16,4 +16,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('upload-metadata', metadata, serverUrl, token),
   uploadFileContent: (filePath: string, sha256: string, hostname: string, serverUrl: string, token: string) =>
     ipcRenderer.invoke('upload-file-content', filePath, sha256, hostname, serverUrl, token),
+  onUploadProgress: (callback: (progress: { fileName: string; filePath: string; loaded: number; total: number; percentage: number }) => void) => {
+    ipcRenderer.on('upload-progress', (_event, progress) => callback(progress));
+  },
+  removeUploadProgressListener: () => {
+    ipcRenderer.removeAllListeners('upload-progress');
+  },
 });

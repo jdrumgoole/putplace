@@ -1,4 +1,12 @@
 // TypeScript definitions for window.electronAPI
+interface UploadProgress {
+  fileName: string;
+  filePath: string;
+  loaded: number;
+  total: number;
+  percentage: number;
+}
+
 interface ElectronAPI {
   selectDirectory: () => Promise<string | null>;
   getSystemInfo: () => Promise<{ hostname: string; ipAddress: string }>;
@@ -9,6 +17,8 @@ interface ElectronAPI {
   register: (username: string, email: string, password: string, fullName: string | null, serverUrl: string) => Promise<any>;
   uploadMetadata: (metadata: any, serverUrl: string, token: string) => Promise<any>;
   uploadFileContent: (filePath: string, sha256: string, hostname: string, serverUrl: string, token: string) => Promise<any>;
+  onUploadProgress: (callback: (progress: UploadProgress) => void) => void;
+  removeUploadProgressListener: () => void;
 }
 
 declare const electronAPI: ElectronAPI;
@@ -69,6 +79,10 @@ const stopBtn = document.getElementById('stop-btn') as HTMLButtonElement;
 const clearLogBtn = document.getElementById('clear-log-btn') as HTMLButtonElement;
 const uploadContentCheckbox = document.getElementById('upload-content') as HTMLInputElement;
 const parallelUploadsInput = document.getElementById('parallel-uploads') as HTMLInputElement;
+const fileProgressContainer = document.getElementById('file-progress-container') as HTMLDivElement;
+const fileProgressName = document.getElementById('file-progress-name') as HTMLSpanElement;
+const fileProgressSize = document.getElementById('file-progress-size') as HTMLSpanElement;
+const fileProgressFill = document.getElementById('file-progress-fill') as HTMLDivElement;
 
 // Initialize
 async function init() {
@@ -444,6 +458,23 @@ async function processAndUploadFile(
   return { success: true, fileName };
 }
 
+// Format bytes to human readable
+function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+// Update file progress UI
+function updateFileProgress(progress: UploadProgress) {
+  fileProgressContainer.style.display = 'block';
+  fileProgressName.textContent = progress.fileName;
+  fileProgressSize.textContent = `${formatBytes(progress.loaded)} / ${formatBytes(progress.total)}`;
+  fileProgressFill.style.width = `${progress.percentage}%`;
+}
+
 // Start upload
 async function startUpload() {
   if (isUploading) {
@@ -470,6 +501,11 @@ async function startUpload() {
   const ipAddress = ipAddressInput.value;
   const uploadContent = uploadContentCheckbox.checked;
   const parallelCount = parseInt(parallelUploadsInput.value) || 4;
+
+  // Set up progress listener for file content uploads
+  if (uploadContent) {
+    electronAPI.onUploadProgress(updateFileProgress);
+  }
 
   log('Starting file scan...', 'info');
   if (uploadContent) {
@@ -556,6 +592,10 @@ function resetUploadState() {
   stopBtn.disabled = true;
   progressText.textContent = 'Ready';
   progressFill.style.width = '0%';
+  // Clean up progress listener and hide file progress
+  electronAPI.removeUploadProgressListener();
+  fileProgressContainer.style.display = 'none';
+  fileProgressFill.style.width = '0%';
 }
 
 // Google OAuth handling
