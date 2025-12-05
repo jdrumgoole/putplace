@@ -13,7 +13,7 @@ pwd_hasher = PasswordHasher()
 # JWT settings
 SECRET_KEY = "your-secret-key-change-this-in-production"  # TODO: Move to config
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours - longer for desktop clients uploading large files
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
