@@ -433,6 +433,22 @@
                     `;
                 }
 
+                // Add macOS installation note
+                if (platforms.macos.files.length > 0) {
+                    html += `
+                        <div style="background: #fef3c7; border: 1px solid #f59e0b; padding: 20px; border-radius: 10px; margin-top: 30px;">
+                            <h4 style="color: #92400e; margin-bottom: 10px;">&#9888; macOS Installation Note</h4>
+                            <p style="color: #78350f; font-size: 0.95em;">
+                                macOS may show "damaged and can't be opened" for unsigned apps. To fix this, open Terminal and run:
+                            </p>
+                            <pre style="background: #292524; color: #fef3c7; padding: 12px; border-radius: 6px; margin: 10px 0; font-size: 0.85em;"><code>xattr -cr "/Applications/PutPlace Client.app"</code></pre>
+                            <p style="color: #78350f; font-size: 0.9em;">
+                                Then open the app again. This removes the quarantine attribute set by macOS Gatekeeper.
+                            </p>
+                        </div>
+                    `;
+                }
+
                 html += `
                     <p style="text-align: center; color: #6b7280; margin-top: 30px;">
                         <a href="${electronRelease.html_url}" target="_blank" style="color: #667eea;">
