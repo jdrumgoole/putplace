@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 @pytest.mark.asyncio
 async def test_register_new_user(client: AsyncClient):
     """Test registering a new user creates pending user."""
-    with patch('putplace.email_service.get_email_service') as mock_email:
+    with patch('putplace_server.email_service.get_email_service') as mock_email:
         email_service = Mock()
         email_service.send_confirmation_email = Mock(return_value=True)
         mock_email.return_value = email_service
@@ -32,7 +32,7 @@ async def test_register_new_user(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_register_user_minimal_data(client: AsyncClient):
     """Test registering a user with only required fields creates pending user."""
-    with patch('putplace.email_service.get_email_service') as mock_email:
+    with patch('putplace_server.email_service.get_email_service') as mock_email:
         email_service = Mock()
         email_service.send_confirmation_email = Mock(return_value=True)
         mock_email.return_value = email_service
@@ -62,7 +62,7 @@ async def test_register_duplicate_email(client: AsyncClient, test_db):
     )
 
     # Try to register with same email
-    with patch('putplace.email_service.get_email_service') as mock_email:
+    with patch('putplace_server.email_service.get_email_service') as mock_email:
         email_service = Mock()
         email_service.send_confirmation_email = Mock(return_value=True)
         mock_email.return_value = email_service
@@ -95,7 +95,7 @@ async def test_register_invalid_password_too_short(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_register_valid_email(client: AsyncClient):
     """Test that email field is validated."""
-    with patch('putplace.email_service.get_email_service') as mock_email:
+    with patch('putplace_server.email_service.get_email_service') as mock_email:
         email_service = Mock()
         email_service.send_confirmation_email = Mock(return_value=True)
         mock_email.return_value = email_service

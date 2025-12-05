@@ -379,3 +379,4 @@ Configuration is managed via Pydantic Settings in `src/putplace/config.py`
 - use the invoke targets to start and stop the sever rather than doing it manually
 - the default region for AWS us eu-west-1
 - Always prefer invoke tasks for operaitons if available
+- when we create a new release of the client update the download page with the new links

@@ -6,12 +6,12 @@ from unittest.mock import Mock, patch, MagicMock
 
 import pytest
 
-from putplace import ppserver
+from putplace_server import ppserver
 
 
 def test_load_config_no_toml():
     """Test load_config when tomllib is not available."""
-    with patch('putplace.ppserver.tomllib', None):
+    with patch('putplace_server.ppserver.tomllib', None):
         config = ppserver.load_config()
         assert config == {}
 
@@ -29,7 +29,7 @@ port = 9000
 pid_file = "/tmp/test.pid"
 """)
 
-        with patch('putplace.ppserver.Path') as mock_path:
+        with patch('putplace_server.ppserver.Path') as mock_path:
             # Mock Path.home() to return our temp directory
             mock_path.return_value = Path(tmpdir)
             mock_path.home.return_value = Path(tmpdir)
@@ -39,7 +39,7 @@ pid_file = "/tmp/test.pid"
             mock_config_path.exists.return_value = True
             mock_config_path.__truediv__ = lambda self, other: config_file if "ppserver.toml" in str(other) else Path(tmpdir) / other
 
-            with patch('putplace.ppserver.Path', return_value=mock_config_path):
+            with patch('putplace_server.ppserver.Path', return_value=mock_config_path):
                 # Directly test with the temp config file
                 import sys
                 if sys.version_info >= (3, 11):
@@ -59,7 +59,7 @@ pid_file = "/tmp/test.pid"
 
 def test_get_pid_file_default():
     """Test get_pid_file returns default path."""
-    with patch('putplace.ppserver.load_config', return_value={}):
+    with patch('putplace_server.ppserver.load_config', return_value={}):
         pid_file = ppserver.get_pid_file()
         assert pid_file.name == "ppserver.pid"
         assert ".putplace" in str(pid_file)
@@ -68,7 +68,7 @@ def test_get_pid_file_default():
 def test_get_pid_file_from_config():
     """Test get_pid_file reads from config."""
     test_pid = "/tmp/custom.pid"
-    with patch('putplace.ppserver.load_config', return_value={
+    with patch('putplace_server.ppserver.load_config', return_value={
         'logging': {'pid_file': test_pid}
     }):
         pid_file = ppserver.get_pid_file()
@@ -84,7 +84,7 @@ def test_get_log_file():
 
 def test_is_running_no_pid_file():
     """Test is_running when PID file doesn't exist."""
-    with patch('putplace.ppserver.get_pid_file') as mock_get_pid:
+    with patch('putplace_server.ppserver.get_pid_file') as mock_get_pid:
         mock_pid_file = Mock()
         mock_pid_file.exists.return_value = False
         mock_get_pid.return_value = mock_pid_file
@@ -100,7 +100,7 @@ def test_is_running_stale_pid():
         pid_file = Path(tmpdir) / "ppserver.pid"
         pid_file.write_text("99999")  # Non-existent PID
 
-        with patch('putplace.ppserver.get_pid_file', return_value=pid_file):
+        with patch('putplace_server.ppserver.get_pid_file', return_value=pid_file):
             running, pid = ppserver.is_running()
             assert running is False
             # When PID doesn't exist, is_running returns None for pid
@@ -147,8 +147,8 @@ def test_wait_for_port_timeout():
 
 def test_stop_server_not_running():
     """Test stop_server when server is not running."""
-    with patch('putplace.ppserver.is_running', return_value=(False, None)):
-        with patch('putplace.ppserver.console') as mock_console:
+    with patch('putplace_server.ppserver.is_running', return_value=(False, None)):
+        with patch('putplace_server.ppserver.console') as mock_console:
             result = ppserver.stop_server()
             assert result == 1
             mock_console.print.assert_called()
@@ -156,8 +156,8 @@ def test_stop_server_not_running():
 
 def test_status_not_running():
     """Test status_server when server is not running."""
-    with patch('putplace.ppserver.is_running', return_value=(False, None)):
-        with patch('putplace.ppserver.console') as mock_console:
+    with patch('putplace_server.ppserver.is_running', return_value=(False, None)):
+        with patch('putplace_server.ppserver.console') as mock_console:
             result = ppserver.status_server()
             assert result == 1
             mock_console.print.assert_called()
@@ -169,9 +169,9 @@ def test_status_running():
         log_file = Path(tmpdir) / "ppserver.log"
         log_file.write_text("INFO: Server started\n")
 
-        with patch('putplace.ppserver.is_running', return_value=(True, 12345)):
-            with patch('putplace.ppserver.get_log_file', return_value=log_file):
-                with patch('putplace.ppserver.console') as mock_console:
+        with patch('putplace_server.ppserver.is_running', return_value=(True, 12345)):
+            with patch('putplace_server.ppserver.get_log_file', return_value=log_file):
+                with patch('putplace_server.ppserver.console') as mock_console:
                     result = ppserver.status_server()
                     assert result == 0
                     # Should print status
@@ -180,9 +180,9 @@ def test_status_running():
 
 def test_restart_not_running():
     """Test restart_server when server is not currently running."""
-    with patch('putplace.ppserver.is_running', return_value=(False, None)):
-        with patch('putplace.ppserver.start_server', return_value=0) as mock_start:
-            with patch('putplace.ppserver.console'):
+    with patch('putplace_server.ppserver.is_running', return_value=(False, None)):
+        with patch('putplace_server.ppserver.start_server', return_value=0) as mock_start:
+            with patch('putplace_server.ppserver.console'):
                 result = ppserver.restart_server()
                 mock_start.assert_called_once()
 
@@ -192,8 +192,8 @@ def test_logs_file_not_found():
     with tempfile.TemporaryDirectory() as tmpdir:
         nonexistent = Path(tmpdir) / "nonexistent.log"
 
-        with patch('putplace.ppserver.get_log_file', return_value=nonexistent):
-            with patch('putplace.ppserver.console') as mock_console:
+        with patch('putplace_server.ppserver.get_log_file', return_value=nonexistent):
+            with patch('putplace_server.ppserver.console') as mock_console:
                 result = ppserver.logs_server(lines=10)
                 assert result == 1
                 mock_console.print.assert_called()
@@ -205,8 +205,8 @@ def test_logs_success():
         log_file = Path(tmpdir) / "ppserver.log"
         log_file.write_text("Line 1\nLine 2\nLine 3\n")
 
-        with patch('putplace.ppserver.get_log_file', return_value=log_file):
-            with patch('putplace.ppserver.console') as mock_console:
+        with patch('putplace_server.ppserver.get_log_file', return_value=log_file):
+            with patch('putplace_server.ppserver.console') as mock_console:
                 result = ppserver.logs_server(lines=10)
                 assert result == 0
                 # Should print log content
@@ -219,7 +219,7 @@ def test_load_config_with_error():
         config_file = Path(tmpdir) / "ppserver.toml"
         config_file.write_text("invalid toml {{{")
 
-        with patch('putplace.ppserver.Path') as mock_path_cls:
+        with patch('putplace_server.ppserver.Path') as mock_path_cls:
             # Create instances that will be returned
             mock_instance1 = MagicMock()
             mock_instance1.exists.return_value = True
@@ -236,8 +236,8 @@ def test_load_config_with_error():
 
 def test_start_server_already_running():
     """Test start_server when server is already running."""
-    with patch('putplace.ppserver.is_running', return_value=(True, 12345)):
-        with patch('putplace.ppserver.console') as mock_console:
+    with patch('putplace_server.ppserver.is_running', return_value=(True, 12345)):
+        with patch('putplace_server.ppserver.console') as mock_console:
             result = ppserver.start_server()
             assert result == 1
             # Should print warning
@@ -246,10 +246,10 @@ def test_start_server_already_running():
 
 def test_start_server_process_fails():
     """Test start_server when process fails immediately."""
-    with patch('putplace.ppserver.is_running', return_value=(False, None)):
-        with patch('putplace.ppserver.load_config', return_value={}):
-            with patch('putplace.ppserver.get_log_file', return_value=Path("/tmp/test.log")):
-                with patch('putplace.ppserver.get_pid_file', return_value=Path("/tmp/test.pid")):
+    with patch('putplace_server.ppserver.is_running', return_value=(False, None)):
+        with patch('putplace_server.ppserver.load_config', return_value={}):
+            with patch('putplace_server.ppserver.get_log_file', return_value=Path("/tmp/test.log")):
+                with patch('putplace_server.ppserver.get_pid_file', return_value=Path("/tmp/test.pid")):
                     with patch('builtins.open', create=True):
                         with patch('subprocess.Popen') as mock_popen:
                             # Mock process that exits immediately
@@ -257,7 +257,7 @@ def test_start_server_process_fails():
                             mock_process.poll.return_value = 1  # Non-None = exited
                             mock_popen.return_value = mock_process
 
-                            with patch('putplace.ppserver.console'):
+                            with patch('putplace_server.ppserver.console'):
                                 result = ppserver.start_server()
                                 assert result == 1
 
@@ -267,13 +267,13 @@ def test_stop_server_success():
     with tempfile.TemporaryDirectory() as tmpdir:
         pid_file = Path(tmpdir) / "ppserver.pid"
 
-        with patch('putplace.ppserver.is_running', return_value=(True, 99999)):
-            with patch('putplace.ppserver.get_pid_file', return_value=pid_file):
+        with patch('putplace_server.ppserver.is_running', return_value=(True, 99999)):
+            with patch('putplace_server.ppserver.get_pid_file', return_value=pid_file):
                 with patch('os.kill') as mock_kill:
                     # First kill is SIGTERM, second is the check which raises ProcessLookupError
                     mock_kill.side_effect = [None, ProcessLookupError()]
 
-                    with patch('putplace.ppserver.console'):
+                    with patch('putplace_server.ppserver.console'):
                         result = ppserver.stop_server()
                         assert result == 0
 
@@ -284,8 +284,8 @@ def test_stop_server_force_kill():
         pid_file = Path(tmpdir) / "ppserver.pid"
         pid_file.write_text("12345")
 
-        with patch('putplace.ppserver.is_running', return_value=(True, 12345)):
-            with patch('putplace.ppserver.get_pid_file', return_value=pid_file):
+        with patch('putplace_server.ppserver.is_running', return_value=(True, 12345)):
+            with patch('putplace_server.ppserver.get_pid_file', return_value=pid_file):
                 with patch('os.kill') as mock_kill:
                     # Process keeps running during checks, then gets force killed
                     call_count = [0]
@@ -299,7 +299,7 @@ def test_stop_server_force_kill():
                     mock_kill.side_effect = kill_side_effect
 
                     with patch('time.sleep'):  # Speed up the test
-                        with patch('putplace.ppserver.console'):
+                        with patch('putplace_server.ppserver.console'):
                             result = ppserver.stop_server()
                             # Should succeed after force kill
                             assert result == 0
@@ -307,9 +307,9 @@ def test_stop_server_force_kill():
 
 def test_stop_server_permission_error():
     """Test stop_server handles permission errors."""
-    with patch('putplace.ppserver.is_running', return_value=(True, 12345)):
+    with patch('putplace_server.ppserver.is_running', return_value=(True, 12345)):
         with patch('os.kill', side_effect=PermissionError("Permission denied")):
-            with patch('putplace.ppserver.console') as mock_console:
+            with patch('putplace_server.ppserver.console') as mock_console:
                 result = ppserver.stop_server()
                 assert result == 1
                 # Should print permission error
@@ -322,20 +322,20 @@ def test_stop_server_process_already_gone():
         pid_file = Path(tmpdir) / "ppserver.pid"
         pid_file.write_text("12345")
 
-        with patch('putplace.ppserver.is_running', return_value=(True, 12345)):
-            with patch('putplace.ppserver.get_pid_file', return_value=pid_file):
+        with patch('putplace_server.ppserver.is_running', return_value=(True, 12345)):
+            with patch('putplace_server.ppserver.get_pid_file', return_value=pid_file):
                 with patch('os.kill', side_effect=ProcessLookupError()):
-                    with patch('putplace.ppserver.console'):
+                    with patch('putplace_server.ppserver.console'):
                         result = ppserver.stop_server()
                         assert result == 0
 
 
 def test_restart_with_port_timeout():
     """Test restart_server when port doesn't become available."""
-    with patch('putplace.ppserver.is_running', return_value=(True, 12345)):
-        with patch('putplace.ppserver.stop_server', return_value=0):
-            with patch('putplace.ppserver.wait_for_port_available', return_value=False):
-                with patch('putplace.ppserver.console') as mock_console:
+    with patch('putplace_server.ppserver.is_running', return_value=(True, 12345)):
+        with patch('putplace_server.ppserver.stop_server', return_value=0):
+            with patch('putplace_server.ppserver.wait_for_port_available', return_value=False):
+                with patch('putplace_server.ppserver.console') as mock_console:
                     result = ppserver.restart_server()
                     assert result == 1
                     # Should print port error
@@ -344,16 +344,16 @@ def test_restart_with_port_timeout():
 
 def test_restart_stop_fails():
     """Test restart_server when stop fails."""
-    with patch('putplace.ppserver.is_running', return_value=(True, 12345)):
-        with patch('putplace.ppserver.stop_server', return_value=1):
-            with patch('putplace.ppserver.console'):
+    with patch('putplace_server.ppserver.is_running', return_value=(True, 12345)):
+        with patch('putplace_server.ppserver.stop_server', return_value=1):
+            with patch('putplace_server.ppserver.console'):
                 result = ppserver.restart_server()
                 assert result == 1
 
 
 def test_wait_for_port_becomes_available():
     """Test wait_for_port_available when port becomes free."""
-    with patch('putplace.ppserver.is_port_available') as mock_is_avail:
+    with patch('putplace_server.ppserver.is_port_available') as mock_is_avail:
         # Port becomes available on second check
         mock_is_avail.side_effect = [False, True]
 
@@ -365,7 +365,7 @@ def test_wait_for_port_becomes_available():
 def test_main_no_command():
     """Test main() with no command prints help."""
     with patch('sys.argv', ['ppserver']):
-        with patch('putplace.ppserver.load_config', return_value={}):
+        with patch('putplace_server.ppserver.load_config', return_value={}):
             result = ppserver.main()
             assert result == 1
 
@@ -373,8 +373,8 @@ def test_main_no_command():
 def test_main_start_command():
     """Test main() with start command."""
     with patch('sys.argv', ['ppserver', 'start']):
-        with patch('putplace.ppserver.load_config', return_value={}):
-            with patch('putplace.ppserver.start_server', return_value=0) as mock_start:
+        with patch('putplace_server.ppserver.load_config', return_value={}):
+            with patch('putplace_server.ppserver.start_server', return_value=0) as mock_start:
                 result = ppserver.main()
                 mock_start.assert_called_once()
                 assert result == 0
@@ -383,8 +383,8 @@ def test_main_start_command():
 def test_main_stop_command():
     """Test main() with stop command."""
     with patch('sys.argv', ['ppserver', 'stop']):
-        with patch('putplace.ppserver.load_config', return_value={}):
-            with patch('putplace.ppserver.stop_server', return_value=0) as mock_stop:
+        with patch('putplace_server.ppserver.load_config', return_value={}):
+            with patch('putplace_server.ppserver.stop_server', return_value=0) as mock_stop:
                 result = ppserver.main()
                 mock_stop.assert_called_once()
                 assert result == 0
@@ -393,8 +393,8 @@ def test_main_stop_command():
 def test_main_restart_command():
     """Test main() with restart command."""
     with patch('sys.argv', ['ppserver', 'restart', '--port', '9000']):
-        with patch('putplace.ppserver.load_config', return_value={}):
-            with patch('putplace.ppserver.restart_server', return_value=0) as mock_restart:
+        with patch('putplace_server.ppserver.load_config', return_value={}):
+            with patch('putplace_server.ppserver.restart_server', return_value=0) as mock_restart:
                 result = ppserver.main()
                 mock_restart.assert_called_once_with('127.0.0.1', 9000, False)
                 assert result == 0
@@ -403,8 +403,8 @@ def test_main_restart_command():
 def test_main_status_command():
     """Test main() with status command."""
     with patch('sys.argv', ['ppserver', 'status']):
-        with patch('putplace.ppserver.load_config', return_value={}):
-            with patch('putplace.ppserver.status_server', return_value=0) as mock_status:
+        with patch('putplace_server.ppserver.load_config', return_value={}):
+            with patch('putplace_server.ppserver.status_server', return_value=0) as mock_status:
                 result = ppserver.main()
                 mock_status.assert_called_once()
                 assert result == 0
@@ -413,8 +413,8 @@ def test_main_status_command():
 def test_main_logs_command():
     """Test main() with logs command."""
     with patch('sys.argv', ['ppserver', 'logs', '--lines', '100']):
-        with patch('putplace.ppserver.load_config', return_value={}):
-            with patch('putplace.ppserver.logs_server', return_value=0) as mock_logs:
+        with patch('putplace_server.ppserver.load_config', return_value={}):
+            with patch('putplace_server.ppserver.logs_server', return_value=0) as mock_logs:
                 result = ppserver.main()
                 mock_logs.assert_called_once_with(False, 100)
                 assert result == 0
@@ -423,8 +423,8 @@ def test_main_logs_command():
 def test_main_logs_follow():
     """Test main() with logs --follow command."""
     with patch('sys.argv', ['ppserver', 'logs', '-f']):
-        with patch('putplace.ppserver.load_config', return_value={}):
-            with patch('putplace.ppserver.logs_server', return_value=0) as mock_logs:
+        with patch('putplace_server.ppserver.load_config', return_value={}):
+            with patch('putplace_server.ppserver.logs_server', return_value=0) as mock_logs:
                 result = ppserver.main()
                 mock_logs.assert_called_once_with(True, 50)
                 assert result == 0
@@ -440,8 +440,8 @@ def test_main_with_config_overrides():
     }
 
     with patch('sys.argv', ['ppserver', 'start', '--port', '8080']):
-        with patch('putplace.ppserver.load_config', return_value=config):
-            with patch('putplace.ppserver.start_server', return_value=0) as mock_start:
+        with patch('putplace_server.ppserver.load_config', return_value=config):
+            with patch('putplace_server.ppserver.start_server', return_value=0) as mock_start:
                 result = ppserver.main()
                 # CLI port should override config
                 mock_start.assert_called_once_with('0.0.0.0', 8080, False)
@@ -457,7 +457,7 @@ def test_is_running_with_valid_pid():
         pid_file = Path(tmpdir) / "ppserver.pid"
         pid_file.write_text(str(current_pid))
 
-        with patch('putplace.ppserver.get_pid_file', return_value=pid_file):
+        with patch('putplace_server.ppserver.get_pid_file', return_value=pid_file):
             running, pid = ppserver.is_running()
             assert running is True
             assert pid == current_pid
@@ -469,7 +469,7 @@ def test_is_running_invalid_pid_format():
         pid_file = Path(tmpdir) / "ppserver.pid"
         pid_file.write_text("not-a-number")
 
-        with patch('putplace.ppserver.get_pid_file', return_value=pid_file):
+        with patch('putplace_server.ppserver.get_pid_file', return_value=pid_file):
             running, pid = ppserver.is_running()
             assert running is False
             assert pid is None

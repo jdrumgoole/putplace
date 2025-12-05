@@ -265,7 +265,7 @@ async def test_api_register_endpoint(client: AsyncClient):
     """Test POST /api/register endpoint creates pending user."""
     from unittest.mock import Mock, patch
 
-    with patch('putplace.email_service.get_email_service') as mock_email:
+    with patch('putplace_server.email_service.get_email_service') as mock_email:
         email_service = Mock()
         email_service.send_confirmation_email = Mock(return_value=True)
         mock_email.return_value = email_service

@@ -182,7 +182,7 @@ async def test_database_connection_failure():
     invalid_settings = Settings(mongodb_url="mongodb://invalid-host:27017")
 
     # Temporarily replace settings
-    from putplace import database as db_module
+    from putplace_server import database as db_module
 
     original_settings = db_module.settings
     db_module.settings = invalid_settings

@@ -66,7 +66,7 @@ class TestRegistrationWithEmailConfirmation:
     @pytest.fixture
     async def mock_email_service(self):
         """Mock email service."""
-        with patch('putplace.email_service.get_email_service') as mock:
+        with patch('putplace_server.email_service.get_email_service') as mock:
             email_service = Mock()
             email_service.send_confirmation_email = Mock(return_value=True)
             mock.return_value = email_service
@@ -121,7 +121,7 @@ class TestRegistrationWithEmailConfirmation:
 
     async def test_register_email_send_failure_rolls_back(self, client, test_db):
         """Test registration rolls back if email fails to send."""
-        with patch('putplace.email_service.get_email_service') as mock_email:
+        with patch('putplace_server.email_service.get_email_service') as mock_email:
             email_service = Mock()
             email_service.send_confirmation_email = Mock(return_value=False)
             mock_email.return_value = email_service
@@ -306,7 +306,7 @@ class TestEmailConfirmationIntegration:
 
     async def test_complete_registration_flow(self, client, test_db):
         """Test complete flow: register -> confirm -> login."""
-        with patch('putplace.email_service.get_email_service') as mock_email:
+        with patch('putplace_server.email_service.get_email_service') as mock_email:
             email_service = Mock()
             captured_token = None
 

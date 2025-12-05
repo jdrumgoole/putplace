@@ -212,7 +212,7 @@ async def test_app_lifespan(test_settings, test_db, monkeypatch):
     """
     from fastapi import FastAPI
     from putplace_server.database import MongoDB
-    from putplace import database
+    from putplace_server import database
 
     # Skip test if aioboto3 is not installed (needed if S3 backend is configured)
     # This handles cases where ppserver.toml has storage.backend = "s3"
@@ -245,7 +245,7 @@ async def test_app_lifespan(test_settings, test_db, monkeypatch):
 
     try:
         # Import lifespan after monkeypatch to get updated settings
-        from putplace import main
+        from putplace_server import main
 
         # Test lifespan context manager
         async with main.lifespan(app):

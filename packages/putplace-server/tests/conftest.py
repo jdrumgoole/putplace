@@ -65,7 +65,7 @@ def run_configure(
     import sys
 
     cmd = [
-        sys.executable, "-m", "putplace.scripts.putplace_configure",
+        sys.executable, "-m", "putplace_server.scripts.putplace_configure",
         "--non-interactive",
         "--mongodb-url", "mongodb://localhost:27017",
         "--mongodb-database", db_name,

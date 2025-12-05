@@ -10,7 +10,7 @@ async def test_registration_enabled_by_default(client: AsyncClient):
     """Test that registration is enabled by default."""
     from unittest.mock import Mock, patch
 
-    with patch('putplace.email_service.get_email_service') as mock_email:
+    with patch('putplace_server.email_service.get_email_service') as mock_email:
         email_service = Mock()
         email_service.send_confirmation_email = Mock(return_value=True)
         mock_email.return_value = email_service
@@ -76,7 +76,7 @@ async def test_registration_can_be_reenabled(client: AsyncClient):
         # Now re-enable registration
         settings.registration_enabled = True
 
-        with patch('putplace.email_service.get_email_service') as mock_email:
+        with patch('putplace_server.email_service.get_email_service') as mock_email:
             email_service = Mock()
             email_service.send_confirmation_email = Mock(return_value=True)
             mock_email.return_value = email_service

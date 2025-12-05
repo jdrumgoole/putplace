@@ -200,7 +200,7 @@ s3_region_name = "us-east-1"
             config_path.write_text(config_content)
 
             # Mock the search paths to use our temp directory
-            with patch('putplace.scripts.putplace_configure.Path') as mock_path:
+            with patch('putplace_server.scripts.putplace_configure.Path') as mock_path:
                 mock_path_instance = Mock()
                 mock_path_instance.exists.return_value = True
                 mock_path_instance.__truediv__ = lambda self, other: config_path
