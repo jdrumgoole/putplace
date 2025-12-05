@@ -275,7 +275,7 @@ ipcMain.handle('login', async (
   try {
     const loginUrl = `${serverUrl.replace(/\/$/, '')}/api/login`;
     const response = await axios.post(loginUrl, {
-      username,
+      email: username,  // Server expects email field
       password,
     }, {
       headers: {
