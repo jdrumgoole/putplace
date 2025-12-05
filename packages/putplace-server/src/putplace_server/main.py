@@ -3932,13 +3932,16 @@ async def my_files_page() -> str:
                     container.innerHTML = `
                         <div class="no-files">
                             <h3>No files uploaded yet</h3>
-                            <p>Use the <strong>ppclient</strong> command-line tool to scan directories and upload file metadata.</p>
+                            <p>Use the desktop app or command-line tool to scan directories and upload file metadata.</p>
                             <div class="install-info">
-                                <h4>Install ppclient</h4>
-                                <pre>pip install putplace</pre>
+                                <h4>Desktop App (Recommended)</h4>
+                                <p style="margin: 8px 0;">Download the PutPlace Client for macOS, Windows, or Linux:</p>
+                                <p><a href="/downloads" style="color: #667eea; font-weight: 600;">Download Desktop App</a></p>
+                                <h4>Command Line (Python)</h4>
+                                <pre>pip install putplace-client</pre>
                                 <h4>Usage</h4>
-                                <pre>ppclient /path/to/scan --api-key YOUR_API_KEY</pre>
-                                <p class="hint">Get your API key from the <a href="/api_keys_page">My API Keys</a> page.</p>
+                                <pre>ppclient /path/to/scan --email you@example.com --password yourpass</pre>
+                                <p class="hint">Or use an API key from the <a href="/api_keys_page">My API Keys</a> page.</p>
                             </div>
                         </div>
                     `;
