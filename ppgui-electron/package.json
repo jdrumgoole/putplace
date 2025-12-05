@@ -3,6 +3,11 @@
   "productName": "PutPlace Client",
   "version": "1.0.0",
   "description": "PutPlace GUI - Desktop client for file metadata management",
+  "homepage": "https://github.com/jdrumgoole/putplace",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jdrumgoole/putplace.git"
+  },
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc && shx mkdir -p dist/renderer/assets && shx cp src/renderer/*.html dist/renderer/ && shx cp src/renderer/*.css dist/renderer/",
@@ -16,7 +21,10 @@
     "metadata",
     "electron"
   ],
-  "author": "",
+  "author": {
+    "name": "Joe Drumgoole",
+    "email": "joe@joedrumgoole.com"
+  },
   "license": "ISC",
   "devDependencies": {
     "@types/node": "^24.10.0",
@@ -81,7 +89,8 @@
           ]
         }
       ],
-      "category": "Utility"
+      "category": "Utility",
+      "maintainer": "Joe Drumgoole <joe@joedrumgoole.com>"
     },
     "directories": {
       "output": "release"
