@@ -36,17 +36,18 @@ jobs:
 
       - name: Invalidate CloudFront cache
         run: |
+          # Look for distribution with www.putplace.org or putplace.org alias
           DISTRIBUTION_ID=$(aws cloudfront list-distributions \
-            --query "DistributionList.Items[?Aliases.Items[0]=='putplace.org'].Id | [0]" \
+            --query "DistributionList.Items[?contains(Aliases.Items, 'www.putplace.org') || contains(Aliases.Items, 'putplace.org')].Id | [0]" \
             --output text)
 
-          if [ ! -z "$DISTRIBUTION_ID" ]; then
+          if [ "$DISTRIBUTION_ID" != "None" ] && [ ! -z "$DISTRIBUTION_ID" ]; then
             aws cloudfront create-invalidation \
               --distribution-id $DISTRIBUTION_ID \
               --paths '/*'
             echo "✓ CloudFront cache invalidated for distribution: $DISTRIBUTION_ID"
           else
-            echo "⚠ CloudFront distribution not found"
+            echo "⚠ CloudFront distribution not found for putplace.org"
           fi
 
       - name: Deployment summary
