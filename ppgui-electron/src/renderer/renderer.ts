@@ -17,7 +17,7 @@ let excludePatterns: string[] = [];
 let isUploading = false;
 let shouldStop = false;
 let accessToken: string | null = null;
-let serverUrl: string = 'http://localhost:8000';
+let serverUrl: string = 'https://app.putplace.org';
 let currentUsername: string | null = null;
 
 // DOM elements
