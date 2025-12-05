@@ -345,7 +345,11 @@
                 if (!response.ok) throw new Error('Failed to fetch releases');
 
                 const releases = await response.json();
-                const electronRelease = releases.find(r => r.tag_name.startsWith('electron-v'));
+                // Filter electron releases and sort by published date (newest first)
+                const electronReleases = releases
+                    .filter(r => r.tag_name.startsWith('electron-v'))
+                    .sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
+                const electronRelease = electronReleases[0];
 
                 if (!electronRelease) {
                     container.innerHTML = `
