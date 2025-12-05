@@ -392,13 +392,13 @@ ipcMain.handle('upload-file-content', async (
   try {
     const uploadUrl = `${serverUrl.replace(/\/$/, '')}/upload_file/${sha256}?hostname=${encodeURIComponent(hostname)}`;
 
-    // Read file as buffer
-    const fileBuffer = fs.readFileSync(filePath);
+    // Stream file instead of loading into memory
+    const fileStream = fs.createReadStream(filePath);
 
-    // Create form data with file
+    // Create form data with streaming file
     const FormData = require('form-data');
     const formData = new FormData();
-    formData.append('file', fileBuffer, {
+    formData.append('file', fileStream, {
       filename: path.basename(filePath),
       contentType: 'application/octet-stream',
     });
