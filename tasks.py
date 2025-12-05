@@ -1547,17 +1547,12 @@ def deploy_website(c, source_dir="website", bucket=None):
         # Invalidate CloudFront cache
         print(f"\nInvalidating CloudFront cache...")
 
-        # Try to get distribution ID from file first, then query CloudFront
+        # Query CloudFront for distribution serving this domain (handles both www and non-www)
         dist_id = None
-        try:
-            with open("/tmp/putplace-cloudfront-id.txt", 'r') as f:
-                dist_id = f.read().strip()
-        except FileNotFoundError:
-            # Query CloudFront for distribution serving this domain
-            query_cmd = f"aws cloudfront list-distributions --query \"DistributionList.Items[?Aliases.Items[0]=='{bucket}'].Id | [0]\" --output text"
-            query_result = c.run(query_cmd, warn=True, hide=True)
-            if query_result.ok and query_result.stdout.strip():
-                dist_id = query_result.stdout.strip()
+        query_cmd = f"aws cloudfront list-distributions --query \"DistributionList.Items[?contains(Aliases.Items, 'www.{bucket}') || contains(Aliases.Items, '{bucket}')].Id | [0]\" --output text"
+        query_result = c.run(query_cmd, warn=True, hide=True)
+        if query_result.ok and query_result.stdout.strip():
+            dist_id = query_result.stdout.strip()
 
         if dist_id and dist_id != "None":
             invalidate_cmd = f"aws cloudfront create-invalidation --distribution-id {dist_id} --paths '/*'"
