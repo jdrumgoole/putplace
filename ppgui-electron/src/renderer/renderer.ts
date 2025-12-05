@@ -2,11 +2,13 @@
 interface ElectronAPI {
   selectDirectory: () => Promise<string | null>;
   getSystemInfo: () => Promise<{ hostname: string; ipAddress: string }>;
+  getCpuCount: () => Promise<number>;
   scanFiles: (dirPath: string, excludePatterns: string[]) => Promise<any>;
   processFile: (filePath: string, hostname: string, ipAddress: string) => Promise<any>;
   login: (username: string, password: string, serverUrl: string) => Promise<any>;
   register: (username: string, email: string, password: string, fullName: string | null, serverUrl: string) => Promise<any>;
   uploadMetadata: (metadata: any, serverUrl: string, token: string) => Promise<any>;
+  uploadFileContent: (filePath: string, sha256: string, hostname: string, serverUrl: string, token: string) => Promise<any>;
 }
 
 declare const electronAPI: ElectronAPI;
@@ -65,12 +67,18 @@ const logOutput = document.getElementById('log-output') as HTMLDivElement;
 const startBtn = document.getElementById('start-btn') as HTMLButtonElement;
 const stopBtn = document.getElementById('stop-btn') as HTMLButtonElement;
 const clearLogBtn = document.getElementById('clear-log-btn') as HTMLButtonElement;
+const uploadContentCheckbox = document.getElementById('upload-content') as HTMLInputElement;
+const parallelUploadsInput = document.getElementById('parallel-uploads') as HTMLInputElement;
 
 // Initialize
 async function init() {
   const systemInfo = await electronAPI.getSystemInfo();
   hostnameInput.value = systemInfo.hostname;
   ipAddressInput.value = systemInfo.ipAddress;
+
+  // Set default parallel uploads to CPU count
+  const cpuCount = await electronAPI.getCpuCount();
+  parallelUploadsInput.value = Math.min(cpuCount, 8).toString(); // Cap at 8 by default
 
   // Load saved settings from localStorage
   const savedToken = localStorage.getItem('accessToken');
@@ -391,6 +399,51 @@ function stopUpload() {
   stopBtn.disabled = true;
 }
 
+// Process a single file (metadata + optional content)
+async function processAndUploadFile(
+  filePath: string,
+  hostname: string,
+  ipAddress: string,
+  uploadContent: boolean
+): Promise<{ success: boolean; fileName: string; error?: string }> {
+  const fileName = filePath.split(/[/\\]/).pop() || filePath;
+
+  // Process file to get metadata
+  const processResult = await electronAPI.processFile(filePath, hostname, ipAddress);
+
+  if (!processResult.success) {
+    return { success: false, fileName, error: `Processing error: ${processResult.error}` };
+  }
+
+  // Upload metadata
+  const uploadResult = await electronAPI.uploadMetadata(
+    processResult.metadata,
+    serverUrl,
+    accessToken!
+  );
+
+  if (!uploadResult.success) {
+    return { success: false, fileName, error: `Metadata upload failed: ${uploadResult.error}` };
+  }
+
+  // Optionally upload file content
+  if (uploadContent) {
+    const contentResult = await electronAPI.uploadFileContent(
+      filePath,
+      processResult.metadata.sha256,
+      hostname,
+      serverUrl,
+      accessToken!
+    );
+
+    if (!contentResult.success) {
+      return { success: false, fileName, error: `Content upload failed: ${contentResult.error}` };
+    }
+  }
+
+  return { success: true, fileName };
+}
+
 // Start upload
 async function startUpload() {
   if (isUploading) {
@@ -415,8 +468,15 @@ async function startUpload() {
 
   const hostname = hostnameInput.value;
   const ipAddress = ipAddressInput.value;
+  const uploadContent = uploadContentCheckbox.checked;
+  const parallelCount = parseInt(parallelUploadsInput.value) || 4;
 
   log('Starting file scan...', 'info');
+  if (uploadContent) {
+    log(`File content upload enabled (${parallelCount} parallel uploads)`, 'info');
+  } else {
+    log(`Metadata-only mode (${parallelCount} parallel uploads)`, 'info');
+  }
 
   // Scan files
   const scanResult = await electronAPI.scanFiles(selectedPath, excludePatterns);
@@ -427,7 +487,7 @@ async function startUpload() {
     return;
   }
 
-  const files = scanResult.files;
+  const files: string[] = scanResult.files;
   const total = files.length;
 
   log(`Found ${total} files to process`, 'info');
@@ -438,52 +498,53 @@ async function startUpload() {
     return;
   }
 
-  let current = 0;
+  let completed = 0;
   let success = 0;
   let failed = 0;
 
-  // Process files
-  for (const filePath of files) {
+  // Process files in parallel batches
+  const processBatch = async (batch: string[]) => {
+    const promises = batch.map(async (filePath) => {
+      if (shouldStop) {
+        return { success: false, fileName: '', error: 'Cancelled' };
+      }
+      return processAndUploadFile(filePath, hostname, ipAddress, uploadContent);
+    });
+
+    const results = await Promise.all(promises);
+
+    for (const result of results) {
+      if (shouldStop && result.error === 'Cancelled') {
+        continue;
+      }
+
+      if (result.success) {
+        log(`✓ ${result.fileName}`, 'success');
+        success++;
+      } else {
+        log(`✗ ${result.fileName}: ${result.error}`, 'error');
+        failed++;
+      }
+      completed++;
+      updateProgress(completed, total, success, failed);
+    }
+  };
+
+  // Split files into batches and process
+  for (let i = 0; i < files.length; i += parallelCount) {
     if (shouldStop) {
       log('Upload cancelled by user', 'warning');
       break;
     }
 
-    // Process file
-    const processResult = await electronAPI.processFile(filePath, hostname, ipAddress);
-
-    if (!processResult.success) {
-      log(`Error processing ${filePath}: ${processResult.error}`, 'error');
-      failed++;
-      current++;
-      updateProgress(current, total, success, failed);
-      continue;
-    }
-
-    // Upload metadata
-    const uploadResult = await electronAPI.uploadMetadata(
-      processResult.metadata,
-      serverUrl,
-      accessToken!
-    );
-
-    if (uploadResult.success) {
-      const fileName = filePath.split(/[/\\]/).pop();
-      log(`✓ Uploaded: ${fileName}`, 'success');
-      success++;
-    } else {
-      const fileName = filePath.split(/[/\\]/).pop();
-      log(`✗ Failed to upload ${fileName}: ${uploadResult.error}`, 'error');
-      failed++;
-    }
-
-    current++;
-    updateProgress(current, total, success, failed);
+    const batch = files.slice(i, i + parallelCount);
+    await processBatch(batch);
   }
 
   // Summary
   log('---', 'info');
-  log(`Upload complete: ${success} uploaded, ${failed} failed, ${current} total`, 'info');
+  const contentMode = uploadContent ? 'with content' : 'metadata only';
+  log(`Upload complete (${contentMode}): ${success} uploaded, ${failed} failed, ${completed} total`, 'info');
 
   resetUploadState();
 }

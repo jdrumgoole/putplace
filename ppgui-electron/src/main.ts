@@ -374,3 +374,58 @@ ipcMain.handle('upload-metadata', async (
     };
   }
 });
+
+// Get CPU count for parallel uploads
+ipcMain.handle('get-cpu-count', async () => {
+  return os.cpus().length;
+});
+
+// Upload file content to server
+ipcMain.handle('upload-file-content', async (
+  event,
+  filePath: string,
+  sha256: string,
+  hostname: string,
+  serverUrl: string,
+  token: string
+) => {
+  try {
+    const uploadUrl = `${serverUrl.replace(/\/$/, '')}/upload_file/${sha256}?hostname=${encodeURIComponent(hostname)}`;
+
+    // Read file as buffer
+    const fileBuffer = fs.readFileSync(filePath);
+
+    // Create form data with file
+    const FormData = require('form-data');
+    const formData = new FormData();
+    formData.append('file', fileBuffer, {
+      filename: path.basename(filePath),
+      contentType: 'application/octet-stream',
+    });
+
+    const response = await axios.post(uploadUrl, formData, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        ...formData.getHeaders(),
+      },
+      timeout: 300000, // 5 minutes for large files
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity,
+    });
+
+    return { success: true, data: response.data, status: response.status };
+  } catch (error: any) {
+    let errorMsg = 'Unknown error';
+    if (error.response?.data?.detail) {
+      const detail = error.response.data.detail;
+      errorMsg = typeof detail === 'string' ? detail : JSON.stringify(detail);
+    } else if (error.message) {
+      errorMsg = error.message;
+    }
+    return {
+      success: false,
+      error: errorMsg,
+      status: error.response?.status,
+    };
+  }
+});
