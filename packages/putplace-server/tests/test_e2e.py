@@ -342,7 +342,7 @@ async def test_e2e_real_server_and_client_with_upload(worker_id):
 
         with open(server_stdout_file, "w") as stdout_f, open(server_stderr_file, "w") as stderr_f:
             server_process = subprocess.Popen(
-                ["uv", "run", "uvicorn", "putplace.main:app",
+                ["uv", "run", "uvicorn", "putplace_server.main:app",
                  "--host", "127.0.0.1", "--port", str(server_port)],
                 env=env,
                 stdout=stdout_f,

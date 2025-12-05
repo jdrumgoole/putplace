@@ -29,7 +29,8 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture
 def electron_dir():
     """Get the Electron project directory."""
-    project_root = Path(__file__).parent.parent
+    # Go up from tests -> putplace-server -> packages -> repo root
+    project_root = Path(__file__).parent.parent.parent.parent
     return project_root / "ppgui-electron"
 
 

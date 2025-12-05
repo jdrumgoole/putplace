@@ -380,3 +380,4 @@ Configuration is managed via Pydantic Settings in `src/putplace/config.py`
 - the default region for AWS us eu-west-1
 - Always prefer invoke tasks for operaitons if available
 - when we create a new release of the client update the download page with the new links
+- syncrohize the version in package.json with the version in pyproject.toml

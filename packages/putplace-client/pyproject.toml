@@ -1,7 +1,7 @@
 [project]
 name = "putplace-client"
 # IMPORTANT: Keep this version in sync with src/putplace_client/version.py!
-version = "0.8.3"
+version = "0.8.4"
 description = "PutPlace CLI client for scanning directories and uploading file metadata"
 readme = "README.md"
 license = {text = "Apache-2.0"}
