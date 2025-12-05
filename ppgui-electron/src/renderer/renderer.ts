@@ -82,10 +82,10 @@ const stopBtn = document.getElementById('stop-btn') as HTMLButtonElement;
 const clearLogBtn = document.getElementById('clear-log-btn') as HTMLButtonElement;
 const uploadContentCheckbox = document.getElementById('upload-content') as HTMLInputElement;
 const parallelUploadsInput = document.getElementById('parallel-uploads') as HTMLInputElement;
-const fileProgressContainer = document.getElementById('file-progress-container') as HTMLDivElement;
-const fileProgressName = document.getElementById('file-progress-name') as HTMLSpanElement;
-const fileProgressSize = document.getElementById('file-progress-size') as HTMLSpanElement;
-const fileProgressFill = document.getElementById('file-progress-fill') as HTMLDivElement;
+const activeUploadsContainer = document.getElementById('active-uploads-container') as HTMLDivElement;
+
+// Track active uploads by file path
+const activeUploads = new Map<string, HTMLElement>();
 
 // Initialize
 async function init() {
@@ -487,12 +487,66 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
 }
 
-// Update file progress UI
+// Create a progress bar element for a file
+function createProgressElement(filePath: string, fileName: string): HTMLElement {
+  const item = document.createElement('div');
+  item.className = 'file-progress-item';
+  item.dataset.filePath = filePath;
+  item.innerHTML = `
+    <div class="file-progress-label">
+      <span class="file-name" title="${filePath}">${fileName}</span>
+      <span class="file-size">0 B / 0 B</span>
+      <span class="file-percentage">0%</span>
+    </div>
+    <div class="file-progress-bar">
+      <div class="file-progress-fill" style="width: 0%"></div>
+    </div>
+  `;
+  return item;
+}
+
+// Update file progress UI - handles multiple concurrent uploads
 function updateFileProgress(progress: UploadProgress) {
-  fileProgressContainer.style.display = 'block';
-  fileProgressName.textContent = progress.fileName;
-  fileProgressSize.textContent = `${formatBytes(progress.loaded)} / ${formatBytes(progress.total)}`;
-  fileProgressFill.style.width = `${progress.percentage}%`;
+  let progressElement = activeUploads.get(progress.filePath);
+
+  // Create new progress element if doesn't exist
+  if (!progressElement) {
+    progressElement = createProgressElement(progress.filePath, progress.fileName);
+    activeUploadsContainer.appendChild(progressElement);
+    activeUploads.set(progress.filePath, progressElement);
+  }
+
+  // Update the progress
+  const sizeEl = progressElement.querySelector('.file-size') as HTMLSpanElement;
+  const percentEl = progressElement.querySelector('.file-percentage') as HTMLSpanElement;
+  const fillEl = progressElement.querySelector('.file-progress-fill') as HTMLDivElement;
+
+  sizeEl.textContent = `${formatBytes(progress.loaded)} / ${formatBytes(progress.total)}`;
+  percentEl.textContent = `${progress.percentage}%`;
+  fillEl.style.width = `${progress.percentage}%`;
+
+  // If complete, mark as completing and schedule removal
+  if (progress.percentage >= 100) {
+    progressElement.classList.add('completing');
+    setTimeout(() => {
+      removeFileProgress(progress.filePath);
+    }, 500);
+  }
+}
+
+// Remove a file's progress bar
+function removeFileProgress(filePath: string) {
+  const element = activeUploads.get(filePath);
+  if (element) {
+    element.remove();
+    activeUploads.delete(filePath);
+  }
+}
+
+// Clear all file progress bars
+function clearAllFileProgress() {
+  activeUploads.forEach((element) => element.remove());
+  activeUploads.clear();
 }
 
 // Start upload
@@ -612,10 +666,9 @@ function resetUploadState() {
   stopBtn.disabled = true;
   progressText.textContent = 'Ready';
   progressFill.style.width = '0%';
-  // Clean up progress listener and hide file progress
+  // Clean up progress listener and clear all file progress bars
   electronAPI.removeUploadProgressListener();
-  fileProgressContainer.style.display = 'none';
-  fileProgressFill.style.width = '0%';
+  clearAllFileProgress();
 }
 
 // Google OAuth handling
