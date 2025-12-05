@@ -2160,6 +2160,10 @@ def _deploy_with_config(
     s3_bucket = config.get("storage", {}).get("s3_bucket_name")
     aws_region = config.get("aws", {}).get("region", "eu-west-1")
 
+    # Read domain from config if not provided as argument
+    if domain is None:
+        domain = config.get("server", {}).get("domain")
+
     # Infer environment from filename (ppserver-prod.toml -> prod)
     if droplet_name is None:
         if "prod" in config_file:
@@ -2177,6 +2181,8 @@ def _deploy_with_config(
 
     print(f"✓ Configuration loaded:")
     print(f"  Droplet: {droplet_name}")
+    if domain:
+        print(f"  Domain: {domain} (SSL will be configured)")
     print(f"  MongoDB: {mongodb_url.split('@')[1] if '@' in mongodb_url else 'localhost'}")
     print(f"  Storage: {storage_backend}")
     if storage_backend == "s3":

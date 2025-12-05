@@ -699,13 +699,61 @@ sleep 2
 
         print("✓ Systemd service configured and running!\n")
 
+    def setup_ssl(self, ip: str, domain: str) -> None:
+        """Configure SSL certificate using certbot (snap version)."""
+        print(f"\n{'='*60}")
+        print(f"STEP 7: Setting up SSL Certificate")
+        print(f"{'='*60}\n")
+
+        print(f"→ Configuring SSL for {domain}...")
+
+        # First ensure snap certbot is installed (more reliable than apt version)
+        install_certbot = """
+# Remove apt certbot if present (has compatibility issues)
+apt remove -y certbot python3-certbot-nginx 2>/dev/null || true
+
+# Install snap certbot
+snap install --classic certbot 2>/dev/null || true
+ln -sf /snap/bin/certbot /usr/bin/certbot 2>/dev/null || true
+"""
+        self.run_ssh_quiet(ip, install_certbot)
+
+        # Run certbot to get and install certificate
+        certbot_cmd = f"/snap/bin/certbot --nginx -d {domain} --non-interactive --agree-tos --email admin@{domain} --redirect"
+
+        if not self.run_ssh_realtime(ip, certbot_cmd, f"Setup SSL for {domain}"):
+            # Try with a fallback email
+            print("→ Retrying with fallback email...")
+            certbot_cmd_fallback = f"/snap/bin/certbot --nginx -d {domain} --non-interactive --agree-tos --register-unsafely-without-email --redirect"
+            if not self.run_ssh_realtime(ip, certbot_cmd_fallback, f"Setup SSL for {domain} (no email)"):
+                print(f"⚠ SSL setup failed. You can manually run:")
+                print(f"  ssh root@{ip} '/snap/bin/certbot --nginx -d {domain}'")
+                return
+
+        # Validate HTTPS is working
+        import time
+        time.sleep(2)  # Give nginx time to reload
+
+        success, _ = self.run_ssh_quiet(ip, f"curl -s -o /dev/null -w '%{{http_code}}' https://localhost/ --insecure")
+        self.validate_step(
+            success,
+            f"SSL certificate installed for {domain}",
+            "SSL validation failed (certificate may still be valid)"
+        )
+
+        print(f"✓ SSL configured successfully for https://{domain}\n")
+
     def setup_nginx(self, ip: str, domain: Optional[str] = None) -> None:
-        """Configure nginx as reverse proxy."""
+        """Configure nginx as reverse proxy with optional SSL."""
         print(f"\n{'='*60}")
         print(f"STEP 6: Setting up Nginx")
         print(f"{'='*60}\n")
 
-        server_name = domain if domain else ip
+        # Include both domain and IP in server_name when domain is provided
+        if domain:
+            server_name = f"{domain} {ip}"
+        else:
+            server_name = ip
 
         nginx_config = f"""server {{
     listen 80;
@@ -743,9 +791,9 @@ systemctl reload nginx
 
         print("✓ Nginx configured successfully!\n")
 
+        # Setup SSL with certbot if domain is provided
         if domain:
-            print(f"ℹ To enable SSL, run:")
-            print(f"  ssh root@{ip} 'certbot --nginx -d {domain}'\n")
+            self.setup_ssl(ip, domain)
 
     def cleanup_on_failure(self) -> None:
         """Clean up resources if deployment fails."""
