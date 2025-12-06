@@ -758,7 +758,7 @@ ln -sf /snap/bin/certbot /usr/bin/certbot 2>/dev/null || true
         nginx_config = f"""server {{
     listen 80;
     server_name {server_name};
-    client_max_body_size 500M;
+    client_max_body_size 50G;
 
     location / {{
         proxy_pass http://localhost:8000;
@@ -766,8 +766,14 @@ ln -sf /snap/bin/certbot /usr/bin/certbot 2>/dev/null || true
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 300s;
+
+        # Extended timeouts for large file uploads (up to 50GB)
+        proxy_read_timeout 7200s;
+        proxy_send_timeout 7200s;
         proxy_connect_timeout 75s;
+
+        # Disable request body buffering for streaming uploads
+        proxy_request_buffering off;
     }}
 }}
 """

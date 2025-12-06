@@ -856,8 +856,11 @@ async def upload_file(
 
     Requires authentication via JWT Bearer token.
 
-    This endpoint is called after POST /put_file indicates upload_required=true.
-    The file content is stored using the configured storage backend (local or S3).
+    This endpoint supports streaming uploads for large files (up to 50GB).
+    File content is streamed in chunks to avoid memory issues:
+    - SHA256 hash is calculated incrementally during streaming
+    - Content is stored using the configured storage backend (local or S3)
+    - For S3, multipart upload is used for efficient large file handling
 
     Args:
         sha256: SHA256 hash of the file (must match file content)
@@ -866,7 +869,7 @@ async def upload_file(
         file: File upload
         db: Database instance (injected)
         storage: Storage backend instance (injected)
-        api_key: API key metadata (injected, for authentication)
+        current_user: Authenticated user (injected)
 
     Returns:
         Success message with details
@@ -882,28 +885,66 @@ async def upload_file(
             detail="SHA256 hash must be exactly 64 characters",
         )
 
+    # Streaming chunk size: 1MB chunks for efficient memory usage
+    CHUNK_SIZE = 1024 * 1024  # 1MB
+
+    # Hash calculator for incremental SHA256
+    hash_calculator = hashlib.sha256()
+    total_size = 0
+
+    async def streaming_hash_generator():
+        """Async generator that reads file in chunks and calculates hash incrementally."""
+        nonlocal total_size
+        while True:
+            chunk = await file.read(CHUNK_SIZE)
+            if not chunk:
+                break
+            hash_calculator.update(chunk)
+            total_size += len(chunk)
+            yield chunk
+
     try:
-        # Read and verify file content
-        content = await file.read()
+        # Get content length from headers if available (for logging)
+        content_length = file.size or 0
 
-        # Calculate SHA256 of uploaded content
-        calculated_hash = hashlib.sha256(content).hexdigest()
+        logger.info(
+            f"Starting streaming upload for SHA256: {sha256}, "
+            f"expected size: {content_length} bytes"
+        )
 
-        if calculated_hash != sha256:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"File content SHA256 ({calculated_hash}) does not match provided hash ({sha256})",
-            )
+        # Store file content using streaming
+        stored = await storage.store_stream(
+            sha256,
+            streaming_hash_generator(),
+            content_length,
+        )
 
-        logger.info(f"File upload verified for SHA256: {sha256}, size: {len(content)} bytes")
-
-        # Store file content using storage backend
-        stored = await storage.store(sha256, content)
         if not stored:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to store file content",
             )
+
+        # Verify hash after streaming completes
+        calculated_hash = hash_calculator.hexdigest()
+
+        if calculated_hash != sha256:
+            # Hash mismatch - delete the stored file
+            logger.error(
+                f"SHA256 mismatch for upload: expected {sha256}, got {calculated_hash}"
+            )
+            try:
+                await storage.delete(sha256)
+                logger.info(f"Deleted mismatched file: {sha256}")
+            except Exception as delete_error:
+                logger.error(f"Failed to delete mismatched file {sha256}: {delete_error}")
+
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File content SHA256 ({calculated_hash}) does not match provided hash ({sha256})",
+            )
+
+        logger.info(f"File upload verified for SHA256: {sha256}, size: {total_size} bytes")
 
         # Get the storage path where file was stored
         storage_path = storage.get_storage_path(sha256)
@@ -920,7 +961,7 @@ async def upload_file(
         return {
             "message": "File uploaded successfully",
             "sha256": sha256,
-            "size": str(len(content)),
+            "size": str(total_size),
             "hostname": hostname,
             "filepath": filepath,
             "status": "uploaded",

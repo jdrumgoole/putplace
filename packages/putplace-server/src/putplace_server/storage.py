@@ -3,9 +3,12 @@
 import logging
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Optional
+from typing import AsyncIterator, Optional
 
 logger = logging.getLogger(__name__)
+
+# Default chunk size for streaming operations (1MB)
+DEFAULT_CHUNK_SIZE = 1024 * 1024
 
 
 class StorageBackend(ABC):
@@ -18,6 +21,28 @@ class StorageBackend(ABC):
         Args:
             sha256: SHA256 hash of the file (used as key)
             content: File content bytes
+
+        Returns:
+            True if stored successfully, False otherwise
+        """
+        pass
+
+    @abstractmethod
+    async def store_stream(
+        self,
+        sha256: str,
+        stream: AsyncIterator[bytes],
+        content_length: int,
+    ) -> bool:
+        """Store file content from an async stream.
+
+        This method supports large files by streaming chunks instead of
+        loading the entire file into memory.
+
+        Args:
+            sha256: SHA256 hash of the file (used as key)
+            stream: Async iterator yielding file content chunks
+            content_length: Total size of the file in bytes
 
         Returns:
             True if stored successfully, False otherwise
@@ -127,6 +152,49 @@ class LocalStorage(StorageBackend):
 
         except (IOError, OSError) as e:
             logger.error(f"Failed to store file {sha256}: {e}")
+            return False
+
+    async def store_stream(
+        self,
+        sha256: str,
+        stream: AsyncIterator[bytes],
+        content_length: int,
+    ) -> bool:
+        """Store file content from an async stream to local filesystem.
+
+        Args:
+            sha256: SHA256 hash of the file
+            stream: Async iterator yielding file content chunks
+            content_length: Total size of the file in bytes
+
+        Returns:
+            True if stored successfully, False otherwise
+        """
+        try:
+            file_path = self._get_file_path(sha256)
+
+            # Create parent directory if it doesn't exist
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+
+            bytes_written = 0
+            # Write chunks to file
+            with open(file_path, "wb") as f:
+                async for chunk in stream:
+                    f.write(chunk)
+                    bytes_written += len(chunk)
+
+            logger.info(f"Stored file (streaming): {sha256} ({bytes_written} bytes) at {file_path}")
+            return True
+
+        except (IOError, OSError) as e:
+            logger.error(f"Failed to store file {sha256} (streaming): {e}")
+            # Clean up partial file if it exists
+            try:
+                file_path = self._get_file_path(sha256)
+                if file_path.exists():
+                    file_path.unlink()
+            except Exception:
+                pass
             return False
 
     async def retrieve(self, sha256: str) -> Optional[bytes]:
@@ -320,6 +388,120 @@ class S3Storage(StorageBackend):
 
         except Exception as e:
             logger.error(f"Failed to store file {sha256} in S3: {e}")
+            return False
+
+    async def store_stream(
+        self,
+        sha256: str,
+        stream: AsyncIterator[bytes],
+        content_length: int,
+    ) -> bool:
+        """Store file content from an async stream to S3 using multipart upload.
+
+        Uses S3 multipart upload for efficient streaming of large files.
+        Parts are uploaded as soon as we have 5MB+ of data (S3 minimum part size).
+
+        Args:
+            sha256: SHA256 hash of the file
+            stream: Async iterator yielding file content chunks
+            content_length: Total size of the file in bytes
+
+        Returns:
+            True if stored successfully, False otherwise
+        """
+        # S3 multipart upload minimum part size is 5MB (except last part)
+        MIN_PART_SIZE = 5 * 1024 * 1024  # 5MB
+
+        s3_key = self._get_s3_key(sha256)
+        upload_id = None
+
+        try:
+            async with self.session.client("s3", region_name=self.region_name) as s3:
+                # Start multipart upload
+                response = await s3.create_multipart_upload(
+                    Bucket=self.bucket_name,
+                    Key=s3_key,
+                    ContentType="application/octet-stream",
+                    Metadata={"sha256": sha256},
+                )
+                upload_id = response["UploadId"]
+
+                parts = []
+                part_number = 1
+                buffer = bytearray()
+                total_uploaded = 0
+
+                async for chunk in stream:
+                    buffer.extend(chunk)
+
+                    # Upload part when buffer exceeds minimum part size
+                    while len(buffer) >= MIN_PART_SIZE:
+                        part_data = bytes(buffer[:MIN_PART_SIZE])
+                        buffer = buffer[MIN_PART_SIZE:]
+
+                        part_response = await s3.upload_part(
+                            Bucket=self.bucket_name,
+                            Key=s3_key,
+                            UploadId=upload_id,
+                            PartNumber=part_number,
+                            Body=part_data,
+                        )
+
+                        parts.append({
+                            "PartNumber": part_number,
+                            "ETag": part_response["ETag"],
+                        })
+                        total_uploaded += len(part_data)
+                        logger.debug(
+                            f"Uploaded part {part_number} ({len(part_data)} bytes) "
+                            f"for {sha256}, total: {total_uploaded}/{content_length}"
+                        )
+                        part_number += 1
+
+                # Upload remaining data as final part (can be less than 5MB)
+                if buffer:
+                    part_response = await s3.upload_part(
+                        Bucket=self.bucket_name,
+                        Key=s3_key,
+                        UploadId=upload_id,
+                        PartNumber=part_number,
+                        Body=bytes(buffer),
+                    )
+
+                    parts.append({
+                        "PartNumber": part_number,
+                        "ETag": part_response["ETag"],
+                    })
+                    total_uploaded += len(buffer)
+
+                # Complete multipart upload
+                await s3.complete_multipart_upload(
+                    Bucket=self.bucket_name,
+                    Key=s3_key,
+                    UploadId=upload_id,
+                    MultipartUpload={"Parts": parts},
+                )
+
+                logger.info(
+                    f"Stored file in S3 (streaming): {sha256} ({total_uploaded} bytes) "
+                    f"at s3://{self.bucket_name}/{s3_key} in {len(parts)} parts"
+                )
+                return True
+
+        except Exception as e:
+            logger.error(f"Failed to store file {sha256} in S3 (streaming): {e}")
+            # Abort multipart upload if it was started
+            if upload_id:
+                try:
+                    async with self.session.client("s3", region_name=self.region_name) as s3:
+                        await s3.abort_multipart_upload(
+                            Bucket=self.bucket_name,
+                            Key=s3_key,
+                            UploadId=upload_id,
+                        )
+                    logger.info(f"Aborted multipart upload for {sha256}")
+                except Exception as abort_error:
+                    logger.error(f"Failed to abort multipart upload for {sha256}: {abort_error}")
             return False
 
     async def retrieve(self, sha256: str) -> Optional[bytes]:
