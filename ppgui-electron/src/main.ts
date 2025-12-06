@@ -380,7 +380,8 @@ ipcMain.handle('get-cpu-count', async () => {
   return os.cpus().length;
 });
 
-// Upload file content to server
+// Upload file content to server using native Node.js streaming
+// This avoids buffering the entire file in memory, supporting files > 4GB
 ipcMain.handle('upload-file-content', async (
   event,
   filePath: string,
@@ -389,61 +390,110 @@ ipcMain.handle('upload-file-content', async (
   serverUrl: string,
   token: string
 ) => {
-  try {
-    const uploadUrl = `${serverUrl.replace(/\/$/, '')}/upload_file/${sha256}?hostname=${encodeURIComponent(hostname)}&filepath=${encodeURIComponent(filePath)}`;
+  return new Promise((resolve) => {
+    try {
+      const stats = fs.statSync(filePath);
+      const fileSize = stats.size;
+      const fileName = path.basename(filePath);
 
-    // Get file size for progress tracking
-    const stats = fs.statSync(filePath);
-    const fileSize = stats.size;
-    const fileName = path.basename(filePath);
+      // Build multipart form data manually to avoid buffering
+      const boundary = `----FormBoundary${Date.now()}`;
+      const formHeader = Buffer.from(
+        `--${boundary}\r\n` +
+        `Content-Disposition: form-data; name="file"; filename="${fileName}"\r\n` +
+        `Content-Type: application/octet-stream\r\n\r\n`
+      );
+      const formFooter = Buffer.from(`\r\n--${boundary}--\r\n`);
+      const contentLength = formHeader.length + fileSize + formFooter.length;
 
-    // Stream file instead of loading into memory
-    const fileStream = fs.createReadStream(filePath);
+      // Parse the server URL
+      const url = new URL(`${serverUrl.replace(/\/$/, '')}/upload_file/${sha256}?hostname=${encodeURIComponent(hostname)}&filepath=${encodeURIComponent(filePath)}`);
+      const isHttps = url.protocol === 'https:';
+      const httpModule = isHttps ? require('https') : require('http');
 
-    // Create form data with streaming file
-    const FormData = require('form-data');
-    const formData = new FormData();
-    formData.append('file', fileStream, {
-      filename: fileName,
-      contentType: 'application/octet-stream',
-    });
+      const options = {
+        hostname: url.hostname,
+        port: url.port || (isHttps ? 443 : 80),
+        path: url.pathname + url.search,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          'Content-Length': contentLength,
+        },
+      };
 
-    const response = await axios.post(uploadUrl, formData, {
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        ...formData.getHeaders(),
-      },
-      timeout: 300000, // 5 minutes for large files
-      maxContentLength: Infinity,
-      maxBodyLength: Infinity,
-      onUploadProgress: (progressEvent) => {
-        const loaded = progressEvent.loaded || 0;
-        const total = progressEvent.total || fileSize;
-        const percentage = total > 0 ? Math.round((loaded / total) * 100) : 0;
-        // Send progress to renderer
+      let uploadedBytes = 0;
+
+      const req = httpModule.request(options, (res: any) => {
+        let responseData = '';
+        res.on('data', (chunk: Buffer) => {
+          responseData += chunk.toString();
+        });
+        res.on('end', () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            resolve({ success: true, data: responseData, status: res.statusCode });
+          } else {
+            resolve({
+              success: false,
+              error: `Request failed with status code ${res.statusCode}`,
+              status: res.statusCode,
+            });
+          }
+        });
+      });
+
+      req.on('error', (error: Error) => {
+        resolve({
+          success: false,
+          error: error.message,
+          status: undefined,
+        });
+      });
+
+      // Increase timeout for large files (1 hour)
+      req.setTimeout(3600000);
+
+      // Write form header
+      req.write(formHeader);
+
+      // Stream file content with progress tracking
+      const fileStream = fs.createReadStream(filePath, { highWaterMark: 64 * 1024 }); // 64KB chunks
+
+      fileStream.on('data', (chunk: Buffer | string) => {
+        const chunkBuffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        uploadedBytes += chunkBuffer.length;
+        const percentage = Math.round((uploadedBytes / fileSize) * 100);
         event.sender.send('upload-progress', {
           fileName,
           filePath,
-          loaded,
-          total,
+          loaded: uploadedBytes,
+          total: fileSize,
           percentage,
         });
-      },
-    });
+        req.write(chunkBuffer);
+      });
 
-    return { success: true, data: response.data, status: response.status };
-  } catch (error: any) {
-    let errorMsg = 'Unknown error';
-    if (error.response?.data?.detail) {
-      const detail = error.response.data.detail;
-      errorMsg = typeof detail === 'string' ? detail : JSON.stringify(detail);
-    } else if (error.message) {
-      errorMsg = error.message;
+      fileStream.on('end', () => {
+        req.write(formFooter);
+        req.end();
+      });
+
+      fileStream.on('error', (error: Error) => {
+        req.destroy();
+        resolve({
+          success: false,
+          error: `File read error: ${error.message}`,
+          status: undefined,
+        });
+      });
+
+    } catch (error: any) {
+      resolve({
+        success: false,
+        error: error.message || 'Unknown error',
+        status: undefined,
+      });
     }
-    return {
-      success: false,
-      error: errorMsg,
-      status: error.response?.status,
-    };
-  }
+  });
 });
