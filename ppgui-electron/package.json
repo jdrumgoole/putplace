@@ -1,7 +1,7 @@
 {
   "name": "ppgui-electron",
   "productName": "PutPlace Client",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "PutPlace GUI - Desktop client for file metadata management",
   "homepage": "https://github.com/jdrumgoole/putplace",
   "repository": {

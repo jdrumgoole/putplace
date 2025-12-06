@@ -37,7 +37,7 @@ const authSection = document.getElementById('auth-section') as HTMLElement;
 const loginForm = document.getElementById('login-form') as HTMLElement;
 const registerForm = document.getElementById('register-form') as HTMLElement;
 const mainContent = document.getElementById('main-content') as HTMLElement;
-const authStatus = document.getElementById('auth-status') as HTMLDivElement;
+const authBtn = document.getElementById('auth-btn') as HTMLButtonElement;
 const authMessage = document.getElementById('auth-message') as HTMLDivElement;
 
 // Login elements
@@ -144,8 +144,10 @@ function showMainContent() {
   mainContent.style.display = 'block';
   loginBtn.style.display = 'none';
   logoutBtn.style.display = 'block';
-  authStatus.textContent = `Logged in as ${currentUsername}`;
-  authStatus.classList.add('logged-in');
+  // Update header auth button to show logout with email
+  authBtn.textContent = `Logout ${currentUsername}`;
+  authBtn.classList.add('logged-in');
+  authBtn.title = `Click to logout from ${currentUsername}`;
 }
 
 function showAuthSection() {
@@ -153,8 +155,10 @@ function showAuthSection() {
   mainContent.style.display = 'none';
   loginBtn.style.display = 'block';
   logoutBtn.style.display = 'none';
-  authStatus.textContent = 'Not logged in';
-  authStatus.classList.remove('logged-in');
+  // Update header auth button to show login
+  authBtn.textContent = 'Login';
+  authBtn.classList.remove('logged-in');
+  authBtn.title = 'Click to login';
 }
 
 function showLoginForm() {
@@ -342,6 +346,19 @@ showLoginLink.addEventListener('click', (e) => {
   showLoginForm();
 });
 
+// Header auth button - toggles between login/logout
+authBtn.addEventListener('click', () => {
+  if (accessToken) {
+    // User is logged in, so logout
+    handleLogout();
+  } else {
+    // User is logged out, scroll to login form
+    showAuthSection();
+    showLoginForm();
+    loginUsername.focus();
+  }
+});
+
 // Allow Enter key to submit login
 loginPassword.addEventListener('keypress', (e) => {
   if (e.key === 'Enter') {
@@ -433,6 +450,41 @@ function stopUpload() {
   stopBtn.disabled = true;
 }
 
+// Explain HTTP status codes to users
+function explainStatusCode(statusCode: number): string {
+  const explanations: Record<number, string> = {
+    400: 'Bad Request - The server could not understand the request',
+    401: 'Unauthorized - Your session has expired. Please log in again',
+    403: 'Forbidden - You do not have permission to access this resource',
+    404: 'Not Found - The requested resource does not exist',
+    408: 'Request Timeout - The server took too long to respond',
+    409: 'Conflict - The file may already exist on the server',
+    413: 'File Too Large - The file exceeds the server\'s size limit',
+    422: 'Invalid Data - The server could not process the request',
+    429: 'Too Many Requests - Please slow down and try again later',
+    500: 'Server Error - Something went wrong on the server',
+    502: 'Bad Gateway - The server is temporarily unavailable',
+    503: 'Service Unavailable - The server is overloaded or under maintenance',
+    504: 'Gateway Timeout - The server took too long to respond',
+  };
+  return explanations[statusCode] || `Error ${statusCode} - An unexpected error occurred`;
+}
+
+// Extract status code from error message
+function extractStatusCode(error: string): number | null {
+  const match = error.match(/status code (\d{3})/i) || error.match(/(\d{3})/);
+  return match ? parseInt(match[1], 10) : null;
+}
+
+// Format error message with explanation
+function formatErrorMessage(error: string): string {
+  const statusCode = extractStatusCode(error);
+  if (statusCode) {
+    return explainStatusCode(statusCode);
+  }
+  return error;
+}
+
 // Check if error indicates authentication failure
 function isAuthError(error: string): boolean {
   return error.includes('401') || error.toLowerCase().includes('unauthorized');
@@ -487,7 +539,7 @@ async function processAndUploadFile(
     if (isAuthError(uploadResult.error)) {
       return { success: false, fileName, error: 'Session expired', authRequired: true };
     }
-    return { success: false, fileName, error: `Metadata upload failed: ${uploadResult.error}` };
+    return { success: false, fileName, error: formatErrorMessage(uploadResult.error) };
   }
 
   // Optionally upload file content
@@ -505,7 +557,7 @@ async function processAndUploadFile(
       if (isAuthError(contentResult.error)) {
         return { success: false, fileName, error: 'Session expired', authRequired: true };
       }
-      return { success: false, fileName, error: `Content upload failed: ${contentResult.error}` };
+      return { success: false, fileName, error: formatErrorMessage(contentResult.error) };
     }
   }
 
