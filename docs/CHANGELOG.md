@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.9] - 2025-12-06
+
+### Fixed
+
+#### Electron Client Stability
+- **Large File Upload Crash Fix**: Fixed crashes during large file uploads (multi-GB files)
+  - Added global error handlers (`uncaughtException`, `unhandledRejection`) to prevent app crashes
+  - Added `event.sender.isDestroyed()` check before sending IPC progress updates
+  - Implemented stream backpressure handling with pause/resume for file uploads
+  - Properly positioned request error handlers to clean up file streams on errors
+  - App now remains stable when uploading files of any size
+
+### Added
+
+#### Electron Client Testing
+- **Playwright E2E Test Suite**: Comprehensive automated tests for the Electron client
+  - Tests login form display, authentication, directory selection, file upload, and logout
+  - Invalid credentials error handling test
+  - Crash detection during uploads
+  - Support for large file uploads with progress monitoring
+  - Uses `DEV_TEST_USER` and `DEV_TEST_PASSWORD` from `.env` file
+  - Run with: `npm run test` or `npm run test:headed`
+
+### Changed
+- **Test Configuration**: Added Playwright dependencies and test scripts to `package.json`
+  - `@playwright/test`, `dotenv`, `@types/dotenv` added to devDependencies
+  - New npm scripts: `test`, `test:headed`, `test:debug`, `test:report`
+
+### Refactored
+- **Server Code Organization**: Extracted routes and templates for better maintainability
+  - Created `routers/` module with separate files for `api_keys`, `files`, `pages`, `users`, `admin`
+  - Moved HTML templates to `templates.py` module
+  - Reduced `main.py` size by ~1100 lines
+
 ## [0.5.1] - 2025-01-06
 
 ### Fixed

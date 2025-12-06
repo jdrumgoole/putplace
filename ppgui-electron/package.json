@@ -1,7 +1,7 @@
 {
   "name": "ppgui-electron",
   "productName": "PutPlace Client",
-  "version": "1.0.14",
+  "version": "1.0.15",
   "description": "PutPlace GUI - Desktop client for file metadata management",
   "homepage": "https://github.com/jdrumgoole/putplace",
   "repository": {
@@ -13,7 +13,11 @@
     "build": "tsc && shx mkdir -p dist/renderer/assets && shx cp src/renderer/*.html dist/renderer/ && shx cp src/renderer/*.css dist/renderer/",
     "start": "npm run build && electron .",
     "dev": "npm run build && electron . --dev",
-    "package": "npm run build && electron-builder"
+    "package": "npm run build && electron-builder",
+    "test": "npm run build && npx playwright test",
+    "test:headed": "npm run build && npx playwright test --headed",
+    "test:debug": "npm run build && npx playwright test --debug",
+    "test:report": "npx playwright show-report"
   },
   "keywords": [
     "putplace",
@@ -27,7 +31,10 @@
   },
   "license": "ISC",
   "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@types/dotenv": "^6.1.1",
     "@types/node": "^24.10.0",
+    "dotenv": "^16.3.1",
     "electron": "^39.0.0",
     "electron-builder": "^26.0.12",
     "shx": "^0.3.4",

@@ -95,3 +95,5 @@ ppserver.log
 # Backup directories from package split
 src_old/
 tests_old/
+ppgui-electron/playwright-report/
+ppgui-electron/test-results/

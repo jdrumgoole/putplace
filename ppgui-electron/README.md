@@ -34,6 +34,38 @@ Build and run in development mode (with DevTools):
 npm run dev
 ```
 
+## Testing
+
+Run the Playwright E2E test suite:
+
+```bash
+# Run tests (headless)
+npm run test
+
+# Run tests with visible browser
+npm run test:headed
+
+# Run tests in debug mode
+npm run test:debug
+
+# View test report
+npm run test:report
+```
+
+**Environment Variables Required:**
+- `DEV_TEST_USER` - Email/username for login
+- `DEV_TEST_PASSWORD` - Password for login
+
+Set these in the `.env` file in the parent directory.
+
+**Tests Include:**
+- Login form display validation
+- Authentication with valid/invalid credentials
+- Directory selection and upload configuration
+- File upload with progress monitoring
+- Logout functionality
+- Crash detection during large file uploads
+
 ## Production Build
 
 Build the application:

@@ -8,6 +8,17 @@ import axios from 'axios';
 // Set the application name BEFORE app is ready (required for macOS menu bar)
 app.setName('PutPlace Client');
 
+// Global error handlers to prevent crashes
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  // Don't exit - try to keep the app running
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit - try to keep the app running
+});
+
 let mainWindow: BrowserWindow | null = null;
 
 function createMenu() {
@@ -443,7 +454,19 @@ ipcMain.handle('upload-file-content', async (
         });
       });
 
+      // Increase timeout for large files (1 hour)
+      req.setTimeout(3600000);
+
+      // Write form header
+      req.write(formHeader);
+
+      // Stream file content with progress tracking and backpressure handling
+      const fileStream = fs.createReadStream(filePath, { highWaterMark: 64 * 1024 }); // 64KB chunks
+
+      // Handle request errors - clean up file stream
       req.on('error', (error: Error) => {
+        console.error(`Request error for ${filePath}:`, error);
+        fileStream.destroy();
         resolve({
           success: false,
           error: error.message,
@@ -451,27 +474,35 @@ ipcMain.handle('upload-file-content', async (
         });
       });
 
-      // Increase timeout for large files (1 hour)
-      req.setTimeout(3600000);
-
-      // Write form header
-      req.write(formHeader);
-
-      // Stream file content with progress tracking
-      const fileStream = fs.createReadStream(filePath, { highWaterMark: 64 * 1024 }); // 64KB chunks
-
       fileStream.on('data', (chunk: Buffer | string) => {
         const chunkBuffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
         uploadedBytes += chunkBuffer.length;
         const percentage = Math.round((uploadedBytes / fileSize) * 100);
-        event.sender.send('upload-progress', {
-          fileName,
-          filePath,
-          loaded: uploadedBytes,
-          total: fileSize,
-          percentage,
-        });
-        req.write(chunkBuffer);
+
+        // Safely send progress - check if sender is still valid
+        try {
+          if (event.sender && !event.sender.isDestroyed()) {
+            event.sender.send('upload-progress', {
+              fileName,
+              filePath,
+              loaded: uploadedBytes,
+              total: fileSize,
+              percentage,
+            });
+          }
+        } catch (sendError) {
+          // Ignore errors when sending progress - renderer may have been closed
+          console.warn('Could not send progress update:', sendError);
+        }
+
+        // Handle backpressure - pause file stream if write buffer is full
+        const canContinue = req.write(chunkBuffer);
+        if (!canContinue) {
+          fileStream.pause();
+          req.once('drain', () => {
+            fileStream.resume();
+          });
+        }
       });
 
       fileStream.on('end', () => {
@@ -480,10 +511,22 @@ ipcMain.handle('upload-file-content', async (
       });
 
       fileStream.on('error', (error: Error) => {
+        console.error(`File stream error for ${filePath}:`, error);
         req.destroy();
         resolve({
           success: false,
           error: `File read error: ${error.message}`,
+          status: undefined,
+        });
+      });
+
+      // Handle request errors during streaming
+      req.on('error', (error: Error) => {
+        console.error(`Request error for ${filePath}:`, error);
+        fileStream.destroy();
+        resolve({
+          success: false,
+          error: error.message,
           status: undefined,
         });
       });
