@@ -13,15 +13,20 @@ def setup_venv(c):
 
 @task
 def install(c):
-    """Install both packages in development mode using uv."""
+    """Build and install all packages in development mode using uv."""
+    # Build packages first
+    build(c)
+    # Install in editable mode
     c.run("uv pip install -e './packages/putplace-client[dev]'")
     c.run("uv pip install -e './packages/putplace-server[dev]'")
-    print("\n✓ Both packages installed")
+    c.run("uv pip install -e './packages/putplace-assist[dev]'")
+    print("\n✓ All packages installed")
     print("\nIMPORTANT: Activate the virtual environment to use console scripts:")
     print("  source .venv/bin/activate")
     print("\nThen you can use:")
-    print("  ppclient --help")
-    print("  ppserver --help")
+    print("  pp_client --help")
+    print("  pp_server --help")
+    print("  pp_assist --help")
 
 
 @task
@@ -29,7 +34,7 @@ def install_client(c):
     """Install putplace-client package in development mode."""
     c.run("uv pip install -e './packages/putplace-client[dev]'")
     print("\n✓ putplace-client installed")
-    print("Use: ppclient --help")
+    print("Use: pp_client --help")
 
 
 @task
@@ -37,7 +42,15 @@ def install_server(c):
     """Install putplace-server package in development mode."""
     c.run("uv pip install -e './packages/putplace-server[dev]'")
     print("\n✓ putplace-server installed")
-    print("Use: ppserver --help")
+    print("Use: pp_server --help")
+
+
+@task
+def install_assist(c):
+    """Install putplace-assist package in development mode."""
+    c.run("uv pip install -e './packages/putplace-assist[dev]'")
+    print("\n✓ putplace-assist installed")
+    print("Use: pp_assist --help")
 
 
 @task
@@ -56,7 +69,7 @@ def test_all(c, verbose=True, coverage=True, parallel=True, workers=4):
     """Run all tests for both client and server packages.
 
     Tests include:
-        - Client tests (ppclient functionality)
+        - Client tests (pp_client functionality)
         - Server tests (API, database, auth, storage, integration)
 
     Args:
@@ -121,6 +134,32 @@ def test_one(c, path):
     c.run(f"uv run pytest {path} -v")
 
 
+@task(pre=[install])
+def test_e2e_upload(c):
+    """Run end-to-end upload test.
+
+    This test performs a complete upload workflow:
+    1. Installs all packages in development mode (ensures latest code)
+    2. Generates a deterministic test file
+    3. Starts server with ppserver-dev.toml
+    4. Creates a test user
+    5. Uploads file via pp_client
+    6. Validates file in MongoDB and S3
+    7. Purges user and data
+    8. Verifies cleanup
+
+    Requires:
+    - ppserver-dev.toml configured
+    - AWS credentials (profile: putplace-dev)
+    - MongoDB access
+    - pp_assist daemon (test will start/restart it)
+    """
+    print("\n" + "="*80)
+    print("Running E2E Upload Test")
+    print("="*80 + "\n")
+    c.run("uv run python -u tests/test_e2e_upload.py")
+
+
 @task
 def lint(c, fix=False):
     """Run ruff linter on both packages."""
@@ -175,11 +214,12 @@ def clean(c):
 
 @task
 def build(c):
-    """Build both packages."""
+    """Build all packages."""
     clean(c)
     build_client(c)
     build_server(c)
-    print("\n✓ Both packages built successfully")
+    build_assist(c)
+    print("\n✓ All packages built successfully")
 
 
 @task
@@ -196,6 +236,14 @@ def build_server(c):
     c.run("cd packages/putplace-server && uv build")
     print("\n✓ putplace-server built")
     print("  Distribution files in: packages/putplace-server/dist/")
+
+
+@task
+def build_assist(c):
+    """Build putplace-assist package."""
+    c.run("cd packages/putplace-assist && uv build")
+    print("\n✓ putplace-assist built")
+    print("  Distribution files in: packages/putplace-assist/dist/")
 
 
 @task
@@ -391,11 +439,11 @@ def mongo_logs(c, name="mongodb", follow=False):
 #    - Logs to ppserver.log in current directory
 #    - Stop with: invoke ppserver-stop
 #
-# 3. ppserver start (FOR PRODUCTION/DAEMON)
+# 3. pp_server start (FOR PRODUCTION/DAEMON)
 #    - CLI tool for production daemon management
 #    - Logs to ~/.putplace/ppserver.log
 #    - Has status, restart, logs commands
-#    - Stop with: ppserver stop
+#    - Stop with: pp_server stop
 # ============================================================================
 
 # Server management tasks removed - use ppserver-start --dev or --prod instead
@@ -403,7 +451,7 @@ def mongo_logs(c, name="mongodb", follow=False):
 
 # Client tasks
 @task
-def gui_electron_build(c):
+def pp_gui_build(c):
     """Build the Electron GUI desktop app.
 
     Builds the TypeScript source files and copies assets to dist directory.
@@ -414,7 +462,7 @@ def gui_electron_build(c):
         - Run from project root directory
     """
     import os
-    electron_dir = "ppgui-electron"
+    electron_dir = "pp_gui_client"
 
     if not os.path.exists(electron_dir):
         print(f"❌ Error: {electron_dir} directory not found")
@@ -436,18 +484,18 @@ def gui_electron_build(c):
 
 
 @task
-def gui_electron_package(c):
+def pp_gui_package(c):
     """Package the Electron GUI app into a distributable .app bundle.
 
     Creates a properly signed macOS application with correct menu names.
-    Output will be in ppgui-electron/release/ directory.
+    Output will be in pp_gui_client/release/ directory.
 
     Requirements:
         - Node.js and npm must be installed
         - electron-builder package installed
     """
     import os
-    electron_dir = "ppgui-electron"
+    electron_dir = "pp_gui_client"
 
     if not os.path.exists(electron_dir):
         print(f"❌ Error: {electron_dir} directory not found")
@@ -469,14 +517,14 @@ def gui_electron_package(c):
 
 
 @task
-def gui_electron(c, dev=False, packaged=True):
+def pp_gui(c, dev=False, packaged=False):
     """Run the Electron GUI desktop app.
 
     Launches the cross-platform desktop application for PutPlace.
 
     Args:
         dev: Run in development mode with DevTools (default: False)
-        packaged: Use packaged .app with correct menu names (default: True)
+        packaged: Use packaged .app with correct menu names (default: False)
 
     Features:
         - Native directory picker
@@ -488,23 +536,23 @@ def gui_electron(c, dev=False, packaged=True):
 
     Requirements:
         - Node.js and npm must be installed
-        - App must be built/packaged first
+        - App will be built automatically if needed
     """
     import os
     import sys
-    electron_dir = "ppgui-electron"
+    electron_dir = "pp_gui_client"
 
     if not os.path.exists(electron_dir):
         print(f"❌ Error: {electron_dir} directory not found")
         return
 
-    # Use packaged app by default (has correct menu names)
+    # Use packaged app if requested (has correct menu names)
     if packaged and sys.platform == 'darwin':
         app_path = f"{electron_dir}/release/mac-arm64/PutPlace Client.app"
 
         if not os.path.exists(app_path):
-            print("⚠️  Packaged app not found. Packaging now...")
-            gui_electron_package(c)
+            print("⚠️  Packaged app not found. Building package...")
+            pp_gui_package(c)
 
         # Convert to absolute path for 'open' command
         abs_app_path = os.path.abspath(app_path)
@@ -516,22 +564,43 @@ def gui_electron(c, dev=False, packaged=True):
         else:
             c.run(f'open "{abs_app_path}"')
     else:
-        # Development mode (menu will show "Electron")
-        if not os.path.exists(f"{electron_dir}/dist/main.js"):
-            print("⚠️  App not built yet. Building now...")
-            gui_electron_build(c)
-
-        print("🚀 Launching Electron GUI (development mode)...")
-        print("⚠️  Note: Menu bar will show 'Electron' in dev mode")
+        # Development mode - build and run directly
+        print("🔨 Building Electron app...")
         with c.cd(electron_dir):
-            if dev:
-                c.run("npm run dev")
-            else:
-                c.run("npm start")
+            # Install dependencies if needed
+            if not os.path.exists("node_modules"):
+                print("📦 Installing dependencies...")
+                c.run("npm install")
+
+            # Build TypeScript files
+            result = c.run("npm run build", warn=True, hide=True)
+            if not result.ok:
+                print("❌ Build failed. Showing output:")
+                c.run("npm run build")
+                return
+
+        print("🚀 Launching Electron app...")
+        if dev:
+            # Run with visible output for debugging
+            with c.cd(electron_dir):
+                c.run("npx electron . --dev")
+        else:
+            # Launch in background
+            import subprocess
+            abs_electron_dir = os.path.abspath(electron_dir)
+            subprocess.Popen(
+                ["npx", "electron", "."],
+                cwd=abs_electron_dir,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True
+            )
+            print("✅ Electron app launched")
+            print("   Check your dock for the PutPlace window")
 
 
 @task
-def gui_electron_test_install(c, automated=False):
+def pp_gui_test_install(c, automated=False):
     """Test the packaged Electron app installation and uninstallation.
 
     Args:
@@ -554,7 +623,7 @@ def gui_electron_test_install(c, automated=False):
         print("❌ This test is only for macOS")
         return
 
-    electron_dir = "ppgui-electron"
+    electron_dir = "pp_gui_client"
     app_name = "PutPlace Client"
 
     # Step 1: Ensure app is packaged
@@ -567,7 +636,7 @@ def gui_electron_test_install(c, automated=False):
 
     if not dmg_files:
         print("⚠️  DMG not found. Packaging now...")
-        gui_electron_package(c)
+        pp_gui_package(c)
         # Re-check for DMG files
         dmg_files = glob.glob(f"{dmg_dir}/{app_name}-*.dmg")
 
@@ -797,6 +866,114 @@ def reset_password(c, email=None, password=None, mongodb_url=None, database=None
     c.run(cmd, pty=True)
 
 
+@task
+def purge_dev(c, force=False, dry_run=False):
+    """Purge dev environment database and S3 storage.
+
+    This is a DESTRUCTIVE operation that deletes ALL data from the dev environment.
+    Requires ppserver-dev.toml to exist.
+
+    Safety features:
+    - Only runs if ppserver-dev.toml exists
+    - Requires confirmation before purging (unless --force)
+    - Supports --dry-run to preview what would be deleted
+
+    Args:
+        force: Skip confirmation prompt
+        dry_run: Show what would be deleted without actually deleting
+
+    Examples:
+        # Dry run (preview what would be deleted)
+        invoke purge-dev --dry-run
+
+        # Purge dev environment (will prompt for confirmation)
+        invoke purge-dev
+
+        # Force purge without confirmation
+        invoke purge-dev --force
+
+    Prerequisites:
+        - ppserver-dev.toml must exist
+        - MongoDB must be accessible
+        - For S3 purge: AWS credentials configured (putplace-dev profile)
+
+    WARNING: This operation CANNOT be undone!
+    """
+    from pathlib import Path
+
+    config_file = Path("ppserver-dev.toml")
+    if not config_file.exists():
+        print("❌ Error: ppserver-dev.toml not found")
+        print("   This task requires ppserver-dev.toml to exist")
+        return
+
+    cmd = "uv run python -m putplace_server.scripts.purge_data"
+    cmd += " --config-file=ppserver-dev.toml"
+    cmd += " --environment=dev"
+
+    if force:
+        cmd += " --force"
+
+    if dry_run:
+        cmd += " --dry-run"
+
+    c.run(cmd, pty=True)
+
+
+@task
+def purge_test(c, force=False, dry_run=False):
+    """Purge test environment database and S3 storage.
+
+    This is a DESTRUCTIVE operation that deletes ALL data from the test environment.
+    Requires ppserver-test.toml to exist.
+
+    Safety features:
+    - Only runs if ppserver-test.toml exists
+    - Requires confirmation before purging (unless --force)
+    - Supports --dry-run to preview what would be deleted
+
+    Args:
+        force: Skip confirmation prompt
+        dry_run: Show what would be deleted without actually deleting
+
+    Examples:
+        # Dry run (preview what would be deleted)
+        invoke purge-test --dry-run
+
+        # Purge test environment (will prompt for confirmation)
+        invoke purge-test
+
+        # Force purge without confirmation
+        invoke purge-test --force
+
+    Prerequisites:
+        - ppserver-test.toml must exist
+        - MongoDB must be accessible
+        - For S3 purge: AWS credentials configured (putplace-test profile)
+
+    WARNING: This operation CANNOT be undone!
+    """
+    from pathlib import Path
+
+    config_file = Path("ppserver-test.toml")
+    if not config_file.exists():
+        print("❌ Error: ppserver-test.toml not found")
+        print("   This task requires ppserver-test.toml to exist")
+        return
+
+    cmd = "uv run python -m putplace_server.scripts.purge_data"
+    cmd += " --config-file=ppserver-test.toml"
+    cmd += " --environment=test"
+
+    if force:
+        cmd += " --force"
+
+    if dry_run:
+        cmd += " --dry-run"
+
+    c.run(cmd, pty=True)
+
+
 # PutPlace server management
 @task(pre=[mongo_start])
 def ppserver_start(c, host="127.0.0.1", port=8000, dev=True, prod=False, background=False, reload=True, workers=1):
@@ -871,7 +1048,7 @@ def ppserver_start(c, host="127.0.0.1", port=8000, dev=True, prod=False, backgro
     c.run("uv pip install -e .", pty=False)
     print("✓ Package installed\n")
 
-    # Set up configuration using putplace_configure non-interactively
+    # Set up configuration using pp_configure non-interactively
     config_dir = Path.home() / ".config" / "putplace"
     config_path = config_dir / "ppserver.toml"
     storage_path = Path.home() / ".putplace" / "storage"
@@ -885,7 +1062,7 @@ def ppserver_start(c, host="127.0.0.1", port=8000, dev=True, prod=False, backgro
         log_file = Path.home() / ".putplace" / "ppserver.log"
         pid_file = Path.home() / ".putplace" / "ppserver.pid"
         configure_cmd = [
-            "uv", "run", "putplace_configure",
+            "uv", "run", "pp_configure",
             "--non-interactive",
             "--skip-checks",
             "--mongodb-url", "mongodb://localhost:27017",
@@ -909,13 +1086,13 @@ def ppserver_start(c, host="127.0.0.1", port=8000, dev=True, prod=False, backgro
         print(f"✓ Using existing configuration: {config_path}\n")
 
     mode_desc = "production" if prod else "background"
-    print(f"Starting ppserver in {mode_desc} mode on {host}:{port}...")
+    print(f"Starting pp_server in {mode_desc} mode on {host}:{port}...")
 
-    # Use ppserver CLI to start the server
-    result = c.run(f"uv run ppserver start --host {host} --port {port}", warn=True)
+    # Use pp_server CLI to start the server
+    result = c.run(f"uv run pp_server start --host {host} --port {port}", warn=True)
 
     if result.ok:
-        print(f"\n✓ ppserver started successfully ({mode_desc} mode)")
+        print(f"\n✓ pp_server started successfully ({mode_desc} mode)")
         print(f"  API: http://{host}:{port}")
         print(f"  Docs: http://{host}:{port}/docs")
         print(f"  Config: {config_path}")
@@ -927,22 +1104,22 @@ def ppserver_start(c, host="127.0.0.1", port=8000, dev=True, prod=False, backgro
         print(f"\nStop with: invoke ppserver-stop")
         print(f"Check status with: invoke ppserver-status")
     else:
-        print("\n✗ Failed to start ppserver")
-        print("Check logs with: ppserver logs")
+        print("\n✗ Failed to start pp_server")
+        print("Check logs with: pp_server logs")
 
 
 @task
 def ppserver_stop(c):
-    """Stop ppserver using ppserver CLI and uninstall local package."""
-    print("Stopping ppserver using ppserver CLI...")
+    """Stop pp_server using pp_server CLI and uninstall local package."""
+    print("Stopping pp_server using pp_server CLI...")
 
-    # Use ppserver CLI to stop the server
-    result = c.run("uv run ppserver stop", warn=True)
+    # Use pp_server CLI to stop the server
+    result = c.run("uv run pp_server stop", warn=True)
 
     if result.ok:
-        print("\n✓ ppserver stopped successfully")
+        print("\n✓ pp_server stopped successfully")
     else:
-        print("\n✗ ppserver may not be running or already stopped")
+        print("\n✗ pp_server may not be running or already stopped")
 
     # Uninstall the package
     print("\nUninstalling putplace package...")
@@ -957,19 +1134,19 @@ def ppserver_stop(c):
 
 @task
 def ppserver_status(c):
-    """Check ppserver status using ppserver CLI."""
-    c.run("uv run ppserver status", warn=True)
+    """Check pp_server status using pp_server CLI."""
+    c.run("uv run pp_server status", warn=True)
 
 
 @task
 def ppserver_logs(c, lines=50, follow=False):
-    """Show ppserver logs using ppserver CLI.
+    """Show pp_server logs using pp_server CLI.
 
     Args:
         lines: Number of lines to show (default: 50)
         follow: Follow log output (default: False)
     """
-    cmd = f"uv run ppserver logs --lines {lines}"
+    cmd = f"uv run pp_server logs --lines {lines}"
     if follow:
         cmd += " --follow"
     c.run(cmd, warn=True)
@@ -1788,7 +1965,7 @@ def configure(
         - Instructions for AWS credential configuration
         - Admin user creation
     """
-    cmd = f"putplace_configure --non-interactive --skip-checks"
+    cmd = f"pp_configure --non-interactive --skip-checks"
     cmd += f" --mongodb-url='{mongodb_url}'"
     cmd += f" --mongodb-database=putplace"
     cmd += f" --admin-username={admin_username}"

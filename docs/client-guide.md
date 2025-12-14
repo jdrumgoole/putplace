@@ -1,6 +1,6 @@
 # Client Guide
 
-Complete guide to using the PutPlace client (`ppclient.py`).
+Complete guide to using the PutPlace client (`pp_client.py`).
 
 ## Overview
 
@@ -45,10 +45,10 @@ export PUTPLACE_USERNAME="your-username"
 export PUTPLACE_PASSWORD="your-password"
 
 # Test scan (dry run)
-python ppclient.py /tmp --dry-run
+python pp_client.py /tmp --dry-run
 
 # Real scan
-python ppclient.py /tmp
+python pp_client.py /tmp
 ```
 
 ## Usage
@@ -56,7 +56,7 @@ python ppclient.py /tmp
 ### Basic Syntax
 
 ```bash
-python ppclient.py [OPTIONS] PATH
+python pp_client.py [OPTIONS] PATH
 ```
 
 ### Options
@@ -68,9 +68,9 @@ python ppclient.py [OPTIONS] PATH
 - Supports absolute and relative paths
 
 ```bash
-python ppclient.py /var/www
-python ppclient.py ~/Documents
-python ppclient.py .
+python pp_client.py /var/www
+python pp_client.py ~/Documents
+python pp_client.py .
 ```
 
 **`--username USERNAME` or `-u USERNAME`**
@@ -79,8 +79,8 @@ python ppclient.py .
 - Can also set in config file
 
 ```bash
-python ppclient.py /tmp --username "admin"
-python ppclient.py /tmp -u "admin"
+python pp_client.py /tmp --username "admin"
+python pp_client.py /tmp -u "admin"
 ```
 
 **`--password PASSWORD` or `-p PASSWORD`**
@@ -89,8 +89,8 @@ python ppclient.py /tmp -u "admin"
 - Can also set in config file
 
 ```bash
-python ppclient.py /tmp --password "your-password"
-python ppclient.py /tmp -p "your-password"
+python pp_client.py /tmp --password "your-password"
+python pp_client.py /tmp -p "your-password"
 ```
 
 #### Optional Options
@@ -100,7 +100,7 @@ python ppclient.py /tmp -p "your-password"
 - Default: `http://localhost:8000/put_file`
 
 ```bash
-python ppclient.py /tmp --url "https://putplace.example.com/put_file"
+python pp_client.py /tmp --url "https://putplace.example.com/put_file"
 ```
 
 **`--hostname HOSTNAME`**
@@ -108,7 +108,7 @@ python ppclient.py /tmp --url "https://putplace.example.com/put_file"
 - Useful for custom naming
 
 ```bash
-python ppclient.py /tmp --hostname "web-server-01"
+python pp_client.py /tmp --hostname "web-server-01"
 ```
 
 **`--ip IP`**
@@ -116,7 +116,7 @@ python ppclient.py /tmp --hostname "web-server-01"
 - Useful when multiple IPs exist
 
 ```bash
-python ppclient.py /tmp --ip "192.168.1.100"
+python pp_client.py /tmp --ip "192.168.1.100"
 ```
 
 **`--exclude PATTERN`**
@@ -125,7 +125,7 @@ python ppclient.py /tmp --ip "192.168.1.100"
 - Supports wildcards
 
 ```bash
-python ppclient.py /tmp --exclude "*.log" --exclude ".git"
+python pp_client.py /tmp --exclude "*.log" --exclude ".git"
 ```
 
 **`--dry-run`**
@@ -133,7 +133,7 @@ python ppclient.py /tmp --exclude "*.log" --exclude ".git"
 - Useful for testing
 
 ```bash
-python ppclient.py /tmp --dry-run
+python pp_client.py /tmp --dry-run
 ```
 
 **`--verbose` or `-v`**
@@ -141,23 +141,23 @@ python ppclient.py /tmp --dry-run
 - Shows detailed progress
 
 ```bash
-python ppclient.py /tmp --verbose
-python ppclient.py /tmp -v
+python pp_client.py /tmp --verbose
+python pp_client.py /tmp -v
 ```
 
 **`--config PATH`**
 - Path to configuration file
-- Default: `ppclient.conf` or `~/ppclient.conf`
+- Default: `pp_client.conf` or `~/pp_client.conf`
 
 ```bash
-python ppclient.py /tmp --config ~/my-config.conf
+python pp_client.py /tmp --config ~/my-config.conf
 ```
 
 **`--help` or `-h`**
 - Show help message
 
 ```bash
-python ppclient.py --help
+python pp_client.py --help
 ```
 
 ## Configuration
@@ -183,7 +183,7 @@ Example:
 
 Create a configuration file to avoid repeating options:
 
-**~/ppclient.conf:**
+**~/pp_client.conf:**
 ```ini
 [DEFAULT]
 url = http://localhost:8000/put_file
@@ -196,13 +196,13 @@ exclude = *.log
 
 **Set secure permissions:**
 ```bash
-chmod 600 ~/ppclient.conf
+chmod 600 ~/pp_client.conf
 ```
 
 **Use:**
 ```bash
 # All settings from config file
-python ppclient.py /var/www
+python pp_client.py /var/www
 ```
 
 See [Configuration Reference](configuration.md#client-configuration) for all options.
@@ -214,7 +214,7 @@ See [Configuration Reference](configuration.md#client-configuration) for all opt
 #### 1. Command Line (Quick Testing)
 
 ```bash
-python ppclient.py /tmp --username "admin" --password "your-password"
+python pp_client.py /tmp --username "admin" --password "your-password"
 ```
 
 **Pros:** Quick for testing
@@ -225,7 +225,7 @@ python ppclient.py /tmp --username "admin" --password "your-password"
 ```bash
 export PUTPLACE_USERNAME="admin"
 export PUTPLACE_PASSWORD="your-password"
-python ppclient.py /tmp
+python pp_client.py /tmp
 ```
 
 **Pros:** Not in command history, works across commands
@@ -248,16 +248,16 @@ source ~/.zshrc
 
 ```bash
 # Create config
-cat > ~/ppclient.conf << 'EOF'
+cat > ~/pp_client.conf << 'EOF'
 [DEFAULT]
 username = admin
 password = your-password
 EOF
 
-chmod 600 ~/ppclient.conf
+chmod 600 ~/pp_client.conf
 
 # Use
-python ppclient.py /tmp
+python pp_client.py /tmp
 ```
 
 **Pros:** Most secure, persistent
@@ -310,7 +310,7 @@ Use `--exclude` to skip files:
 
 **Python projects:**
 ```bash
-python ppclient.py /project \
+python pp_client.py /project \
   --exclude ".git" \
   --exclude "__pycache__" \
   --exclude "*.pyc" \
@@ -322,7 +322,7 @@ python ppclient.py /project \
 
 **Node.js projects:**
 ```bash
-python ppclient.py /project \
+python pp_client.py /project \
   --exclude ".git" \
   --exclude "node_modules" \
   --exclude "dist" \
@@ -332,7 +332,7 @@ python ppclient.py /project \
 
 **Web servers:**
 ```bash
-python ppclient.py /var/www \
+python pp_client.py /var/www \
   --exclude ".git" \
   --exclude "*.log" \
   --exclude "cache" \
@@ -376,7 +376,7 @@ Scan a directory with default settings:
 ```bash
 export PUTPLACE_USERNAME="admin"
 export PUTPLACE_PASSWORD="your-password"
-python ppclient.py /var/www
+python pp_client.py /var/www
 ```
 
 Output:
@@ -404,7 +404,7 @@ Summary:
 Test without sending data:
 
 ```bash
-python ppclient.py /tmp --dry-run
+python pp_client.py /tmp --dry-run
 ```
 
 Output shows what would be sent but doesn't actually send.
@@ -414,7 +414,7 @@ Output shows what would be sent but doesn't actually send.
 Scan and send to remote server:
 
 ```bash
-python ppclient.py /var/www \
+python pp_client.py /var/www \
   --url "https://putplace.example.com/put_file" \
   --username "admin" \
   --password "production-password"
@@ -425,7 +425,7 @@ python ppclient.py /var/www \
 Override auto-detected hostname:
 
 ```bash
-python ppclient.py /var/www \
+python pp_client.py /var/www \
   --hostname "web-prod-01" \
   --ip "10.0.1.50"
 ```
@@ -435,7 +435,7 @@ python ppclient.py /var/www \
 Exclude multiple patterns:
 
 ```bash
-python ppclient.py /home/user \
+python pp_client.py /home/user \
   --exclude ".git" \
   --exclude "node_modules" \
   --exclude "__pycache__" \
@@ -449,7 +449,7 @@ python ppclient.py /home/user \
 See detailed progress:
 
 ```bash
-python ppclient.py /tmp --verbose
+python pp_client.py /tmp --verbose
 ```
 
 Output:
@@ -485,10 +485,10 @@ export PUTPLACE_USERNAME="dev-user"
 export PUTPLACE_PASSWORD="dev-password"
 
 # 2. Test connection with dry run
-python ppclient.py /tmp --dry-run
+python pp_client.py /tmp --dry-run
 
 # 3. Scan development directory
-python ppclient.py ~/projects/myapp \
+python pp_client.py ~/projects/myapp \
   --exclude ".git" \
   --exclude "node_modules" \
   --exclude ".venv"
@@ -498,7 +498,7 @@ python ppclient.py ~/projects/myapp \
 
 ```bash
 # 1. Create config file
-cat > ~/ppclient.conf << 'EOF'
+cat > ~/pp_client.conf << 'EOF'
 [DEFAULT]
 url = https://putplace.example.com/put_file
 username = prod-user
@@ -508,46 +508,46 @@ exclude = *.log
 exclude = tmp
 EOF
 
-chmod 600 ~/ppclient.conf
+chmod 600 ~/pp_client.conf
 
 # 2. Test with dry run
-python ppclient.py /var/www --dry-run
+python pp_client.py /var/www --dry-run
 
 # 3. Run actual scan
-python ppclient.py /var/www
+python pp_client.py /var/www
 
 # 4. Set up cron job for daily scans
-echo "0 2 * * * /usr/bin/python3 /path/to/ppclient.py /var/www" | crontab -
+echo "0 2 * * * /usr/bin/python3 /path/to/pp_client.py /var/www" | crontab -
 ```
 
 ### Multi-Environment Workflow
 
 ```bash
 # Development config
-cat > ~/ppclient.conf.dev << 'EOF'
+cat > ~/pp_client.conf.dev << 'EOF'
 url = http://dev-putplace:8000/put_file
 username = dev-user
 password = dev-password
 EOF
 
 # Staging config
-cat > ~/ppclient.conf.staging << 'EOF'
+cat > ~/pp_client.conf.staging << 'EOF'
 url = https://staging-putplace.example.com/put_file
 username = staging-user
 password = staging-password
 EOF
 
 # Production config
-cat > ~/ppclient.conf.prod << 'EOF'
+cat > ~/pp_client.conf.prod << 'EOF'
 url = https://putplace.example.com/put_file
 username = prod-user
 password = prod-password
 EOF
 
 # Use with --config flag
-python ppclient.py /var/www --config ~/ppclient.conf.dev
-python ppclient.py /var/www --config ~/ppclient.conf.staging
-python ppclient.py /var/www --config ~/ppclient.conf.prod
+python pp_client.py /var/www --config ~/pp_client.conf.dev
+python pp_client.py /var/www --config ~/pp_client.conf.staging
+python pp_client.py /var/www --config ~/pp_client.conf.prod
 ```
 
 ## Automated Scanning
@@ -561,30 +561,30 @@ python ppclient.py /var/www --config ~/ppclient.conf.prod
 crontab -e
 
 # Add line
-0 2 * * * /usr/bin/python3 /path/to/ppclient.py /var/www
+0 2 * * * /usr/bin/python3 /path/to/pp_client.py /var/www
 ```
 
 #### Hourly Scan
 
 ```bash
-0 * * * * /usr/bin/python3 /path/to/ppclient.py /var/www
+0 * * * * /usr/bin/python3 /path/to/pp_client.py /var/www
 ```
 
 #### Weekly Scan (Sundays at 3 AM)
 
 ```bash
-0 3 * * 0 /usr/bin/python3 /path/to/ppclient.py /var/www
+0 3 * * 0 /usr/bin/python3 /path/to/pp_client.py /var/www
 ```
 
 #### With Logging
 
 ```bash
-0 2 * * * /usr/bin/python3 /path/to/ppclient.py /var/www >> /var/log/ppclient.log 2>&1
+0 2 * * * /usr/bin/python3 /path/to/pp_client.py /var/www >> /var/log/pp_client.log 2>&1
 ```
 
 ### systemd Timer
 
-**Create service: /etc/systemd/system/ppclient.service**
+**Create service: /etc/systemd/system/pp_client.service**
 
 ```ini
 [Unit]
@@ -597,17 +597,17 @@ User=www-data
 Group=www-data
 Environment="PUTPLACE_USERNAME=prod-user"
 Environment="PUTPLACE_PASSWORD=prod-password"
-ExecStart=/usr/bin/python3 /path/to/ppclient.py /var/www
+ExecStart=/usr/bin/python3 /path/to/pp_client.py /var/www
 StandardOutput=journal
 StandardError=journal
 ```
 
-**Create timer: /etc/systemd/system/ppclient.timer**
+**Create timer: /etc/systemd/system/pp_client.timer**
 
 ```ini
 [Unit]
 Description=PutPlace Client Daily Scan
-Requires=ppclient.service
+Requires=pp_client.service
 
 [Timer]
 OnCalendar=daily
@@ -622,11 +622,11 @@ WantedBy=timers.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable ppclient.timer
-sudo systemctl start ppclient.timer
+sudo systemctl enable pp_client.timer
+sudo systemctl start pp_client.timer
 
 # Check status
-sudo systemctl status ppclient.timer
+sudo systemctl status pp_client.timer
 sudo systemctl list-timers
 ```
 
@@ -652,7 +652,7 @@ The client provides rich console output with:
 
 **Use in scripts:**
 ```bash
-python ppclient.py /var/www
+python pp_client.py /var/www
 if [ $? -eq 0 ]; then
     echo "All files processed successfully"
 elif [ $? -eq 1 ]; then
@@ -720,7 +720,7 @@ Failed to send file.txt: Cannot connect to host localhost:8000
 curl http://localhost:8000/health
 
 # Check URL
-python ppclient.py /tmp --url "http://correct-server:8000/put_file"
+python pp_client.py /tmp --url "http://correct-server:8000/put_file"
 
 # Check firewall
 telnet localhost 8000
@@ -737,7 +737,7 @@ Error scanning /var/www/private: Permission denied
 **Solution:**
 ```bash
 # Run with appropriate user
-sudo -u www-data python ppclient.py /var/www
+sudo -u www-data python pp_client.py /var/www
 
 # Or fix permissions
 sudo chmod -R +r /var/www
@@ -754,14 +754,14 @@ sudo chmod -R +r /var/www
 
 ```bash
 # Exclude large directories
-python ppclient.py /var/www \
+python pp_client.py /var/www \
   --exclude "cache" \
   --exclude "tmp" \
   --exclude "*.log"
 
 # Scan subdirectories separately
-python ppclient.py /var/www/app
-python ppclient.py /var/www/static
+python pp_client.py /var/www/app
+python pp_client.py /var/www/static
 ```
 
 ## Advanced Usage
@@ -779,7 +779,7 @@ DIRS="/var/www /etc /opt/myapp"
 
 for dir in $DIRS; do
     echo "Scanning $dir..."
-    python ppclient.py "$dir" \
+    python pp_client.py "$dir" \
         --url "https://putplace.example.com/put_file" \
         --username "$PUTPLACE_USERNAME" \
         --password "$PUTPLACE_PASSWORD" \
@@ -803,17 +803,17 @@ echo "All directories scanned successfully"
 #!/bin/bash
 # scan-with-monitoring.sh
 
-OUTPUT=$(python ppclient.py /var/www 2>&1)
+OUTPUT=$(python pp_client.py /var/www 2>&1)
 EXIT_CODE=$?
 
 if [ $EXIT_CODE -eq 0 ]; then
     # Send success metric to monitoring
     curl -X POST https://monitoring.example.com/metric \
-        -d "service=ppclient&status=success"
+        -d "service=pp_client&status=success"
 else
     # Send failure metric and alert
     curl -X POST https://monitoring.example.com/metric \
-        -d "service=ppclient&status=failure"
+        -d "service=pp_client&status=failure"
 
     # Send alert
     echo "$OUTPUT" | mail -s "PutPlace scan failed" ops@example.com
@@ -828,9 +828,9 @@ Scan multiple directories in parallel:
 #!/bin/bash
 # parallel-scan.sh
 
-python ppclient.py /var/www &
-python ppclient.py /etc &
-python ppclient.py /opt &
+python pp_client.py /var/www &
+python pp_client.py /etc &
+python pp_client.py /opt &
 
 wait
 
@@ -847,23 +847,23 @@ echo "All scans complete"
 2. **Scan subdirectories separately** - For very large directories
    ```bash
    for dir in /var/www/*; do
-       python ppclient.py "$dir"
+       python pp_client.py "$dir"
    done
    ```
 
 3. **Use dry run for testing** - Verify setup without sending
    ```bash
-   python ppclient.py /var/www --dry-run
+   python pp_client.py /var/www --dry-run
    ```
 
 4. **Run during off-peak hours** - Use cron for scheduled scans
    ```bash
-   0 2 * * * /usr/bin/python3 /path/to/ppclient.py /var/www
+   0 2 * * * /usr/bin/python3 /path/to/pp_client.py /var/www
    ```
 
 5. **Monitor progress** - Use verbose mode for long scans
    ```bash
-   python ppclient.py /large/directory --verbose
+   python pp_client.py /large/directory --verbose
    ```
 
 ## Graceful Interrupt Handling
@@ -886,7 +886,7 @@ The PutPlace client handles `Ctrl-C` (SIGINT) gracefully, allowing you to stop l
 
 ```bash
 # Start scanning a large directory
-ppclient --path /large/directory
+pp_client --path /large/directory
 
 # Press Ctrl-C once to stop gracefully
 # (Current file completes, then exits)
@@ -910,7 +910,7 @@ ppclient --path /large/directory
 **1. Testing:**
 ```bash
 # Start scan to verify configuration
-ppclient --path /large/directory
+pp_client --path /large/directory
 
 # Once you see it's working, press Ctrl-C to stop
 ```
@@ -918,7 +918,7 @@ ppclient --path /large/directory
 **2. Resource Management:**
 ```bash
 # Stop scan if system load is too high
-ppclient --path /data
+pp_client --path /data
 # ... system load warning appears ...
 # Press Ctrl-C to stop gracefully
 ```
@@ -926,7 +926,7 @@ ppclient --path /data
 **3. Time-Limited Scans:**
 ```bash
 # Run scan for a few minutes to sample data
-ppclient --path /var/www
+pp_client --path /var/www
 # Press Ctrl-C when you have enough samples
 ```
 
@@ -934,7 +934,7 @@ ppclient --path /var/www
 ```bash
 #!/bin/bash
 # Start scan in background
-ppclient --path /data &
+pp_client --path /data &
 PID=$!
 
 # Wait for 5 minutes
@@ -955,7 +955,7 @@ When interrupted:
 - Useful for automation/monitoring
 
 ```bash
-ppclient --path /data
+pp_client --path /data
 EXIT_CODE=$?
 
 if [ $EXIT_CODE -eq 0 ]; then
@@ -975,15 +975,15 @@ fi
 3. **Resume where you left off** - Use exclusions to skip already-processed files:
    ```bash
    # First scan (interrupted after 100 files)
-   ppclient --path /data
+   pp_client --path /data
 
    # Resume by scanning remaining directories
-   ppclient --path /data/subdirectory
+   pp_client --path /data/subdirectory
    ```
 
 4. **Monitor long scans** - Use `--verbose` to see progress and know when to interrupt:
    ```bash
-   ppclient --path /large/directory --verbose
+   pp_client --path /large/directory --verbose
    ```
 
 ## Next Steps

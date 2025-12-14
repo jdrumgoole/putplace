@@ -516,7 +516,7 @@ PutPlace supports storing file content in AWS S3 instead of local disk storage. 
 ### Prerequisites
 
 1. **AWS Account** with S3 access
-2. **IAM Users Created**: Use `putplace_configure` with `--setup-iam` to create IAM users and S3 buckets
+2. **IAM Users Created**: Use `pp_configure` with `--setup-iam` to create IAM users and S3 buckets
 3. **Credentials Generated**: Located in `./aws_credentials_output/` directory
 
 ### 1. Generate AWS Credentials (One-Time Setup)

@@ -233,7 +233,7 @@ invoke quickstart
 
 ## Testing Guide
 
-See [GOOGLE_SIGNIN_TESTING.md](ppgui-electron/GOOGLE_SIGNIN_TESTING.md) for comprehensive testing instructions.
+See [GOOGLE_SIGNIN_TESTING.md](pp_gui_client/GOOGLE_SIGNIN_TESTING.md) for comprehensive testing instructions.
 
 ## API Endpoints
 

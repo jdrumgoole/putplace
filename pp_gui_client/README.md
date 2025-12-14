@@ -22,7 +22,7 @@ A cross-platform desktop application for the PutPlace file metadata management s
 ## Installation
 
 ```bash
-cd ppgui-electron
+cd pp_gui_client
 npm install
 ```
 
@@ -127,7 +127,7 @@ Exclude patterns support:
 ## Project Structure
 
 ```
-ppgui-electron/
+pp_gui_client/
 ├── src/
 │   ├── main.ts           # Main Electron process
 │   ├── preload.ts        # Preload script (IPC bridge)

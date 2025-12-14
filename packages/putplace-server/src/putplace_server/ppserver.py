@@ -13,6 +13,8 @@ from typing import Dict, Any
 
 from rich.console import Console
 
+from .version import __version__
+
 console = Console()
 
 # TOML reading support
@@ -24,19 +26,47 @@ except ImportError:
     except ImportError:
         tomllib = None
 
+# Config cache to avoid loading multiple times
+_config_cache: Dict[str, Any] | None = None
+_config_path: Path | None = None
+
 
 def load_config() -> Dict[str, Any]:
     """Load configuration from ppserver.toml.
 
     Searches for ppserver.toml in standard locations:
-    1. ./ppserver.toml (current directory)
-    2. ~/.config/putplace/ppserver.toml (user config)
-    3. /etc/putplace/ppserver.toml (system config)
+    1. PUTPLACE_CONFIG environment variable (if set)
+    2. ./ppserver.toml (current directory)
+    3. ~/.config/putplace/ppserver.toml (user config)
+    4. /etc/putplace/ppserver.toml (system config)
+
+    Config is cached after first load, subsequent calls return cached value.
 
     Returns a dictionary with server configuration, or empty dict if not found.
     """
+    global _config_cache, _config_path
+
+    # Return cached config if available
+    if _config_cache is not None:
+        return _config_cache
+
     if not tomllib:
-        return {}
+        _config_cache = {}
+        return _config_cache
+
+    # Check PUTPLACE_CONFIG environment variable first
+    import os
+    env_config = os.environ.get("PUTPLACE_CONFIG")
+    if env_config:
+        env_path = Path(env_config)
+        if env_path.exists() and env_path.is_file():
+            try:
+                with open(env_path, 'rb') as f:
+                    _config_cache = tomllib.load(f)
+                _config_path = env_path
+                return _config_cache
+            except Exception as e:
+                pass  # Try other locations
 
     search_paths = [
         Path("./ppserver.toml"),
@@ -48,14 +78,26 @@ def load_config() -> Dict[str, Any]:
         if config_path.exists():
             try:
                 with open(config_path, 'rb') as f:
-                    config = tomllib.load(f)
-                console.print(f"[dim]Using config from {config_path}[/dim]")
-                return config
+                    _config_cache = tomllib.load(f)
+                _config_path = config_path
+                return _config_cache
             except Exception as e:
-                console.print(f"[yellow]Warning: Could not load {config_path}: {e}[/yellow]")
-                continue
+                continue  # Try next location
 
-    return {}
+    # No config found
+    _config_cache = {}
+    return _config_cache
+
+
+def print_config_info() -> None:
+    """Print information about which config file is being used.
+
+    Call this after load_config() has been called at least once.
+    """
+    if _config_path:
+        console.print(f"[dim]Using config from {_config_path.resolve()}[/dim]")
+    else:
+        console.print("[dim]No config file found, using defaults[/dim]")
 
 
 def get_pid_file() -> Path:
@@ -152,7 +194,7 @@ def wait_for_port_available(host: str, port: int, timeout: int = 10) -> bool:
     return False
 
 
-def start_server(host: str = "127.0.0.1", port: int = 8000, reload: bool = False) -> int:
+def start_server(host: str = "127.0.0.1", port: int = 8100, reload: bool = False) -> int:
     """Start the PutPlace server.
 
     Args:
@@ -168,6 +210,12 @@ def start_server(host: str = "127.0.0.1", port: int = 8000, reload: bool = False
         console.print(f"[yellow]Server is already running (PID: {pid})[/yellow]")
         console.print(f"[yellow]Use 'ppserver stop' to stop it first[/yellow]")
         return 1
+
+    # Show which config file is being used
+    print_config_info()
+
+    # Load config (uses cached value from main())
+    config = load_config()
 
     console.print(f"[cyan]Starting PutPlace server on {host}:{port}...[/cyan]")
 
@@ -185,7 +233,6 @@ def start_server(host: str = "127.0.0.1", port: int = 8000, reload: bool = False
         cmd.append("--reload")
 
     # Get log file path from config, fallback to default
-    config = load_config()
     log_file = None
     if config and 'logging' in config and 'log_file' in config['logging']:
         log_file = config['logging']['log_file']
@@ -284,7 +331,7 @@ def stop_server() -> int:
         return 1
 
 
-def restart_server(host: str = "127.0.0.1", port: int = 8000, reload: bool = False) -> int:
+def restart_server(host: str = "127.0.0.1", port: int = 8100, reload: bool = False) -> int:
     """Restart the PutPlace server.
 
     Args:
@@ -382,13 +429,13 @@ def logs_server(follow: bool = False, lines: int = 50) -> int:
 
 def main() -> int:
     """Main entry point."""
-    # Load configuration from ppserver.toml
+    # Load configuration from ppserver.toml (cached for later use)
     config = load_config()
 
     # Extract server settings from config with defaults
     server_config = config.get('server', {})
     default_host = server_config.get('host', '127.0.0.1')
-    default_port = server_config.get('port', 8000)
+    default_port = server_config.get('port', 8100)
 
     parser = argparse.ArgumentParser(
         prog="ppserver",
@@ -429,7 +476,8 @@ Examples:
 
   # Follow logs
   ppserver logs --follow
-        """,
+
+ppserver version """ + __version__,
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Command to run")

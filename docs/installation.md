@@ -206,32 +206,32 @@ python -m putplace.scripts.create_api_key --name "admin-key" --description "Admi
 
 ## Installing the Client
 
-The client (`ppclient.py`) is included in the repository.
+The client (`pp_client.py`) is included in the repository.
 
 ### System-Wide Installation
 
 ```bash
 # Make client executable
-chmod +x ppclient.py
+chmod +x pp_client.py
 
 # Create symbolic link (optional)
-sudo ln -s $(pwd)/ppclient.py /usr/local/bin/ppclient
+sudo ln -s $(pwd)/pp_client.py /usr/local/bin/pp_client
 
 # Now you can run from anywhere
-ppclient --help
+pp_client --help
 ```
 
 ### Client Configuration
 
 ```bash
 # Create client config
-cp ppclient.conf.example ~/ppclient.conf
+cp pp_client.conf.example ~/pp_client.conf
 
 # Edit and add your API key
-nano ~/ppclient.conf
+nano ~/pp_client.conf
 
 # Set secure permissions
-chmod 600 ~/ppclient.conf
+chmod 600 ~/pp_client.conf
 ```
 
 ## Verification
@@ -253,7 +253,7 @@ curl http://localhost:8000/health
 export PUTPLACE_API_KEY="your-api-key-here"
 
 # Test client (dry run)
-python ppclient.py /tmp --dry-run
+python pp_client.py /tmp --dry-run
 
 # Expected output:
 # PutPlace Client

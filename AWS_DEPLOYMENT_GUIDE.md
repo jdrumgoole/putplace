@@ -143,7 +143,7 @@ docs/
 .git/
 .github/
 node_modules/
-ppgui-electron/
+pp_gui_client/
 storage/
 *.log
 .env

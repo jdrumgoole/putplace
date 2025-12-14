@@ -1,0 +1,73 @@
+# PutPlace Assist Configuration Example
+#
+# Copy this file to one of these locations:
+#   - ./pp_assist.toml (current directory)
+#   - ~/.config/putplace/pp_assist.toml (user config - recommended)
+#   - /etc/putplace/pp_assist.toml (system config)
+#
+# Or set PPASSIST_CONFIG environment variable to point to your config file.
+#
+# You can also override any setting with environment variables using PPASSIST_ prefix:
+#   PPASSIST_SERVER_PORT=9000 pp_assist start
+#
+# See packages/putplace-assist/src/putplace_assist/config.py for all options
+
+[server]
+# Host to bind the web server to
+host = "127.0.0.1"
+
+# Port for the web server and API
+port = 8765
+
+# Logging level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+log_level = "INFO"
+
+[remote_server]
+# Default PutPlace server to upload files to
+# This server will be automatically configured in the database on first startup
+# Name is derived from URL (e.g., "localhost:8100"), but you can customize it
+name = "localhost:8100"
+url = "http://localhost:8100"
+
+# Optional authentication credentials
+# Uncomment and configure if your PutPlace server requires authentication
+# username = "your-username"
+# password = "your-password"
+
+[database]
+# SQLite database path for storing file metadata and activity logs
+path = "~/.local/share/putplace/assist.db"
+
+[watcher]
+# Enable automatic file watching for registered paths
+enabled = true
+
+# Debounce delay in seconds - wait this long before processing file change events
+# This prevents rapid-fire events from overwhelming the system
+debounce_seconds = 2.0
+
+[uploader]
+# Number of parallel upload workers
+parallel_uploads = 4
+
+# Number of retry attempts for failed uploads
+retry_attempts = 3
+
+# Delay between retries in seconds
+retry_delay_seconds = 5.0
+
+[sha256]
+# Chunk size for reading files during SHA256 calculation (bytes)
+# Larger chunks = faster processing but more memory usage
+chunk_size = 65536
+
+# Delay between chunks in milliseconds to prevent CPU saturation
+# Set to 0 for maximum speed (may impact system responsiveness)
+chunk_delay_ms = 1
+
+# Number of files to process in each batch before pausing
+batch_size = 100
+
+# Delay between processing batches in seconds
+# Gives the system time to handle other tasks
+batch_delay_seconds = 1.0

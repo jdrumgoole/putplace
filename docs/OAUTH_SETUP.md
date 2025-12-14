@@ -121,7 +121,7 @@ After configuration, restart the server:
 ```bash
 invoke quickstart
 # Or manually:
-ppserver restart
+pp_server restart
 ```
 
 ## Step 3: Test Google Sign-In
@@ -178,7 +178,7 @@ curl http://localhost:8000/api/oauth/config
 **Solution**:
 1. Verify `ppserver.toml` has `[oauth]` section with `google_client_id`
 2. Verify Client ID format (should end with `.apps.googleusercontent.com`)
-3. Restart server: `ppserver restart`
+3. Restart server: `pp_server restart`
 
 ### "Invalid Google ID token" Error
 
@@ -268,7 +268,7 @@ Google Sign-In requires HTTPS in production. Exceptions:
 ## Support
 
 If you encounter issues:
-1. Check server logs: `ppserver logs --follow`
+1. Check server logs: `pp_server logs --follow`
 2. Check browser console for JavaScript errors
 3. Verify MongoDB is running: `invoke mongo-status`
 4. Test backend endpoint: `curl http://localhost:8000/api/oauth/config`

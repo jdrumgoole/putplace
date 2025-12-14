@@ -60,7 +60,7 @@ docs/
 !README.md
 
 # Electron GUI
-ppgui-electron/
+pp_gui_client/
 node_modules/
 
 # Local development

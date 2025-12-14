@@ -1,7 +1,7 @@
 [project]
 name = "putplace-server"
 # IMPORTANT: Keep this version in sync with src/putplace_server/version.py!
-version = "0.8.9"
+version = "0.8.10"
 description = "PutPlace FastAPI server for file metadata storage"
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -46,9 +46,10 @@ dependencies = [
 ]
 
 [project.scripts]
-ppserver = "putplace_server.ppserver:main"
-putplace_configure = "putplace_server.scripts.putplace_configure:main"
+pp_server = "putplace_server.ppserver:main"
+pp_configure = "putplace_server.scripts.putplace_configure:main"
 pp_manage_users = "putplace_server.scripts.pp_manage_users:run"
+pp_purge_data = "putplace_server.scripts.purge_data:main"
 
 [project.optional-dependencies]
 dev = [
@@ -105,6 +106,7 @@ ignore = []
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*" = ["B", "S101"]
 "src/putplace_server/ppserver.py" = ["T201"]  # Allow print statements in server script
+"src/putplace_server/scripts/purge_data.py" = ["T201"]  # Allow print statements in purge script
 
 [tool.mypy]
 python_version = "3.10"

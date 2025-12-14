@@ -68,7 +68,7 @@ invoke setup
 # Configure the server (create admin user, check AWS, set storage backend)
 source .venv/bin/activate
 invoke configure
-# Or directly: putplace_configure
+# Or directly: pp_configure
 
 # Start MongoDB and server
 invoke quickstart
@@ -82,16 +82,16 @@ PutPlace includes a configuration wizard to set up your server after installatio
 
 ```bash
 # Interactive configuration (recommended for first-time setup)
-putplace_configure
+pp_configure
 
 # Non-interactive configuration (for automation/CI/CD)
-putplace_configure --non-interactive \
+pp_configure --non-interactive \
   --admin-username admin \
   --admin-email admin@example.com \
   --storage-backend local
 
 # With S3 storage
-putplace_configure --non-interactive \
+pp_configure --non-interactive \
   --admin-username admin \
   --admin-email admin@example.com \
   --storage-backend s3 \
@@ -101,7 +101,7 @@ putplace_configure --non-interactive \
 # Environment-specific configuration (auto-suffixes bucket name)
 # User provides: --s3-bucket=putplace --envtype=prod
 # System creates: putplace-prod bucket
-putplace_configure --non-interactive \
+pp_configure --non-interactive \
   --envtype prod \
   --admin-username admin \
   --admin-email admin@example.com \
@@ -110,12 +110,12 @@ putplace_configure --non-interactive \
   --aws-region us-west-2
 
 # Skip validation checks (useful for testing)
-putplace_configure --skip-checks
+pp_configure --skip-checks
 
 # Standalone AWS tests (new in v0.5.2)
-putplace_configure S3                        # Test S3 access
-putplace_configure SES                       # Test SES access
-putplace_configure S3 --aws-region us-west-2 # Test in specific region
+pp_configure S3                        # Test S3 access
+pp_configure SES                       # Test SES access
+pp_configure S3 --aws-region us-west-2 # Test in specific region
 
 # Via invoke task
 invoke configure --test-mode=S3
@@ -150,13 +150,13 @@ invoke configure --test-mode=SES
 
 ```bash
 # Scan a directory and upload metadata
-ppclient --path /var/log
+pp_client --path /var/log
 
 # Dry run (no upload)
-ppclient --path /var/log --dry-run
+pp_client --path /var/log --dry-run
 
 # With authentication
-ppclient --path /var/log --username admin --password your-password
+pp_client --path /var/log --username admin --password your-password
 ```
 
 #### Graphical User Interface (GUI)
@@ -214,7 +214,6 @@ putplace/
 │   ├── database.py      # MongoDB operations
 │   ├── storage.py       # Storage backends (local/S3)
 │   ├── auth.py          # Authentication (JWT & API keys)
-│   ├── ppclient.py      # Client tool
 │   └── ppserver.py      # Server manager
 ├── tests/               # Test suite (125+ tests, parallel execution)
 ├── docs/                # Documentation (Sphinx)
@@ -305,16 +304,16 @@ open htmlcov/index.html
 
 See [tests/README.md](tests/README.md) for detailed testing documentation.
 
-### Server Manager (ppserver)
+### Server Manager (pp_server)
 
 ```bash
-ppserver start            # Start server
-ppserver start --port 8080  # Custom port
-ppserver status           # Check status
-ppserver stop             # Stop server
-ppserver restart          # Restart server
-ppserver logs             # View logs
-ppserver logs --follow    # Follow logs
+pp_server start            # Start server
+pp_server start --port 8080  # Custom port
+pp_server status           # Check status
+pp_server stop             # Stop server
+pp_server restart          # Restart server
+pp_server logs             # View logs
+pp_server logs --follow    # Follow logs
 ```
 
 Files are stored in `~/.putplace/`:
@@ -335,7 +334,7 @@ The server looks for `ppserver.toml` in:
 2. `~/.config/putplace/ppserver.toml` (user config)
 3. `/etc/putplace/ppserver.toml` (system config)
 
-You can also use `invoke configure` or `putplace_configure` for guided setup. Environment variables can override TOML settings if needed. See [Configuration Guide](https://putplace.readthedocs.io/en/latest/configuration.html) for details.
+You can also use `invoke configure` or `pp_configure` for guided setup. Environment variables can override TOML settings if needed. See [Configuration Guide](https://putplace.readthedocs.io/en/latest/configuration.html) for details.
 
 ## API Endpoints
 

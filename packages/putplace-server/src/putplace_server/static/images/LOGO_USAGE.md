@@ -141,7 +141,7 @@ This logo is stored in multiple locations:
 1. **Server:** `src/putplace/static/images/putplace-logo.svg`
    - Access: `http://localhost:8000/static/images/putplace-logo.svg`
 
-2. **Electron Client:** `ppgui-electron/src/renderer/assets/putplace-logo.svg`
+2. **Electron Client:** `pp_gui_client/src/renderer/assets/putplace-logo.svg`
    - Access: `assets/putplace-logo.svg` (in HTML)
 
 3. **Docs:** Copy to `docs/images/` for README usage

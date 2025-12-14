@@ -101,15 +101,13 @@ The fastest way to test your AWS credentials:
 
 ```bash
 # Test S3 access
-putplace_configure S3
-# Or: uv run python -m putplace.scripts.putplace_configure S3
+pp_configure S3
 
 # Test SES access
-putplace_configure SES
-# Or: uv run python -m putplace.scripts.putplace_configure SES
+pp_configure SES
 
 # Test in specific region
-putplace_configure S3 --aws-region us-west-2
+pp_configure S3 --aws-region us-west-2
 
 # Via invoke task
 invoke configure --test-mode=S3

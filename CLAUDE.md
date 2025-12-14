@@ -102,22 +102,22 @@ Use the configuration wizard to set up PutPlace after installation:
 ```bash
 # Interactive configuration
 invoke configure
-# Or: uv run python -m putplace.scripts.putplace_configure
+# Or: pp_configure
 
 # Non-interactive (for automation)
-uv run python -m putplace.scripts.putplace_configure --non-interactive \
+pp_configure --non-interactive \
   --admin-username admin \
   --admin-email admin@example.com \
   --storage-backend local
 
 # Standalone AWS tests (v0.5.2+)
-uv run python -m putplace.scripts.putplace_configure S3   # Test S3 access
-uv run python -m putplace.scripts.putplace_configure SES  # Test SES access
-invoke configure --test-mode=S3                  # Via invoke
-invoke configure --test-mode=SES                 # Via invoke
+pp_configure S3   # Test S3 access
+pp_configure SES  # Test SES access
+invoke configure --test-mode=S3   # Via invoke
+invoke configure --test-mode=SES  # Via invoke
 
 # Test in specific region
-uv run python -m putplace.scripts.putplace_configure S3 --aws-region us-west-2
+pp_configure S3 --aws-region us-west-2
 ```
 
 **What it does:**
@@ -180,7 +180,7 @@ All development tasks are managed through `invoke` (see tasks.py):
 - `test_models.py` - Pydantic model validation tests
 - `test_api.py` - FastAPI endpoint tests (async)
 - `test_database.py` - MongoDB operation tests (async)
-- `test_client.py` - ppclient.py unit tests
+- `test_client.py` - pp_client unit tests
 - `test_admin_creation.py` - Admin user creation tests
 - `test_e2e.py` - End-to-end integration tests (marked with @pytest.mark.integration)
 - `conftest.py` - Shared fixtures (test_db, client, sample_file_metadata, temp_test_dir)
@@ -216,7 +216,6 @@ tests/                     Test suite (comprehensive unit and integration tests)
   ├── test_e2e.py          End-to-end integration tests
   └── README.md            Test documentation
 docs/                      Documentation
-ppclient.py                Client tool for directory scanning
 tasks.py                   Invoke task definitions
 pyproject.toml             Project config, dependencies, tool settings
 .env.example               Environment variables template
@@ -241,9 +240,9 @@ curl -X POST http://localhost:8000/put_file \
 curl http://localhost:8000/get_file/e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 ```
 
-## PutPlace Client (ppclient.py)
+## PutPlace Client (pp_client)
 
-The `ppclient.py` is a command-line tool for scanning directories and sending file metadata to the server.
+The `pp_client` is a command-line tool for scanning directories and sending file metadata to the server.
 
 ### Key Features
 - Recursively scans directories
@@ -257,16 +256,16 @@ The `ppclient.py` is a command-line tool for scanning directories and sending fi
 ### Basic Usage
 ```bash
 # Scan directory and send to server
-python ppclient.py /path/to/scan
+pp_client /path/to/scan
 
 # With exclude patterns
-python ppclient.py /path --exclude .git --exclude "*.log" --exclude __pycache__
+pp_client /path --exclude .git --exclude "*.log" --exclude __pycache__
 
 # Dry run (don't send to server)
-python ppclient.py /path --dry-run
+pp_client /path --dry-run
 
 # Custom server URL
-python ppclient.py /path --url http://remote-server:8000/put_file
+pp_client /path --url http://remote-server:8000/put_file
 ```
 
 ### Implementation Details
@@ -381,3 +380,6 @@ Configuration is managed via Pydantic Settings in `src/putplace/config.py`
 - Always prefer invoke tasks for operaitons if available
 - when we create a new release of the client update the download page with the new links
 - syncrohize the version in package.json with the version in pyproject.toml
+- pp_client is a canonical test client, pp_assist is the client side server that mediates access to the server for all clients. pp_server is the server side hosted component that stores meta-data in MongoDB and rawfile data in S3.
+- use port 8100 for test and dev servers
+- Write all tests in python

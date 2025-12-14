@@ -120,11 +120,11 @@ export PUTPLACE_API_KEY="your-api-key-here"
 
 ```bash
 # Test with dry run
-python ppclient.py /tmp --dry-run
+python pp_client.py /tmp --dry-run
 
 # Test actual upload
 echo "test" > /tmp/test.txt
-python ppclient.py /tmp/test.txt
+python pp_client.py /tmp/test.txt
 ```
 
 ## Project Structure
@@ -150,7 +150,7 @@ putplace/
 │   ├── test_auth.py             # Authentication tests
 │   └── test_storage.py          # Storage backend tests
 ├── docs/                        # Documentation
-├── ppclient.py                  # Command-line client
+├── pp_client.py                  # Command-line client
 ├── pyproject.toml               # Project metadata & dependencies
 ├── setup.py                     # Setup script
 ├── ppserver.toml.example        # Example server configuration

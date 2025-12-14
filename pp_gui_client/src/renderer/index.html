@@ -10,7 +10,11 @@
     <div class="container">
         <header>
             <h1>PutPlace GUI Client</h1>
-            <button id="auth-btn" class="auth-btn">Login</button>
+            <div class="header-status">
+                <div id="daemon-status" class="daemon-status disconnected">Daemon: Checking...</div>
+                <button id="config-btn" class="config-btn">⚙️ Config</button>
+                <button id="auth-btn" class="auth-btn">Login</button>
+            </div>
         </header>
 
         <!-- Auth Section -->
@@ -42,8 +46,8 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="login-server">Server URL:</label>
-                        <input type="text" id="login-server" value="https://app.putplace.org" />
+                        <label for="login-server">pp_assist URL:</label>
+                        <input type="text" id="login-server" value="http://localhost:8765" />
                     </div>
                 </div>
                 <div class="form-group">
@@ -104,8 +108,8 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="register-server">Server URL:</label>
-                        <input type="text" id="register-server" value="https://app.putplace.org" />
+                        <label for="register-server">pp_assist URL:</label>
+                        <input type="text" id="register-server" value="http://localhost:8765" />
                     </div>
                 </div>
                 <div class="auth-controls">
@@ -129,17 +133,13 @@
                 </div>
             </section>
 
-            <!-- Settings -->
-            <section class="card">
-                <h2>System Information</h2>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="hostname">Hostname:</label>
-                        <input type="text" id="hostname" readonly />
-                    </div>
-                    <div class="form-group">
-                        <label for="ip-address">IP Address:</label>
-                        <input type="text" id="ip-address" readonly />
+            <!-- Daemon Status -->
+            <section class="card daemon-card">
+                <h2>PPassist Daemon Status</h2>
+                <div id="daemon-stats" class="daemon-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Status:</span>
+                        <span class="stat-value">Connecting...</span>
                     </div>
                 </div>
             </section>
@@ -147,17 +147,11 @@
             <!-- Upload Options -->
             <section class="card">
                 <h2>Upload Options</h2>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="upload-content" />
-                            <span>Upload file content (not just metadata)</span>
-                        </label>
-                    </div>
-                    <div class="form-group">
-                        <label for="parallel-uploads">Parallel uploads:</label>
-                        <input type="number" id="parallel-uploads" min="1" max="32" value="4" style="width: 80px;" />
-                    </div>
+                <div class="form-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="upload-content" />
+                        <span>Upload file content (not just metadata)</span>
+                    </label>
                 </div>
             </section>
 
@@ -180,8 +174,19 @@
                 <div class="progress-bar">
                     <div id="progress-fill" class="progress-fill" style="width: 0%"></div>
                 </div>
-                <div id="active-uploads-container" class="active-uploads-container">
-                    <!-- Individual file progress bars will be dynamically added here -->
+                <div class="upload-history-table">
+                    <div class="upload-history-header">
+                        <div class="col-status">Status</div>
+                        <div class="col-file">File</div>
+                        <div class="col-size">Size</div>
+                        <div class="col-progress">Progress</div>
+                    </div>
+                    <div id="active-uploads-container" class="active-uploads-container">
+                        <!-- Individual file progress bars will be dynamically added here -->
+                    </div>
+                </div>
+                <div class="history-controls">
+                    <button id="clear-history-btn" class="btn btn-small btn-secondary">Clear History</button>
                 </div>
                 <div id="stats" class="stats">
                     <span>Total: <strong id="stat-total">0</strong></span>
@@ -203,6 +208,125 @@
                 <button id="clear-log-btn" class="btn btn-secondary">Clear Log</button>
             </section>
         </main>
+    </div>
+
+    <!-- Config Modal -->
+    <div id="config-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Configuration</h2>
+                <button id="config-modal-close" class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="config-file-info">
+                    <span class="config-label">Config File:</span>
+                    <span id="modal-config-file" class="config-value">Not loaded</span>
+                </div>
+
+                <div class="config-section-modal">
+                    <h3>Server Settings</h3>
+                    <div class="form-group">
+                        <label for="config-server-host-input">Listen Address:</label>
+                        <input type="text" id="config-server-host-input" />
+                    </div>
+                    <div class="form-group">
+                        <label for="config-server-port-input">Port:</label>
+                        <input type="number" id="config-server-port-input" />
+                    </div>
+                    <div class="form-group">
+                        <label for="config-server-loglevel-input">Log Level:</label>
+                        <select id="config-server-loglevel-input">
+                            <option value="debug">DEBUG</option>
+                            <option value="info">INFO</option>
+                            <option value="warning">WARNING</option>
+                            <option value="error">ERROR</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="config-section-modal">
+                    <h3>Remote Server</h3>
+                    <div class="form-group">
+                        <label for="config-remote-name-input">Server Name:</label>
+                        <input type="text" id="config-remote-name-input" placeholder="e.g., production" />
+                    </div>
+                    <div class="form-group">
+                        <label for="config-remote-url-input">Server URL:</label>
+                        <input type="text" id="config-remote-url-input" placeholder="https://putplace.example.com" />
+                    </div>
+                    <div class="form-group">
+                        <label for="config-remote-username-input">Username:</label>
+                        <input type="text" id="config-remote-username-input" placeholder="user@example.com" />
+                    </div>
+                    <div class="form-group">
+                        <label for="config-remote-password-input">Password:</label>
+                        <div class="password-input-wrapper">
+                            <input type="password" id="config-remote-password-input" placeholder="Leave blank to keep current" />
+                            <button type="button" id="toggle-config-password" class="password-toggle" aria-label="Toggle password visibility">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="config-section-modal">
+                    <h3>Upload Settings</h3>
+                    <div class="form-group">
+                        <label for="config-uploader-parallel-input">Parallel Uploads:</label>
+                        <input type="number" id="config-uploader-parallel-input" min="1" max="32" />
+                    </div>
+                    <div class="form-group">
+                        <label for="config-uploader-retry-input">Retry Attempts:</label>
+                        <input type="number" id="config-uploader-retry-input" min="0" max="10" />
+                    </div>
+                    <div class="form-group">
+                        <label for="config-uploader-retry-delay-input">Retry Delay (seconds):</label>
+                        <input type="number" id="config-uploader-retry-delay-input" min="1" max="60" />
+                    </div>
+                </div>
+
+                <div class="config-section-modal">
+                    <h3>Database</h3>
+                    <div class="form-group">
+                        <label for="config-database-path-input">Database Path:</label>
+                        <input type="text" id="config-database-path-input" />
+                    </div>
+                </div>
+
+                <div class="config-section-modal">
+                    <h3>Watcher</h3>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="config-watcher-enabled-input" />
+                            <span>Enable file watcher</span>
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label for="config-watcher-debounce-input">Debounce Seconds:</label>
+                        <input type="number" id="config-watcher-debounce-input" min="1" max="60" />
+                    </div>
+                </div>
+
+                <div class="config-section-modal">
+                    <h3>System Information</h3>
+                    <div class="form-group">
+                        <label for="config-hostname-input">Hostname:</label>
+                        <input type="text" id="config-hostname-input" readonly />
+                    </div>
+                    <div class="form-group">
+                        <label for="config-ip-address-input">IP Address:</label>
+                        <input type="text" id="config-ip-address-input" readonly />
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="config-save-btn" class="btn btn-primary">Save Configuration</button>
+                <button id="config-cancel-btn" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
     </div>
 
     <div id="version-display" class="version-display">v1.0.14</div>

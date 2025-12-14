@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.10] - 2025-12-13
+
+### Fixed
+- **E2E Test Authentication**: Fixed authentication failure in Playwright E2E tests
+  - Added `is_default` field to `ServerCreate` model in putplace-assist
+  - Updated POST `/servers` endpoint to honor `is_default` flag from requests
+  - Test server credentials now properly override auto-configured default server
+  - E2E test now passes completely with successful upload verification
+
+### Added
+- **Workspace Configuration**: Added uv workspace support for monorepo structure
+  - Configured workspace members: putplace-server, putplace-client, putplace-assist
+  - Enables proper package resolution with `uv run` commands
+- **Test Markers**: Added pytest markers for test organization
+  - `e2e`: End-to-end tests (can deselect with `-m "not e2e"`)
+  - `integration`: Integration tests requiring external services
+
+### Changed
+- **E2E Test Suite**: Complete end-to-end workflow test now fully functional
+  - Tests authentication, file scanning, SHA256 calculation, and upload
+  - Verifies file existence on server with correct metadata
+  - Execution time: ~11-12 seconds
+  - Test located at: `pp_gui_client/tests/e2e-full-workflow.spec.ts`
+
 ## [0.5.1] - 2025-01-06
 
 ### Fixed

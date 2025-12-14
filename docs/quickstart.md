@@ -65,10 +65,10 @@ export PUTPLACE_USERNAME="admin"
 export PUTPLACE_PASSWORD="paste-your-password-here"
 
 # Scan a directory (dry run first)
-python ppclient.py /tmp --dry-run
+python pp_client.py /tmp --dry-run
 
 # If that works, scan for real
-python ppclient.py /tmp
+python pp_client.py /tmp
 
 # You should see:
 # Logging in as admin...
@@ -149,19 +149,19 @@ uvicorn putplace.main:app --reload
 
 ```bash
 # Scan with exclusions
-python ppclient.py /var/log --exclude "*.log" --exclude ".git"
+python pp_client.py /var/log --exclude "*.log" --exclude ".git"
 
 # Scan different server
-python ppclient.py /var/log --url http://remote-server:8000/put_file
+python pp_client.py /var/log --url http://remote-server:8000/put_file
 
 # Use config file
-cat > ~/ppclient.conf << EOF
+cat > ~/pp_client.conf << EOF
 [DEFAULT]
 username = admin
 password = your-password
 EOF
-chmod 600 ~/ppclient.conf
-python ppclient.py /var/log
+chmod 600 ~/pp_client.conf
+python pp_client.py /var/log
 ```
 
 ### Create More Users
@@ -210,7 +210,7 @@ export PUTPLACE_USERNAME="admin"
 export PUTPLACE_PASSWORD="your-password"
 
 # Or use command line
-python ppclient.py /tmp --username "admin" --password "your-password"
+python pp_client.py /tmp --username "admin" --password "your-password"
 
 # If you lost the admin password, check the server logs from first startup
 ```
@@ -232,16 +232,16 @@ curl -X POST http://localhost:8000/api/login \
   -d '{"username": "admin", "password": "your-password"}'
 
 # Scan directory
-python ppclient.py /path/to/scan
+python pp_client.py /path/to/scan
 
 # Scan with credentials
-python ppclient.py /path --username "admin" --password "your-password"
+python pp_client.py /path --username "admin" --password "your-password"
 
 # Scan remote server
-python ppclient.py /path --url http://server:8000/put_file
+python pp_client.py /path --url http://server:8000/put_file
 
 # Dry run (test without sending)
-python ppclient.py /path --dry-run
+python pp_client.py /path --dry-run
 
 # Health check
 curl http://localhost:8000/health
@@ -261,7 +261,7 @@ cat /tmp/putplace_initial_creds.txt
 # Password: Xy9K3mP#vL2nQ@8sW4tR
 
 # 3. Create config file
-cat > ~/ppclient.conf << EOF
+cat > ~/pp_client.conf << EOF
 [DEFAULT]
 url = http://localhost:8000/put_file
 username = admin
@@ -270,10 +270,10 @@ exclude = .git
 exclude = node_modules
 exclude = __pycache__
 EOF
-chmod 600 ~/ppclient.conf
+chmod 600 ~/pp_client.conf
 
 # 4. Scan your home directory
-python ppclient.py ~/Documents
+python pp_client.py ~/Documents
 
 # 5. Check results
 curl -X POST http://localhost:8000/api/login \
@@ -284,7 +284,7 @@ curl -X POST http://localhost:8000/api/login \
 ## Architecture at a Glance
 
 ```
-[Your Files] → [ppclient.py] → [PutPlace API] → [MongoDB + Storage]
+[Your Files] → [pp_client.py] → [PutPlace API] → [MongoDB + Storage]
                     ↓                              ↓
               JWT Bearer Auth           Metadata + File Content
 ```

@@ -1,0 +1,2384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PutPlace Assist</title>
+    <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
+    <style>
+        :root {
+            --primary: #667eea;
+            --secondary: #764ba2;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            --info: #3b82f6;
+            --text-dark: #1f2937;
+            --text-muted: #6b7280;
+            --bg-card: #ffffff;
+            --border-color: #e5e7eb;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: var(--text-dark);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 20px 0;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            font-weight: 600;
+            color: white;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .status-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            font-size: 0.9rem;
+            color: white;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--error);
+        }
+
+        .status-dot.connected {
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 1024px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: var(--bg-card);
+            border-radius: 20px;
+            padding: 25px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-dark);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-title svg {
+            width: 20px;
+            height: 20px;
+            color: var(--primary);
+        }
+
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #f3f4f6;
+            color: var(--text-dark);
+        }
+
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 16px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .path-list {
+            list-style: none;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .path-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            background: #f9fafb;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid var(--primary);
+        }
+
+        .path-info {
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .path-name {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--text-dark);
+        }
+
+        .path-meta {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .path-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .activity-feed {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .activity-item {
+            display: flex;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 10px;
+            margin-bottom: 8px;
+            background: #f9fafb;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .activity-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .activity-icon.upload { background: rgba(59, 130, 246, 0.1); color: var(--info); }
+        .activity-icon.success { background: rgba(16, 185, 129, 0.1); color: var(--success); }
+        .activity-icon.error { background: rgba(239, 68, 68, 0.1); color: var(--error); }
+        .activity-icon.scan { background: rgba(245, 158, 11, 0.1); color: var(--warning); }
+        .activity-icon.file { background: rgba(102, 126, 234, 0.1); color: var(--primary); }
+
+        .activity-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .activity-message {
+            font-size: 0.9rem;
+            color: var(--text-dark);
+            margin-bottom: 4px;
+        }
+
+        .activity-time {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .upload-progress {
+            margin-top: 20px;
+        }
+
+        .upload-item {
+            background: #f9fafb;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid var(--info);
+        }
+
+        .upload-info {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .upload-filename {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .upload-status {
+            font-size: 0.8rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .upload-status.pending { background: #fef3c7; color: #92400e; }
+        .upload-status.in_progress { background: #dbeafe; color: #1e40af; }
+        .upload-status.success { background: #d1fae5; color: #065f46; }
+        .upload-status.failed { background: #fee2e2; color: #991b1b; }
+
+        .progress-bar {
+            height: 6px;
+            background: #e5e7eb;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            transition: width 0.3s ease;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+        }
+
+        .empty-state svg {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 15px;
+            opacity: 0.5;
+        }
+
+        /* Upload History Section */
+        .history-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            background: #f9fafb;
+            border-radius: 10px;
+            margin-bottom: 8px;
+        }
+
+        .history-item.metadata {
+            border-left: 4px solid var(--warning);
+        }
+
+        .history-item.content {
+            border-left: 4px solid var(--success);
+        }
+
+        .history-info {
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .history-filename {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.85rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            color: var(--text-dark);
+        }
+
+        .history-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+            display: flex;
+            gap: 12px;
+        }
+
+        .history-badges {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .type-badge {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .type-badge.metadata {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .type-badge.content {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-indicator {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .status-indicator.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-indicator.failed {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .filter-bar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .filter-btn {
+            padding: 6px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            background: white;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.8rem;
+            transition: all 0.2s;
+        }
+
+        .filter-btn.active {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            border-color: transparent;
+        }
+
+        .filter-btn:hover:not(.active) {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        /* SHA256 Status Section */
+        .sha256-status {
+            padding: 15px;
+            background: #f9fafb;
+            border-radius: 10px;
+        }
+
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .status-row:last-child {
+            border-bottom: none;
+        }
+
+        .status-label {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+        }
+
+        .status-value {
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-dark);
+        }
+
+        .status-value.current-file {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.8rem;
+            max-width: 300px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .status-indicator.running {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .status-indicator.stopped {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+        }
+
+        .modal-overlay.active {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal h2 {
+            margin-bottom: 20px;
+            color: var(--text-dark);
+            font-size: 1.1rem;
+        }
+
+        .form-group {
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .form-group label {
+            min-width: 180px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .form-group input,
+        .form-group select {
+            flex: 1;
+            padding: 6px 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            background: white;
+            color: var(--text-dark);
+            font-size: 0.8rem;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        /* Checkbox special handling */
+        .form-group input[type="checkbox"] {
+            flex: none;
+            width: auto;
+        }
+
+        .form-group label:has(input[type="checkbox"]) {
+            min-width: auto;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .modal h3 {
+            font-size: 0.75rem;
+            margin-top: 12px;
+            margin-bottom: 8px;
+        }
+
+        .modal p {
+            font-size: 0.75rem;
+        }
+
+        .modal code {
+            font-size: 0.7rem;
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .checkbox-group input {
+            width: auto;
+        }
+
+        /* Server List */
+        .server-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .server-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            background: #f9fafb;
+            border-radius: 10px;
+            margin-bottom: 10px;
+            border-left: 4px solid var(--info);
+        }
+
+        .server-item.default {
+            border-left-color: var(--success);
+        }
+
+        .server-info {
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .server-name {
+            font-weight: 600;
+            color: var(--text-dark);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .server-url {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .default-badge {
+            font-size: 0.65rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: var(--success);
+            color: white;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        /* Exclude List */
+        .exclude-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .exclude-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background: #f9fafb;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+
+        .exclude-pattern {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 0.9rem;
+            color: var(--text-dark);
+        }
+
+        .btn-icon {
+            padding: 6px 10px;
+            border-radius: 6px;
+        }
+
+        .btn-danger {
+            background: var(--error);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 20px;
+            margin-top: 30px;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.85rem;
+        }
+
+        .footer a {
+            color: white;
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Upload Progress */
+        .progress-list {
+            padding: 20px;
+        }
+
+        .progress-item {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f9fafb;
+            border-radius: 10px;
+            border-left: 4px solid var(--info);
+        }
+
+        .progress-item.uploading {
+            border-left-color: var(--primary);
+        }
+
+        .progress-item.error {
+            border-left-color: var(--error);
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .progress-filename {
+            font-weight: 600;
+            color: var(--text-dark);
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-right: 10px;
+        }
+
+        .progress-percent {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        .progress-bar-container {
+            width: 100%;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+
+        .progress-details {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 8px;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .progress-error {
+            margin-top: 8px;
+            padding: 8px;
+            background: #fee2e2;
+            color: #991b1b;
+            border-radius: 6px;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>PutPlace Assist</h1>
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <button class="btn btn-primary" onclick="showLoginModal()" title="Login to Server">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4M10 17l5-5-5-5M13.8 12H3"/>
+                    </svg>
+                    Login
+                </button>
+                <button class="btn btn-secondary" onclick="showConfigModal()" title="Configuration">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                        <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                        <path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                    Config
+                </button>
+                <div class="status-badge">
+                    <div class="status-dot" id="connectionStatus"></div>
+                    <span id="connectionText">Connecting...</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="statPaths">-</div>
+                <div class="stat-label">Paths Watched</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statFiles">-</div>
+                <div class="stat-label">Files Tracked</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statPendingSha256">-</div>
+                <div class="stat-label">Pending SHA256</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="statPendingUpload">-</div>
+                <div class="stat-label">Pending Upload</div>
+            </div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                        </svg>
+                        Watched Paths
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">
+                        Use <code>pp_client</code> or <code>pp_gui_client</code> to add paths
+                    </div>
+                </div>
+                <ul class="path-list" id="pathList">
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                        </svg>
+                        <p>No paths registered yet</p>
+                        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 8px;">
+                            Run <code>pp_client add /path/to/watch</code> to add a path
+                        </p>
+                    </div>
+                </ul>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        Live Activity
+                    </div>
+                    <button class="btn btn-secondary" onclick="clearActivity()">Clear</button>
+                </div>
+                <div class="activity-feed" id="activityFeed">
+                    <div class="empty-state">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <p>Waiting for activity...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 20px;">
+            <div class="card-header">
+                <div class="card-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                    </svg>
+                    SHA256 Processing
+                </div>
+                <span class="status-indicator" id="sha256Status">Checking...</span>
+            </div>
+            <div class="sha256-status" id="sha256StatusDetails">
+                <div class="status-row">
+                    <span class="status-label">Processor:</span>
+                    <span class="status-value" id="sha256Running">-</span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Pending Files:</span>
+                    <span class="status-value" id="sha256Pending">-</span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Processed Today:</span>
+                    <span class="status-value" id="sha256ProcessedToday">-</span>
+                </div>
+                <div class="status-row">
+                    <span class="status-label">Failed Today:</span>
+                    <span class="status-value" id="sha256FailedToday">-</span>
+                </div>
+                <div class="status-row" id="sha256CurrentFileRow" style="display: none;">
+                    <span class="status-label">Current File:</span>
+                    <span class="status-value current-file" id="sha256CurrentFile">-</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Exclude Patterns Section -->
+        <div class="card" style="margin-top: 20px;">
+            <div class="card-header">
+                <div class="card-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                    </svg>
+                    Exclude Patterns
+                </div>
+                <button class="btn btn-primary" onclick="showAddExcludeModal()">Add Pattern</button>
+            </div>
+            <div class="exclude-list" id="excludeList">
+                <div class="empty-state">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                    </svg>
+                    <p>No exclude patterns</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Upload Progress Section -->
+        <div class="card" id="uploadProgressCard" style="margin-top: 20px; display: none;">
+            <div class="card-header">
+                <div class="card-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                    </svg>
+                    Upload Progress
+                </div>
+            </div>
+            <div id="uploadProgressList" class="progress-list">
+                <!-- Progress items will be inserted here -->
+            </div>
+        </div>
+
+        <!-- Upload History Section -->
+        <div class="card" style="margin-top: 20px;">
+            <div class="card-header">
+                <div class="card-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    </svg>
+                    Upload History
+                </div>
+                <button class="btn btn-secondary" onclick="loadUploadHistory()">Refresh</button>
+            </div>
+            <div class="filter-bar">
+                <button class="filter-btn active" data-filter="all" onclick="filterHistory('all', this)">All</button>
+                <button class="filter-btn" data-filter="metadata" onclick="filterHistory('metadata', this)">Metadata Only</button>
+                <button class="filter-btn" data-filter="content" onclick="filterHistory('content', this)">Full Content</button>
+            </div>
+            <div class="history-list" id="historyList">
+                <div class="empty-state">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    </svg>
+                    <p>No upload history yet</p>
+                </div>
+            </div>
+        </div>
+
+        <footer class="footer">
+            <p>PutPlace Assist • <a href="/docs" target="_blank">API Docs</a></p>
+        </footer>
+    </div>
+
+    <!-- Add Server Modal -->
+    <div class="modal-overlay" id="addServerModal">
+        <div class="modal">
+            <h2>Add Server</h2>
+            <form onsubmit="addServer(event)">
+                <div class="form-group">
+                    <label>Server Name</label>
+                    <input type="text" id="serverName" placeholder="e.g., production" required>
+                </div>
+                <div class="form-group">
+                    <label>Server URL</label>
+                    <input type="url" id="serverUrl" placeholder="https://app.putplace.org" required>
+                </div>
+                <div class="form-group">
+                    <label>Username (Email)</label>
+                    <input type="email" id="serverUsername" placeholder="user@example.com" required>
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="serverPassword" placeholder="Your password" required>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="hideAddServerModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Server</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Exclude Pattern Modal -->
+    <div class="modal-overlay" id="addExcludeModal">
+        <div class="modal">
+            <h2>Add Exclude Pattern</h2>
+            <form onsubmit="addExclude(event)">
+                <div class="form-group">
+                    <label>Pattern</label>
+                    <input type="text" id="excludePattern" placeholder="e.g., .git, *.log, node_modules" required>
+                </div>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">
+                    Use glob patterns like <code>*.log</code>, <code>.git</code>, or <code>__pycache__</code>
+                </p>
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="hideAddExcludeModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Add Pattern</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div class="modal-overlay" id="loginModal">
+        <div class="modal" style="max-width: 450px;">
+            <h2>Login to Server</h2>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 20px;">
+                Authenticate with the remote PutPlace server
+            </p>
+
+            <form onsubmit="handleLogin(event)">
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="loginEmail" required autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="loginPassword" required autocomplete="current-password">
+                </div>
+
+                <div id="loginMessage" style="display: none; padding: 10px; margin-top: 15px; border-radius: 8px; font-size: 0.75rem;"></div>
+
+                <div class="form-actions" style="margin-top: 20px;">
+                    <button type="submit" class="btn btn-primary" id="loginSubmitBtn">Login</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeLoginModal()">Cancel</button>
+                </div>
+
+                <div style="margin-top: 15px; text-align: center; font-size: 0.75rem;">
+                    <span style="color: var(--text-muted);">Don't have an account?</span>
+                    <a href="#" onclick="showRegisterFromLogin(event)" style="color: var(--primary); margin-left: 5px;">Register</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Register Modal -->
+    <div class="modal-overlay" id="registerModal">
+        <div class="modal" style="max-width: 450px;">
+            <h2>Register New Account</h2>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 20px;">
+                Create a new account on the remote server
+            </p>
+
+            <form onsubmit="handleRegister(event)">
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="registerUsername" required autocomplete="username">
+                </div>
+                <div class="form-group">
+                    <label>Email</label>
+                    <input type="email" id="registerEmail" required autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="registerPassword" required autocomplete="new-password" minlength="8">
+                </div>
+                <div class="form-group">
+                    <label>Full Name (optional)</label>
+                    <input type="text" id="registerFullName" autocomplete="name">
+                </div>
+
+                <div id="registerMessage" style="display: none; padding: 10px; margin-top: 15px; border-radius: 8px; font-size: 0.75rem;"></div>
+
+                <div class="form-actions" style="margin-top: 20px;">
+                    <button type="submit" class="btn btn-primary" id="registerSubmitBtn">Register</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeRegisterModal()">Cancel</button>
+                </div>
+
+                <div style="margin-top: 15px; text-align: center; font-size: 0.75rem;">
+                    <span style="color: var(--text-muted);">Already have an account?</span>
+                    <a href="#" onclick="showLoginFromRegister(event)" style="color: var(--primary); margin-left: 5px;">Login</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Configuration Modal -->
+    <div class="modal-overlay" id="configModal">
+        <div class="modal" style="max-width: 700px; max-height: 90vh; overflow-y: auto;">
+            <h2>Configuration</h2>
+            <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 20px;">
+                Config file: <code id="configFilePath">Loading...</code>
+            </p>
+
+            <form onsubmit="saveConfig(event)">
+                <!-- Server Section -->
+                <h3 style="margin-top: 0; margin-bottom: 12px; color: var(--primary); font-size: 1rem;">Local API Server</h3>
+                <div class="form-group">
+                    <label>Host</label>
+                    <input type="text" id="configServerHost" required>
+                </div>
+                <div class="form-group">
+                    <label>Port</label>
+                    <input type="number" id="configServerPort" min="1" max="65535" required>
+                </div>
+                <div class="form-group">
+                    <label>Log Level</label>
+                    <select id="configServerLogLevel" required>
+                        <option value="DEBUG">DEBUG</option>
+                        <option value="INFO">INFO</option>
+                        <option value="WARNING">WARNING</option>
+                        <option value="ERROR">ERROR</option>
+                        <option value="CRITICAL">CRITICAL</option>
+                    </select>
+                </div>
+
+                <!-- Remote Server Section -->
+                <h3 style="margin-top: 18px; margin-bottom: 12px; color: var(--primary); font-size: 1rem;">Remote PutPlace Server</h3>
+                <div class="form-group">
+                    <label>Server Name</label>
+                    <input type="text" id="configRemoteServerName">
+                </div>
+                <div class="form-group">
+                    <label>Server URL</label>
+                    <input type="url" id="configRemoteServerUrl">
+                </div>
+                <div class="form-group">
+                    <label>Username</label>
+                    <input type="text" id="configRemoteServerUsername">
+                </div>
+                <div class="form-group">
+                    <label>Password</label>
+                    <input type="password" id="configRemoteServerPassword" placeholder="(unchanged if left empty)">
+                </div>
+
+                <!-- Database Section -->
+                <h3 style="margin-top: 18px; margin-bottom: 12px; color: var(--primary); font-size: 1rem;">Database</h3>
+                <div class="form-group">
+                    <label>Database Path</label>
+                    <input type="text" id="configDatabasePath" required>
+                </div>
+
+                <!-- Watcher Section -->
+                <h3 style="margin-top: 18px; margin-bottom: 12px; color: var(--primary); font-size: 1rem;">File Watcher</h3>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="configWatcherEnabled">
+                        Enable file watching
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Debounce Delay (seconds)</label>
+                    <input type="number" id="configWatcherDebounce" step="0.1" min="0.1" required>
+                </div>
+
+                <!-- Uploader Section -->
+                <h3 style="margin-top: 18px; margin-bottom: 12px; color: var(--primary); font-size: 1rem;">Upload Settings</h3>
+                <div class="form-group">
+                    <label>Parallel Uploads</label>
+                    <input type="number" id="configUploaderParallel" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label>Retry Attempts</label>
+                    <input type="number" id="configUploaderRetry" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label>Retry Delay (seconds)</label>
+                    <input type="number" id="configUploaderRetryDelay" step="0.1" min="0" required>
+                </div>
+
+                <!-- SHA256 Section -->
+                <h3 style="margin-top: 18px; margin-bottom: 12px; color: var(--primary); font-size: 1rem;">SHA256 Processing</h3>
+                <div class="form-group">
+                    <label>Chunk Size (bytes)</label>
+                    <input type="number" id="configSha256ChunkSize" min="1024" required>
+                </div>
+                <div class="form-group">
+                    <label>Chunk Delay (ms)</label>
+                    <input type="number" id="configSha256ChunkDelay" min="0" required>
+                </div>
+                <div class="form-group">
+                    <label>Batch Size</label>
+                    <input type="number" id="configSha256BatchSize" min="1" required>
+                </div>
+                <div class="form-group">
+                    <label>Batch Delay (seconds)</label>
+                    <input type="number" id="configSha256BatchDelay" step="0.1" min="0" required>
+                </div>
+
+                <div class="form-actions" style="margin-top: 20px;">
+                    <button type="button" class="btn btn-secondary" onclick="hideConfigModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Configuration</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Confirm Dialog Modal -->
+    <div class="modal-overlay" id="confirmModal">
+        <div class="modal" style="max-width: 450px;">
+            <h2 id="confirmTitle">Confirm</h2>
+            <p id="confirmMessage" style="font-size: 0.9rem; color: var(--text-dark); margin-bottom: 20px;"></p>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-secondary" onclick="cancelConfirm()">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="acceptConfirm()">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert/Message Modal -->
+    <div class="modal-overlay" id="alertModal">
+        <div class="modal" style="max-width: 450px;">
+            <h2 id="alertTitle">Message</h2>
+            <p id="alertMessage" style="font-size: 0.9rem; color: var(--text-dark); margin-bottom: 20px; white-space: pre-wrap;"></p>
+
+            <div class="form-actions">
+                <button type="button" class="btn btn-primary" onclick="closeAlert()">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let eventSource = null;
+        let activityItems = [];
+        let currentHistoryFilter = 'all';
+        const MAX_ACTIVITY_ITEMS = 100;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Load critical data first
+            await checkConnection();
+
+            // Load primary UI data in parallel
+            await Promise.all([
+                loadStats(),
+                loadPaths(),
+            ]);
+
+            // Load secondary data
+            loadSha256Status();
+            loadExcludes();
+
+            // Load history and connect SSE after a short delay
+            setTimeout(() => {
+                loadUploadProgress();
+                loadUploadHistory();
+                connectSSE();
+            }, 100);
+
+            // Set up polling with reasonable intervals
+            setInterval(loadStats, 5000);           // Every 5 seconds
+            setInterval(loadSha256Status, 3000);    // Every 3 seconds
+            setInterval(loadUploadProgress, 2000);  // Every 2 seconds (real-time progress)
+            setInterval(loadUploadHistory, 10000);  // Every 10 seconds
+        });
+
+        // Check connection to daemon
+        async function checkConnection() {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+
+                document.getElementById('connectionStatus').classList.add('connected');
+                document.getElementById('connectionText').textContent = `Connected (v${data.version})`;
+            } catch (error) {
+                document.getElementById('connectionStatus').classList.remove('connected');
+                document.getElementById('connectionText').textContent = 'Disconnected';
+            }
+        }
+
+        // Load statistics
+        async function loadStats() {
+            try {
+                const [statusRes, statsRes] = await Promise.all([
+                    fetch(`${API_BASE}/status`),
+                    fetch(`${API_BASE}/files/stats`)
+                ]);
+
+                const status = await statusRes.json();
+                const stats = await statsRes.json();
+
+                document.getElementById('statPaths').textContent = status.paths_watched;
+                document.getElementById('statFiles').textContent = stats.total_files;
+                document.getElementById('statPendingSha256').textContent = stats.pending_sha256;
+                document.getElementById('statPendingUpload').textContent = stats.pending_uploads;
+            } catch (error) {
+                console.error('Failed to load stats:', error);
+            }
+        }
+
+        // Load paths
+        async function loadPaths() {
+            try {
+                const response = await fetch(`${API_BASE}/paths`);
+                const data = await response.json();
+
+                const pathList = document.getElementById('pathList');
+
+                if (data.paths.length === 0) {
+                    pathList.innerHTML = `
+                        <div class="empty-state">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+                            </svg>
+                            <p>No paths registered yet</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                pathList.innerHTML = data.paths.map(path => `
+                    <li class="path-item">
+                        <div class="path-info">
+                            <div class="path-name" title="${path.path}">${path.path}</div>
+                            <div class="path-meta">
+                                ${path.file_count} files |
+                                ${path.recursive ? 'Recursive' : 'Non-recursive'} |
+                                Last scanned: ${path.last_scanned_at ? new Date(path.last_scanned_at).toLocaleString() : 'Never'}
+                            </div>
+                        </div>
+                        <div class="path-actions">
+                            <button class="btn btn-secondary" onclick="scanPath(${path.id}, event)">Scan</button>
+                            <button class="btn btn-secondary" onclick="triggerPathUpload(${path.id}, '${path.path.replace(/'/g, "\\'")}', false)" title="Upload metadata only">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                    <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                                Meta
+                            </button>
+                            <button class="btn btn-primary" onclick="triggerPathUpload(${path.id}, '${path.path.replace(/'/g, "\\'")}', true)" title="Upload full content">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14">
+                                    <path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                                </svg>
+                                Full
+                            </button>
+                            <button class="btn btn-secondary" onclick="deletePath(${path.id})">Remove</button>
+                        </div>
+                    </li>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load paths:', error);
+            }
+        }
+
+        // Load SHA256 processor status
+        async function loadSha256Status() {
+            try {
+                const response = await fetch(`${API_BASE}/sha256/status`);
+                const data = await response.json();
+
+                // Update status indicator
+                const statusIndicator = document.getElementById('sha256Status');
+                if (data.is_running) {
+                    statusIndicator.textContent = 'Running';
+                    statusIndicator.className = 'status-indicator running';
+                } else {
+                    statusIndicator.textContent = 'Stopped';
+                    statusIndicator.className = 'status-indicator stopped';
+                }
+
+                // Update status details
+                document.getElementById('sha256Running').textContent = data.is_running ? 'Active' : 'Inactive';
+                document.getElementById('sha256Pending').textContent = data.pending_count;
+                document.getElementById('sha256ProcessedToday').textContent = data.processed_today;
+                document.getElementById('sha256FailedToday').textContent = data.failed_today;
+
+                // Show current file if processing
+                const currentFileRow = document.getElementById('sha256CurrentFileRow');
+                if (data.current_file) {
+                    currentFileRow.style.display = 'flex';
+                    document.getElementById('sha256CurrentFile').textContent = data.current_file.split('/').pop();
+                    document.getElementById('sha256CurrentFile').title = data.current_file;
+                } else {
+                    currentFileRow.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Failed to load SHA256 status:', error);
+            }
+        }
+
+        // Load upload progress
+        async function loadUploadProgress() {
+            try {
+                const response = await fetch(`${API_BASE}/uploads/progress`);
+                const data = await response.json();
+
+                const card = document.getElementById('uploadProgressCard');
+                const progressList = document.getElementById('uploadProgressList');
+
+                // Show/hide card based on whether there are uploads
+                if (data.is_uploading && data.in_progress.length > 0) {
+                    card.style.display = 'block';
+
+                    // Format bytes
+                    const formatBytes = (bytes) => {
+                        if (bytes === 0) return '0 B';
+                        const k = 1024;
+                        const sizes = ['B', 'KB', 'MB', 'GB'];
+                        const i = Math.floor(Math.log(bytes) / Math.log(k));
+                        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+                    };
+
+                    // Render progress items
+                    progressList.innerHTML = data.in_progress.map(item => {
+                        const filename = item.filepath.split('/').pop();
+                        const progressClass = item.error_message ? 'error' : 'uploading';
+
+                        return `
+                            <div class="progress-item ${progressClass}">
+                                <div class="progress-header">
+                                    <div class="progress-filename" title="${item.filepath}">${filename}</div>
+                                    <div class="progress-percent">${Math.round(item.progress_percent)}%</div>
+                                </div>
+                                <div class="progress-bar-container">
+                                    <div class="progress-bar" style="width: ${item.progress_percent}%"></div>
+                                </div>
+                                <div class="progress-details">
+                                    <span>${formatBytes(item.bytes_uploaded)} / ${formatBytes(item.total_bytes)}</span>
+                                    <span>${item.status}</span>
+                                </div>
+                                ${item.error_message ? `
+                                    <div class="progress-error">${item.error_message}</div>
+                                ` : ''}
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    card.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Failed to load upload progress:', error);
+            }
+        }
+
+        // Load upload history
+        async function loadUploadHistory() {
+            try {
+                let url = `${API_BASE}/uploads/history?limit=50`;
+                if (currentHistoryFilter !== 'all') {
+                    // Map filter names to API values
+                    const statusMap = { 'metadata': 'meta', 'content': 'full' };
+                    url += `&upload_status=${statusMap[currentHistoryFilter] || currentHistoryFilter}`;
+                }
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                const historyList = document.getElementById('historyList');
+
+                if (data.records.length === 0) {
+                    historyList.innerHTML = `
+                        <div class="empty-state">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                            </svg>
+                            <p>No upload history yet</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                historyList.innerHTML = data.records.map(record => `
+                    <div class="history-item ${record.upload_status === 'full' ? 'content' : 'metadata'}">
+                        <div class="history-info">
+                            <div class="history-filename" title="${record.filepath}">${record.filepath.split('/').pop()}</div>
+                            <div class="history-meta">
+                                <span>${record.processed_at ? new Date(record.processed_at).toLocaleString() : 'N/A'}</span>
+                                <span>${formatBytes(record.file_size)}</span>
+                            </div>
+                        </div>
+                        <div class="history-badges">
+                            <span class="type-badge ${record.upload_status === 'full' ? 'content' : 'metadata'}">${record.upload_status === 'full' ? 'Full' : 'Meta'}</span>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load upload history:', error);
+            }
+        }
+
+        // Format bytes to human readable
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        }
+
+        // Filter history
+        function filterHistory(filter, btn) {
+            currentHistoryFilter = filter;
+
+            // Update button states
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            // Reload history with new filter
+            loadUploadHistory();
+        }
+
+        // Connect to SSE stream
+        function connectSSE() {
+            if (eventSource) {
+                eventSource.close();
+            }
+
+            eventSource = new EventSource(`${API_BASE}/activity/stream`);
+
+            eventSource.onopen = () => {
+                console.log('SSE connected');
+            };
+
+            eventSource.onerror = (error) => {
+                console.error('SSE error:', error);
+                document.getElementById('connectionStatus').classList.remove('connected');
+                document.getElementById('connectionText').textContent = 'Reconnecting...';
+
+                // Reconnect after 5 seconds
+                setTimeout(connectSSE, 5000);
+            };
+
+            eventSource.addEventListener('connected', (event) => {
+                document.getElementById('connectionStatus').classList.add('connected');
+                checkConnection();
+            });
+
+            // Listen for all event types
+            ['scan_started', 'scan_complete', 'file_discovered', 'file_changed', 'file_deleted',
+             'sha256_started', 'sha256_complete', 'sha256_failed',
+             'upload_started', 'upload_progress', 'upload_complete', 'upload_failed',
+             'table_cleanup', 'error'].forEach(eventType => {
+                eventSource.addEventListener(eventType, (event) => {
+                    const data = JSON.parse(event.data);
+                    addActivityItem(data);
+
+                    // Handle server shutdown event
+                    if (eventType === 'error' && data.details && data.details.reason === 'restart') {
+                        console.log('Server is shutting down, will reconnect...');
+                        document.getElementById('connectionStatus').classList.remove('connected');
+                        document.getElementById('connectionText').textContent = 'Server restarting...';
+
+                        // Close the SSE connection immediately
+                        if (eventSource) {
+                            eventSource.close();
+                            eventSource = null;
+                        }
+
+                        // Attempt to reconnect after 2 seconds
+                        setTimeout(connectSSE, 2000);
+                        return;
+                    }
+
+                    // Refresh stats on certain events
+                    if (['scan_complete', 'upload_complete', 'file_discovered', 'sha256_complete'].includes(eventType)) {
+                        loadStats();
+                        loadSha256Status();
+                        if (eventType === 'scan_complete') {
+                            loadPaths();
+                        }
+                        if (eventType === 'upload_complete') {
+                            loadUploadHistory();
+                        }
+                    }
+                });
+            });
+        }
+
+        // Add activity item
+        function addActivityItem(data) {
+            const feed = document.getElementById('activityFeed');
+
+            // Remove empty state if present
+            const emptyState = feed.querySelector('.empty-state');
+            if (emptyState) {
+                emptyState.remove();
+            }
+
+            const iconClass = getIconClass(data.event_type);
+            const iconSvg = getIconSvg(data.event_type);
+
+            const item = document.createElement('div');
+            item.className = 'activity-item';
+            item.innerHTML = `
+                <div class="activity-icon ${iconClass}">
+                    ${iconSvg}
+                </div>
+                <div class="activity-content">
+                    <div class="activity-message">${data.message || data.event_type}</div>
+                    <div class="activity-time">${new Date(data.created_at).toLocaleTimeString()}</div>
+                </div>
+            `;
+
+            feed.insertBefore(item, feed.firstChild);
+
+            // Limit items
+            activityItems.unshift(data);
+            if (activityItems.length > MAX_ACTIVITY_ITEMS) {
+                activityItems.pop();
+                const items = feed.querySelectorAll('.activity-item');
+                if (items.length > MAX_ACTIVITY_ITEMS) {
+                    items[items.length - 1].remove();
+                }
+            }
+        }
+
+        function getIconClass(eventType) {
+            if (eventType.includes('upload')) return eventType.includes('failed') ? 'error' : 'upload';
+            if (eventType.includes('sha256')) return eventType.includes('failed') ? 'error' : 'success';
+            if (eventType.includes('scan')) return 'scan';
+            if (eventType.includes('file')) return 'file';
+            if (eventType.includes('error')) return 'error';
+            if (eventType.includes('cleanup')) return 'success';
+            return 'info';
+        }
+
+        function getIconSvg(eventType) {
+            if (eventType.includes('upload')) {
+                return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>';
+            }
+            if (eventType.includes('sha256')) {
+                return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>';
+            }
+            if (eventType.includes('scan')) {
+                return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>';
+            }
+            if (eventType.includes('file')) {
+                return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>';
+            }
+            if (eventType.includes('cleanup')) {
+                return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>';
+            }
+            return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+        }
+
+        // Clear activity
+        function clearActivity() {
+            activityItems = [];
+            document.getElementById('activityFeed').innerHTML = `
+                <div class="empty-state">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <p>Waiting for activity...</p>
+                </div>
+            `;
+        }
+
+        // Scan path
+        async function scanPath(pathId, event) {
+            const btn = event.target;
+            const originalText = btn.innerHTML;
+
+            // Disable button and show loading state
+            btn.disabled = true;
+            btn.innerHTML = 'Scanning...';
+
+            try {
+                const response = await fetch(`${API_BASE}/paths/${pathId}/scan`, { method: 'POST' });
+
+                if (response.ok) {
+                    // Show success feedback
+                    btn.innerHTML = '✓ Scan Started';
+                    btn.style.background = 'var(--success)';
+                    btn.style.color = 'white';
+
+                    // Reload stats immediately (doesn't affect button)
+                    loadStats();
+                    loadSha256Status();
+
+                    // Delay reloading paths to allow user to see feedback
+                    setTimeout(() => {
+                        loadPaths();  // This will replace the buttons, so do it after showing feedback
+                    }, 2500);
+
+                    // Reset button after 2 seconds (in case loadPaths doesn't fire)
+                    setTimeout(() => {
+                        if (btn.innerHTML === '✓ Scan Started') {
+                            btn.innerHTML = originalText;
+                            btn.style.background = '';
+                            btn.style.color = '';
+                            btn.disabled = false;
+                        }
+                    }, 2000);
+
+                    // Activity feed will show scan events via SSE
+                } else {
+                    btn.innerHTML = originalText;
+                    btn.disabled = false;
+                    console.error('Failed to trigger scan:', response.statusText);
+                    showAlert(`Failed to trigger scan: ${response.statusText}`, 'Error');
+                }
+            } catch (error) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                console.error('Failed to trigger scan:', error);
+                showAlert(`Failed to trigger scan: ${error.message}`, 'Error');
+            }
+        }
+
+        // Delete path
+        async function deletePath(pathId) {
+            showConfirm('Are you sure you want to remove this path?', 'Remove Path', async (confirmed) => {
+                if (!confirmed) return;
+
+                try {
+                    await fetch(`${API_BASE}/paths/${pathId}`, { method: 'DELETE' });
+                    loadPaths();
+                    loadStats();
+                } catch (error) {
+                    console.error('Failed to delete path:', error);
+                    showAlert('Failed to remove path. Please try again.', 'Error');
+                }
+            });
+        }
+
+        // Trigger upload
+        async function triggerUpload(uploadContent = false) {
+            const btn = uploadContent ? document.getElementById('uploadFullBtn') : document.getElementById('uploadMetaBtn');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span>Uploading...</span>';
+
+            try {
+                const response = await fetch(`${API_BASE}/uploads`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ upload_content: uploadContent })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const typeLabel = uploadContent ? 'full content' : 'metadata';
+                    document.getElementById('uploadQueueInfo').textContent =
+                        `Queued ${data.files_queued} files for ${typeLabel} upload`;
+                    loadStats();
+                } else {
+                    const error = await response.json();
+                    showAlert(`Upload failed: ${error.detail || 'Unknown error'}`, 'Upload Error');
+                }
+            } catch (error) {
+                showAlert(`Failed to trigger upload: ${error.message}`, 'Error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+
+        // Trigger upload for a specific path
+        async function triggerPathUpload(pathId, path, uploadContent = false) {
+            try {
+                const response = await fetch(`${API_BASE}/uploads`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        upload_content: uploadContent,
+                        path_prefix: path
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const typeLabel = uploadContent ? 'full content' : 'metadata';
+                    console.log(`Queued ${data.files_queued} files from ${path} for ${typeLabel} upload`);
+
+                    // Show feedback via activity feed
+                    loadStats();
+                    loadUploadHistory();
+                } else {
+                    const error = await response.json();
+                    showAlert(`Upload failed: ${error.detail || 'Unknown error'}`, 'Upload Error');
+                }
+            } catch (error) {
+                showAlert(`Failed to trigger upload: ${error.message}`, 'Error');
+            }
+        }
+
+        // ===== Server Management =====
+
+        async function loadServers() {
+            console.log('[loadServers] Starting...');
+            try {
+                const response = await fetch(`${API_BASE}/servers`);
+                console.log('[loadServers] Fetch response:', response.status);
+
+                if (!response.ok) {
+                    console.error('Server list fetch failed:', response.status, response.statusText);
+                    return;
+                }
+
+                const data = await response.json();
+                console.log('[loadServers] Data received:', data);
+
+                const serverList = document.getElementById('serverList');
+                console.log('[loadServers] serverList element:', serverList);
+
+                if (!serverList) {
+                    console.error('serverList element not found!');
+                    return;
+                }
+
+                if (!data.servers || data.servers.length === 0) {
+                    console.log('[loadServers] Rendering empty state');
+                    serverList.innerHTML = `
+                        <div class="empty-state">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01"/>
+                            </svg>
+                            <p>No servers configured</p>
+                        </div>
+                    `;
+                    console.log('[loadServers] Empty state rendered, innerHTML length:', serverList.innerHTML.length);
+                    console.log('[loadServers] serverList dimensions:', {
+                        offsetHeight: serverList.offsetHeight,
+                        offsetWidth: serverList.offsetWidth,
+                        scrollHeight: serverList.scrollHeight,
+                        display: window.getComputedStyle(serverList).display,
+                        visibility: window.getComputedStyle(serverList).visibility,
+                        opacity: window.getComputedStyle(serverList).opacity
+                    });
+                    return;
+                }
+
+                serverList.innerHTML = data.servers.map(server => `
+                    <div class="server-item ${server.is_default ? 'default' : ''}">
+                        <div class="server-info">
+                            <div class="server-name">
+                                ${server.name}
+                                ${server.is_default ? '<span class="default-badge">Default</span>' : ''}
+                            </div>
+                            <div class="server-url">${server.url}</div>
+                        </div>
+                        <div class="path-actions">
+                            ${!server.is_default ? `<button class="btn btn-secondary" onclick="setDefaultServer(${server.id})">Set Default</button>` : ''}
+                            <button class="btn btn-danger btn-icon" onclick="deleteServer(${server.id})">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                    <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load servers:', error);
+                const serverList = document.getElementById('serverList');
+                if (serverList) {
+                    serverList.innerHTML = `
+                        <div class="empty-state">
+                            <p style="color: var(--danger);">Error loading servers. Check console for details.</p>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        function showAddServerModal() {
+            document.getElementById('addServerModal').classList.add('active');
+            document.getElementById('serverName').focus();
+        }
+
+        function hideAddServerModal() {
+            document.getElementById('addServerModal').classList.remove('active');
+            document.getElementById('serverName').value = '';
+            document.getElementById('serverUrl').value = '';
+            document.getElementById('serverUsername').value = '';
+            document.getElementById('serverPassword').value = '';
+        }
+
+        async function addServer(event) {
+            event.preventDefault();
+
+            const name = document.getElementById('serverName').value;
+            const url = document.getElementById('serverUrl').value;
+            const username = document.getElementById('serverUsername').value;
+            const password = document.getElementById('serverPassword').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/servers`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, url, username, password })
+                });
+
+                if (response.ok) {
+                    hideAddServerModal();
+                    loadServers();
+                } else {
+                    const error = await response.json();
+                    showAlert(`Failed to add server: ${error.detail || 'Unknown error'}`, 'Error');
+                }
+            } catch (error) {
+                showAlert(`Failed to add server: ${error.message}`, 'Error');
+            }
+        }
+
+        async function deleteServer(serverId) {
+            showConfirm('Are you sure you want to remove this server?', 'Remove Server', async (confirmed) => {
+                if (!confirmed) return;
+
+                try {
+                    await fetch(`${API_BASE}/servers/${serverId}`, { method: 'DELETE' });
+                    loadServers();
+                } catch (error) {
+                    console.error('Failed to delete server:', error);
+                    showAlert('Failed to remove server. Please try again.', 'Error');
+                }
+            });
+        }
+
+        async function setDefaultServer(serverId) {
+            try {
+                await fetch(`${API_BASE}/servers/${serverId}/default`, { method: 'POST' });
+                loadServers();
+            } catch (error) {
+                console.error('Failed to set default server:', error);
+            }
+        }
+
+        // ===== Exclude Pattern Management =====
+
+        async function loadExcludes() {
+            try {
+                const response = await fetch(`${API_BASE}/excludes`);
+                const data = await response.json();
+
+                const excludeList = document.getElementById('excludeList');
+
+                if (data.patterns.length === 0) {
+                    excludeList.innerHTML = `
+                        <div class="empty-state">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/>
+                            </svg>
+                            <p>No exclude patterns</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                excludeList.innerHTML = data.patterns.map(exclude => `
+                    <div class="exclude-item">
+                        <span class="exclude-pattern">${exclude.pattern}</span>
+                        <button class="btn btn-danger btn-icon" onclick="deleteExclude(${exclude.id})">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <path d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </button>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load excludes:', error);
+            }
+        }
+
+        function showAddExcludeModal() {
+            document.getElementById('addExcludeModal').classList.add('active');
+            document.getElementById('excludePattern').focus();
+        }
+
+        function hideAddExcludeModal() {
+            document.getElementById('addExcludeModal').classList.remove('active');
+            document.getElementById('excludePattern').value = '';
+        }
+
+        async function addExclude(event) {
+            event.preventDefault();
+
+            const pattern = document.getElementById('excludePattern').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/excludes`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pattern })
+                });
+
+                if (response.ok) {
+                    hideAddExcludeModal();
+                    loadExcludes();
+                } else {
+                    const error = await response.json();
+                    showAlert(`Failed to add pattern: ${error.detail || 'Unknown error'}`, 'Error');
+                }
+            } catch (error) {
+                showAlert(`Failed to add pattern: ${error.message}`, 'Error');
+            }
+        }
+
+        async function deleteExclude(excludeId) {
+            try {
+                await fetch(`${API_BASE}/excludes/${excludeId}`, { method: 'DELETE' });
+                loadExcludes();
+            } catch (error) {
+                console.error('Failed to delete exclude:', error);
+            }
+        }
+
+        async function showConfigModal() {
+            try {
+                const response = await fetch(`${API_BASE}/config`);
+                const data = await response.json();
+
+                // Show config file path
+                document.getElementById('configFilePath').textContent = data.config_file || 'Not found';
+
+                // Populate form fields
+                const config = data.config;
+
+                // Server section
+                document.getElementById('configServerHost').value = config.server.host || '127.0.0.1';
+                document.getElementById('configServerPort').value = config.server.port || 8765;
+                document.getElementById('configServerLogLevel').value = config.server.log_level || 'INFO';
+
+                // Remote server section
+                document.getElementById('configRemoteServerName').value = config.remote_server.name || '';
+                document.getElementById('configRemoteServerUrl').value = config.remote_server.url || '';
+                document.getElementById('configRemoteServerUsername').value = config.remote_server.username || '';
+                // Password is not exposed for security - clear field and set placeholder
+                const passwordField = document.getElementById('configRemoteServerPassword');
+                passwordField.value = '';
+                passwordField.placeholder = config.remote_server.username ? '(password set - leave blank to keep current)' : '';
+
+                // Database section
+                document.getElementById('configDatabasePath').value = config.database.path || '';
+
+                // Watcher section
+                document.getElementById('configWatcherEnabled').checked = config.watcher.enabled;
+                document.getElementById('configWatcherDebounce').value = config.watcher.debounce_seconds || 2.0;
+
+                // Uploader section
+                document.getElementById('configUploaderParallel').value = config.uploader.parallel_uploads || 4;
+                document.getElementById('configUploaderRetry').value = config.uploader.retry_attempts || 3;
+                document.getElementById('configUploaderRetryDelay').value = config.uploader.retry_delay_seconds || 5.0;
+
+                // SHA256 section
+                document.getElementById('configSha256ChunkSize').value = config.sha256.chunk_size || 65536;
+                document.getElementById('configSha256ChunkDelay').value = config.sha256.chunk_delay_ms || 1;
+                document.getElementById('configSha256BatchSize').value = config.sha256.batch_size || 100;
+                document.getElementById('configSha256BatchDelay').value = config.sha256.batch_delay_seconds || 1.0;
+
+                // Show modal
+                document.getElementById('configModal').classList.add('active');
+            } catch (error) {
+                console.error('Failed to load configuration:', error);
+                showAlert(`Failed to load configuration: ${error.message}`, 'Error');
+            }
+        }
+
+        function hideConfigModal() {
+            document.getElementById('configModal').classList.remove('active');
+        }
+
+        async function saveConfig(event) {
+            event.preventDefault();
+
+            // Build config object from form
+            const config = {
+                server: {
+                    host: document.getElementById('configServerHost').value,
+                    port: parseInt(document.getElementById('configServerPort').value),
+                    log_level: document.getElementById('configServerLogLevel').value,
+                },
+                remote_server: {
+                    name: document.getElementById('configRemoteServerName').value,
+                    url: document.getElementById('configRemoteServerUrl').value,
+                    username: document.getElementById('configRemoteServerUsername').value,
+                },
+                database: {
+                    path: document.getElementById('configDatabasePath').value,
+                },
+                watcher: {
+                    enabled: document.getElementById('configWatcherEnabled').checked,
+                    debounce_seconds: parseFloat(document.getElementById('configWatcherDebounce').value),
+                },
+                uploader: {
+                    parallel_uploads: parseInt(document.getElementById('configUploaderParallel').value),
+                    retry_attempts: parseInt(document.getElementById('configUploaderRetry').value),
+                    retry_delay_seconds: parseFloat(document.getElementById('configUploaderRetryDelay').value),
+                },
+                sha256: {
+                    chunk_size: parseInt(document.getElementById('configSha256ChunkSize').value),
+                    chunk_delay_ms: parseInt(document.getElementById('configSha256ChunkDelay').value),
+                    batch_size: parseInt(document.getElementById('configSha256BatchSize').value),
+                    batch_delay_seconds: parseFloat(document.getElementById('configSha256BatchDelay').value),
+                },
+            };
+
+            // Only include password if user entered a new one
+            const password = document.getElementById('configRemoteServerPassword').value;
+            if (password) {
+                config.remote_server.password = password;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/config`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(config)
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    showAlert(`Configuration saved to: ${result.config_file}\n\nPlease restart pp_assist for changes to take effect.`, 'Configuration Saved');
+                    hideConfigModal();
+                } else {
+                    const error = await response.json();
+                    showAlert(`Failed to save configuration: ${error.detail || 'Unknown error'}`, 'Error');
+                }
+            } catch (error) {
+                showAlert(`Failed to save configuration: ${error.message}`, 'Error');
+            }
+        }
+
+        // Close modals on outside click
+        document.getElementById('addServerModal').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) {
+                hideAddServerModal();
+            }
+        });
+
+        document.getElementById('addExcludeModal').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) {
+                hideAddExcludeModal();
+            }
+        });
+
+        document.getElementById('configModal').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) {
+                hideConfigModal();
+            }
+        });
+
+        // Close modals on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                hideAddServerModal();
+                hideAddExcludeModal();
+                hideConfigModal();
+                closeLoginModal();
+                closeRegisterModal();
+            }
+        });
+
+        // Login/Register Modal Functions
+        function showLoginModal() {
+            document.getElementById('loginModal').classList.add('active');
+            setTimeout(() => document.getElementById('loginEmail').focus(), 100);
+        }
+
+        function closeLoginModal() {
+            document.getElementById('loginModal').classList.remove('active');
+            document.getElementById('loginMessage').style.display = 'none';
+            document.getElementById('loginEmail').value = '';
+            document.getElementById('loginPassword').value = '';
+        }
+
+        function showRegisterModal() {
+            document.getElementById('registerModal').classList.add('active');
+            setTimeout(() => document.getElementById('registerUsername').focus(), 100);
+        }
+
+        function closeRegisterModal() {
+            document.getElementById('registerModal').classList.remove('active');
+            document.getElementById('registerMessage').style.display = 'none';
+            document.getElementById('registerUsername').value = '';
+            document.getElementById('registerEmail').value = '';
+            document.getElementById('registerPassword').value = '';
+            document.getElementById('registerFullName').value = '';
+        }
+
+        function showRegisterFromLogin(e) {
+            e.preventDefault();
+            closeLoginModal();
+            showRegisterModal();
+        }
+
+        function showLoginFromRegister(e) {
+            e.preventDefault();
+            closeRegisterModal();
+            showLoginModal();
+        }
+
+        // Confirm Dialog Functions
+        let confirmCallback = null;
+
+        function showConfirm(message, title = 'Confirm', callback) {
+            document.getElementById('confirmTitle').textContent = title;
+            document.getElementById('confirmMessage').textContent = message;
+            confirmCallback = callback;
+            document.getElementById('confirmModal').classList.add('active');
+        }
+
+        function acceptConfirm() {
+            document.getElementById('confirmModal').classList.remove('active');
+            if (confirmCallback) {
+                confirmCallback(true);
+                confirmCallback = null;
+            }
+        }
+
+        function cancelConfirm() {
+            document.getElementById('confirmModal').classList.remove('active');
+            if (confirmCallback) {
+                confirmCallback(false);
+                confirmCallback = null;
+            }
+        }
+
+        // Alert Dialog Functions
+        function showAlert(message, title = 'Message') {
+            document.getElementById('alertTitle').textContent = title;
+            document.getElementById('alertMessage').textContent = message;
+            document.getElementById('alertModal').classList.add('active');
+        }
+
+        function closeAlert() {
+            document.getElementById('alertModal').classList.remove('active');
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            const submitBtn = document.getElementById('loginSubmitBtn');
+            const messageDiv = document.getElementById('loginMessage');
+
+            // Disable button
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Logging in...';
+            messageDiv.style.display = 'none';
+
+            try {
+                const response = await fetch(`${API_BASE}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    messageDiv.style.display = 'block';
+                    messageDiv.style.background = '#d4edda';
+                    messageDiv.style.color = '#155724';
+                    messageDiv.textContent = '✓ Login successful! Token stored.';
+
+                    // Update login button to show logged in state
+                    const loginBtn = document.querySelector('button[onclick="showLoginModal()"]');
+                    if (loginBtn) {
+                        loginBtn.innerHTML = `
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M8.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM20 8v6M23 11h-6"/>
+                            </svg>
+                            Logged In
+                        `;
+                        loginBtn.classList.remove('btn-primary');
+                        loginBtn.classList.add('btn-success');
+                    }
+
+                    setTimeout(() => closeLoginModal(), 2000);
+                } else {
+                    messageDiv.style.display = 'block';
+                    messageDiv.style.background = '#f8d7da';
+                    messageDiv.style.color = '#721c24';
+                    messageDiv.textContent = `✗ ${data.error || 'Login failed'}`;
+                }
+            } catch (error) {
+                messageDiv.style.display = 'block';
+                messageDiv.style.background = '#f8d7da';
+                messageDiv.style.color = '#721c24';
+                messageDiv.textContent = `✗ Error: ${error.message}`;
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Login';
+            }
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault();
+
+            const username = document.getElementById('registerUsername').value;
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            const fullName = document.getElementById('registerFullName').value || null;
+            const submitBtn = document.getElementById('registerSubmitBtn');
+            const messageDiv = document.getElementById('registerMessage');
+
+            // Disable button
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Registering...';
+            messageDiv.style.display = 'none';
+
+            try {
+                const payload = { username, email, password };
+                if (fullName) payload.full_name = fullName;
+
+                const response = await fetch(`${API_BASE}/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    messageDiv.style.display = 'block';
+                    messageDiv.style.background = '#d4edda';
+                    messageDiv.style.color = '#155724';
+                    messageDiv.textContent = '✓ Registration successful! You can now login.';
+
+                    setTimeout(() => {
+                        closeRegisterModal();
+                        showLoginModal();
+                        document.getElementById('loginEmail').value = email;
+                    }, 2000);
+                } else {
+                    messageDiv.style.display = 'block';
+                    messageDiv.style.background = '#f8d7da';
+                    messageDiv.style.color = '#721c24';
+                    messageDiv.textContent = `✗ ${data.error || 'Registration failed'}`;
+                }
+            } catch (error) {
+                messageDiv.style.display = 'block';
+                messageDiv.style.background = '#f8d7da';
+                messageDiv.style.color = '#721c24';
+                messageDiv.textContent = `✗ Error: ${error.message}`;
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Register';
+            }
+        }
+
+        // Close modals when clicking outside
+        document.getElementById('loginModal').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) closeLoginModal();
+        });
+
+        document.getElementById('registerModal').addEventListener('click', (e) => {
+            if (e.target === e.currentTarget) closeRegisterModal();
+        });
+    </script>
+</body>
+</html>

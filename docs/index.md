@@ -31,6 +31,7 @@ PutPlace allows you to:
 
 ### Usage
 - [Client Guide](client-guide.md) - Complete client documentation
+- [PutPlace Assist](ppassist.md) - Local assistant daemon for automated uploads
 - [API Reference](api-reference.md) - REST API documentation
 - [File Upload Workflow](FILE_UPLOAD_WORKFLOW.md) - Understanding the upload process
 
@@ -42,6 +43,7 @@ PutPlace allows you to:
 - [Static Website Setup](STATIC_WEBSITE_SETUP.md) - Static file serving
 
 ### Operations
+- [User Management](user-management.md) - Managing users with pp_manage_users
 - [Security Guide](SECURITY.md) - Security best practices and credentials
 - [Troubleshooting](troubleshooting.md) - Common issues and solutions
 
@@ -224,6 +226,7 @@ GOOGLE_OAUTH_SETUP
 :caption: User Guide
 
 client-guide
+ppassist
 api-reference
 FILE_UPLOAD_WORKFLOW
 ```
@@ -243,6 +246,7 @@ STATIC_WEBSITE_SETUP
 :maxdepth: 2
 :caption: Operations
 
+user-management
 SECURITY
 troubleshooting
 ```

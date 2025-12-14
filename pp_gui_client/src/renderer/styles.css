@@ -9,7 +9,7 @@ body {
     background: #f5f5f5;
     color: #333;
     line-height: 1.4;
-    font-size: 13px;
+    font-size: 11px;
 }
 
 .container {
@@ -34,7 +34,7 @@ header {
 }
 
 header h1 {
-    font-size: 1.2rem;
+    font-size: 1.0rem;
     font-weight: 600;
 }
 
@@ -91,7 +91,7 @@ header h1 {
 .auth-toggle {
     margin-top: 15px;
     text-align: center;
-    font-size: 14px;
+    font-size: 11px;
     color: #718096;
 }
 
@@ -109,7 +109,7 @@ header h1 {
     margin-top: 15px;
     padding: 10px;
     border-radius: 4px;
-    font-size: 14px;
+    font-size: 11px;
     display: none;
 }
 
@@ -136,7 +136,7 @@ header h1 {
 }
 
 .card h2 {
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     margin-bottom: 6px;
     color: #667eea;
 }
@@ -157,17 +157,17 @@ label {
     margin-bottom: 3px;
     font-weight: 500;
     color: #555;
-    font-size: 12px;
+    font-size: 10px;
 }
 
 input[type="text"],
 input[type="email"],
 input[type="password"] {
     width: 100%;
-    padding: 7px 10px;
+    padding: 6px 8px;
     border: 1px solid #ddd;
     border-radius: 4px;
-    font-size: 13px;
+    font-size: 11px;
 }
 
 input[type="text"]:focus,
@@ -183,10 +183,10 @@ input[readonly] {
 }
 
 input[type="number"] {
-    padding: 6px;
+    padding: 5px;
     border: 1px solid #ddd;
     border-radius: 4px;
-    font-size: 12px;
+    font-size: 11px;
 }
 
 .checkbox-label {
@@ -195,7 +195,7 @@ input[type="number"] {
     gap: 6px;
     cursor: pointer;
     font-weight: normal;
-    font-size: 12px;
+    font-size: 10px;
 }
 
 .checkbox-label input[type="checkbox"] {
@@ -244,10 +244,10 @@ input[type="number"] {
 }
 
 .btn {
-    padding: 7px 14px;
+    padding: 6px 12px;
     border: none;
     border-radius: 4px;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.3s;
@@ -388,63 +388,122 @@ input[type="number"] {
     font-weight: 500;
 }
 
-/* Active uploads container - holds multiple file progress bars */
+/* Upload history table layout */
+.upload-history-table {
+    margin: 8px 0;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.upload-history-header {
+    display: grid;
+    grid-template-columns: 50px 1fr 100px 200px;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #f7fafc;
+    border-bottom: 2px solid #cbd5e0;
+    font-size: 11px;
+    font-weight: 600;
+    color: #4a5568;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.upload-history-header .col-status {
+    text-align: center;
+}
+
+.upload-history-header .col-file {
+    text-align: left;
+}
+
+.upload-history-header .col-size {
+    text-align: right;
+}
+
+.upload-history-header .col-progress {
+    text-align: right;
+}
+
+/* Active uploads container - holds file rows */
 .active-uploads-container {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    margin: 6px 0;
-    max-height: 200px;
+    max-height: 300px;
     overflow-y: auto;
 }
 
 .file-progress-item {
-    padding: 6px 8px;
-    background: #f7fafc;
-    border-radius: 4px;
-    border: 1px solid #e2e8f0;
-    transition: opacity 0.3s ease-out;
-}
-
-.file-progress-item.completing {
-    opacity: 0.5;
-}
-
-.file-progress-label {
-    display: flex;
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 50px 1fr 100px 200px;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #ffffff;
+    border-bottom: 1px solid #e2e8f0;
     align-items: center;
-    margin-bottom: 4px;
+    transition: background-color 0.2s ease;
+}
+
+.file-progress-item:hover {
+    background: #f7fafc;
+}
+
+.file-progress-item:last-child {
+    border-bottom: none;
+}
+
+/* Column styles */
+.col-status {
+    text-align: center;
+}
+
+.col-file {
+    text-align: left;
+    overflow: hidden;
+}
+
+.col-size {
+    text-align: right;
+}
+
+.col-progress {
+    text-align: right;
 }
 
 .file-name {
-    font-size: 10px;
-    color: #4a5568;
+    font-size: 11px;
+    color: #2d3748;
     font-weight: 500;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 60%;
 }
 
 .file-size {
-    font-size: 10px;
+    font-size: 11px;
     color: #718096;
+    font-weight: 500;
 }
 
 .file-percentage {
-    font-size: 10px;
+    font-size: 11px;
     color: #667eea;
     font-weight: 600;
-    min-width: 35px;
-    text-align: right;
+}
+
+.progress-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-end;
 }
 
 .file-progress-bar {
-    height: 10px;
-    margin-bottom: 0;
+    width: 100%;
+    height: 8px;
     background: #e2e8f0;
-    border-radius: 5px;
+    border-radius: 4px;
     overflow: hidden;
 }
 
@@ -452,7 +511,93 @@ input[type="number"] {
     height: 100%;
     background: linear-gradient(90deg, #48bb78 0%, #38a169 100%);
     transition: width 0.2s ease-out;
-    border-radius: 5px;
+    border-radius: 4px;
+}
+
+/* Status icons */
+.status-icon-placeholder {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+}
+
+.status-icon {
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    text-align: center;
+    line-height: 20px;
+    font-weight: bold;
+    font-size: 13px;
+}
+
+.success-icon {
+    background: #48bb78;
+    color: white;
+}
+
+.error-icon {
+    background: #f56565;
+    color: white;
+    cursor: help;
+}
+
+/* Upload status states - row backgrounds */
+.file-progress-item.completed {
+    background: #f0fff4; /* Light green background */
+}
+
+.file-progress-item.completed:hover {
+    background: #e6f9ed;
+}
+
+.file-progress-item.completing {
+    background: #f0fff4; /* Light green background */
+    animation: fadeOut 0.5s ease-out forwards;
+}
+
+@keyframes fadeOut {
+    from {
+        opacity: 1;
+    }
+    to {
+        opacity: 0;
+    }
+}
+
+.file-progress-item.failed {
+    background: #fff5f5; /* Light red background */
+}
+
+.file-progress-item.failed:hover {
+    background: #feeeed;
+}
+
+.file-progress-item.in-progress {
+    background: #ffffff;
+}
+
+.file-progress-item.in-progress:hover {
+    background: #f7fafc;
+}
+
+/* Progress bar error state */
+.file-progress-fill.error {
+    background: linear-gradient(90deg, #f56565 0%, #c53030 100%);
+}
+
+/* History controls */
+.history-controls {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 8px;
+    margin-bottom: 8px;
+}
+
+.btn-small {
+    padding: 4px 12px;
+    font-size: 13px;
 }
 
 .stats {
@@ -541,7 +686,7 @@ input[type="number"] {
     background-color: white;
     padding: 0 15px;
     color: #999;
-    font-size: 14px;
+    font-size: 11px;
     font-weight: 500;
 }
 
@@ -574,7 +719,7 @@ input[type="number"] {
     background: #f7fafc;
     padding: 0 10px;
     color: #718096;
-    font-size: 14px;
+    font-size: 11px;
 }
 
 .oauth-controls {
@@ -597,8 +742,8 @@ input[type="number"] {
     background-color: white;
     border: 1px solid #ddd;
     border-radius: 4px;
-    padding: 12px 24px;
-    font-size: 14px;
+    padding: 10px 20px;
+    font-size: 11px;
     font-weight: 500;
     color: #444;
     cursor: pointer;
@@ -619,4 +764,300 @@ input[type="number"] {
     width: 20px;
     height: 20px;
     margin-right: 12px;
+}
+
+/* Header status section */
+.header-status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Daemon status indicator */
+.daemon-status {
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-weight: 500;
+}
+
+.daemon-status.connected {
+    background: rgba(72, 187, 120, 0.2);
+    color: #68d391;
+}
+
+.daemon-status.disconnected {
+    background: rgba(245, 101, 101, 0.2);
+    color: #fc8181;
+}
+
+/* Daemon stats card */
+.daemon-card {
+    border-left: 3px solid #667eea;
+}
+
+.daemon-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.daemon-stats .stat-item {
+    display: flex;
+    gap: 6px;
+    padding: 4px 0;
+}
+
+.daemon-stats .stat-label {
+    color: #718096;
+    font-size: 11px;
+}
+
+.daemon-stats .stat-value {
+    color: #2d3748;
+    font-weight: 600;
+    font-size: 11px;
+}
+
+.daemon-stats .stat-value.pending {
+    color: #ed8936;
+}
+
+.daemon-stats .current-file {
+    flex-basis: 100%;
+    background: #f7fafc;
+    padding: 6px 8px;
+    border-radius: 4px;
+    border: 1px solid #e2e8f0;
+}
+
+.daemon-stats .current-file .stat-value {
+    font-family: monospace;
+    font-size: 10px;
+    color: #667eea;
+}
+
+/* Configuration card */
+.config-card {
+    border-left: 3px solid #48bb78;
+}
+
+.config-info {
+    margin-bottom: 12px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.config-item {
+    display: flex;
+    gap: 8px;
+    padding: 4px 0;
+    align-items: baseline;
+}
+
+.config-label {
+    color: #718096;
+    font-size: 11px;
+    min-width: 130px;
+    flex-shrink: 0;
+}
+
+.config-value {
+    color: #2d3748;
+    font-weight: 500;
+    font-size: 11px;
+    word-break: break-all;
+}
+
+.config-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+}
+
+.config-section {
+    background: #f7fafc;
+    padding: 10px 12px;
+    border-radius: 4px;
+    border: 1px solid #e2e8f0;
+}
+
+.config-section h3 {
+    margin: 0 0 8px 0;
+    font-size: 12px;
+    font-weight: 600;
+    color: #4a5568;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.message.info {
+    background: #e2e8f0;
+    color: #4a5568;
+    border: 1px solid #cbd5e0;
+    display: block;
+}
+
+/* ===== Config Modal ===== */
+.modal {
+    display: none; /* Hidden by default */
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+}
+
+.modal-content {
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    max-width: 700px;
+    width: 100%;
+    max-height: 90vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-50px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 24px;
+    border-bottom: 1px solid #e2e8f0;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.modal-close {
+    background: none;
+    border: none;
+    font-size: 28px;
+    line-height: 1;
+    color: white;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.modal-close:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.modal-body {
+    padding: 24px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+.config-file-info {
+    background: #f7fafc;
+    padding: 12px 16px;
+    border-radius: 6px;
+    margin-bottom: 24px;
+    border: 1px solid #e2e8f0;
+}
+
+.config-file-info .config-label {
+    font-weight: 600;
+    color: #4a5568;
+    margin-right: 8px;
+}
+
+.config-file-info .config-value {
+    color: #667eea;
+    font-family: 'Monaco', 'Courier New', monospace;
+    font-size: 13px;
+}
+
+.config-section-modal {
+    margin-bottom: 24px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.config-section-modal:last-of-type {
+    border-bottom: none;
+}
+
+.config-section-modal h3 {
+    margin: 0 0 16px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #2d3748;
+    display: flex;
+    align-items: center;
+}
+
+.config-section-modal h3::before {
+    content: '';
+    width: 4px;
+    height: 18px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 2px;
+    margin-right: 10px;
+}
+
+.modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 16px 24px;
+    border-top: 1px solid #e2e8f0;
+    background: #f7fafc;
+}
+
+.config-btn {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.config-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.config-btn:active {
+    transform: translateY(0);
 }

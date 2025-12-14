@@ -24,11 +24,10 @@ classifiers = [
 dependencies = [
     "httpx>=0.26.0",
     "rich>=13.7.0",
-    "configargparse>=1.7.0",
 ]
 
 [project.scripts]
-ppclient = "putplace_client.ppclient:main"
+pp_client = "putplace_client.ppclient:main"
 
 [project.optional-dependencies]
 dev = [

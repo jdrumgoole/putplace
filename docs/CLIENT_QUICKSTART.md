@@ -33,7 +33,7 @@ The client supports **three ways** to provide your credentials:
 ### Method 1: Command Line (Quick Testing)
 
 ```bash
-python ppclient.py /path/to/scan --username "admin" --password "your-password"
+python pp_client.py /path/to/scan --username "admin" --password "your-password"
 ```
 
 **Pros:** Quick and easy for testing
@@ -47,7 +47,7 @@ export PUTPLACE_USERNAME="admin"
 export PUTPLACE_PASSWORD="your-password"
 
 # Run client (no need to specify --username/--password)
-python ppclient.py /path/to/scan
+python pp_client.py /path/to/scan
 ```
 
 **Add to your `.bashrc` or `.zshrc` for persistence:**
@@ -64,17 +64,17 @@ source ~/.bashrc
 
 ```bash
 # Create config file
-cat > ~/ppclient.conf << 'EOF'
+cat > ~/pp_client.conf << 'EOF'
 [DEFAULT]
 username = admin
 password = your-password
 EOF
 
 # Set secure permissions (IMPORTANT!)
-chmod 600 ~/ppclient.conf
+chmod 600 ~/pp_client.conf
 
-# Run client (automatically reads from ~/ppclient.conf)
-python ppclient.py /path/to/scan
+# Run client (automatically reads from ~/pp_client.conf)
+python pp_client.py /path/to/scan
 ```
 
 **Pros:** Most secure, persistent, supports all settings
@@ -86,7 +86,7 @@ If you specify credentials in multiple places, the priority is:
 
 1. **Command line** (`--username`/`--password`) - Highest priority
 2. **Environment variables** (`PUTPLACE_USERNAME`/`PUTPLACE_PASSWORD`)
-3. **Config file** (`~/ppclient.conf` or `ppclient.conf`) - Lowest priority
+3. **Config file** (`~/pp_client.conf` or `pp_client.conf`) - Lowest priority
 
 ## Complete Examples
 
@@ -96,13 +96,13 @@ If you specify credentials in multiple places, the priority is:
 # Using environment variables
 export PUTPLACE_USERNAME="admin"
 export PUTPLACE_PASSWORD="your-password"
-python ppclient.py /var/log
+python pp_client.py /var/log
 ```
 
 ### Example 2: Scan with Exclusions
 
 ```bash
-python ppclient.py /home/user \
+python pp_client.py /home/user \
   --exclude ".git" \
   --exclude "node_modules" \
   --exclude "*.log"
@@ -111,7 +111,7 @@ python ppclient.py /home/user \
 ### Example 3: Scan Remote Server
 
 ```bash
-python ppclient.py /var/www \
+python pp_client.py /var/www \
   --url "https://putplace.example.com/put_file" \
   --username "admin" \
   --password "production-password"
@@ -121,12 +121,12 @@ python ppclient.py /var/www \
 
 ```bash
 # See what would be sent without actually sending
-python ppclient.py /path/to/scan --dry-run
+python pp_client.py /path/to/scan --dry-run
 ```
 
 ### Example 5: Using Config File
 
-**~/ppclient.conf:**
+**~/pp_client.conf:**
 ```ini
 [DEFAULT]
 url = https://putplace.example.com/put_file
@@ -140,7 +140,7 @@ exclude = *.log
 **Run:**
 ```bash
 # All settings loaded from config file
-python ppclient.py /var/www
+python pp_client.py /var/www
 ```
 
 ## Security Best Practices
@@ -150,10 +150,10 @@ python ppclient.py /var/www
 1. **Protect your credentials**
    ```bash
    # Config file permissions
-   chmod 600 ~/ppclient.conf
+   chmod 600 ~/pp_client.conf
 
    # Never commit passwords
-   # ppclient.conf is already in .gitignore
+   # pp_client.conf is already in .gitignore
    ```
 
 2. **Use separate accounts per client**
@@ -169,7 +169,7 @@ python ppclient.py /var/www
 ### ❌ DON'T:
 
 1. **Don't commit passwords to version control**
-   - ppclient.conf is in .gitignore
+   - pp_client.conf is in .gitignore
    - Never put passwords in code
 
 2. **Don't share passwords**
@@ -190,7 +190,7 @@ python ppclient.py /var/www
 **Solution:** Provide both credentials via:
 - `--username` and `--password` flags
 - `PUTPLACE_USERNAME` and `PUTPLACE_PASSWORD` environment variables
-- `username` and `password` in ~/ppclient.conf
+- `username` and `password` in ~/pp_client.conf
 
 ### "Login failed: 401"
 
@@ -217,15 +217,15 @@ curl -X POST http://localhost:8000/api/login \
 ### "Config file not found"
 
 The client looks for config files in this order:
-1. `ppclient.conf` (current directory)
-2. `~/ppclient.conf` (home directory)
+1. `pp_client.conf` (current directory)
+2. `~/pp_client.conf` (home directory)
 3. Path specified with `--config`
 
 Create one:
 ```bash
-cp ppclient.conf.example ~/ppclient.conf
-chmod 600 ~/ppclient.conf
-nano ~/ppclient.conf
+cp pp_client.conf.example ~/pp_client.conf
+chmod 600 ~/pp_client.conf
+nano ~/pp_client.conf
 ```
 
 ## Common Workflows
@@ -238,17 +238,17 @@ export PUTPLACE_USERNAME="dev-user"
 export PUTPLACE_PASSWORD="dev-password"
 
 # 2. Test connection
-python ppclient.py /tmp --dry-run
+python pp_client.py /tmp --dry-run
 
 # 3. Scan actual directory
-python ppclient.py /home/user/projects
+python pp_client.py /home/user/projects
 ```
 
 ### Production Server Setup
 
 ```bash
 # 1. Create config file
-cat > ~/ppclient.conf << 'EOF'
+cat > ~/pp_client.conf << 'EOF'
 [DEFAULT]
 url = https://putplace.example.com/put_file
 username = prod-user
@@ -259,47 +259,47 @@ exclude = tmp
 EOF
 
 # 2. Set secure permissions
-chmod 600 ~/ppclient.conf
+chmod 600 ~/pp_client.conf
 
 # 3. Test
-python ppclient.py /var/www --dry-run
+python pp_client.py /var/www --dry-run
 
 # 4. Run for real
-python ppclient.py /var/www
+python pp_client.py /var/www
 
 # 5. Set up cron job
-echo "0 2 * * * /usr/bin/python3 /path/to/ppclient.py /var/www" | crontab -
+echo "0 2 * * * /usr/bin/python3 /path/to/pp_client.py /var/www" | crontab -
 ```
 
 ### Multi-Environment Setup
 
 ```bash
 # Development
-cat > ~/ppclient.conf.dev << 'EOF'
+cat > ~/pp_client.conf.dev << 'EOF'
 url = http://dev-putplace:8000/put_file
 username = dev-user
 password = dev-password
 EOF
 
 # Production
-cat > ~/ppclient.conf.prod << 'EOF'
+cat > ~/pp_client.conf.prod << 'EOF'
 url = https://putplace.example.com/put_file
 username = prod-user
 password = prod-password
 EOF
 
 # Use with --config flag
-python ppclient.py /var/www --config ~/ppclient.conf.prod
+python pp_client.py /var/www --config ~/pp_client.conf.prod
 ```
 
 ## Getting Help
 
 ```bash
 # Show all options
-python ppclient.py --help
+python pp_client.py --help
 
 # Check version and settings
-python ppclient.py --version
+python pp_client.py --version
 ```
 
 ## Next Steps

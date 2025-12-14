@@ -31,7 +31,7 @@ def electron_dir():
     """Get the Electron project directory."""
     # Go up from tests -> putplace-server -> packages -> repo root
     project_root = Path(__file__).parent.parent.parent.parent
-    return project_root / "ppgui-electron"
+    return project_root / "pp_gui_client"
 
 
 @pytest.fixture

@@ -128,21 +128,21 @@ cat /tmp/putplace_initial_creds.txt
 
 ```bash
 # Option 1: Command line arguments
-python ppclient.py /var/log --email "admin@localhost" --password "your-password"
+python pp_client.py /var/log --email "admin@localhost" --password "your-password"
 
 # Option 2: Environment variables (recommended)
 export PUTPLACE_EMAIL="admin@localhost"
 export PUTPLACE_PASSWORD="your-password"
-python ppclient.py /var/log
+python pp_client.py /var/log
 
 # Option 3: Config file (most secure)
-cat > ~/ppclient.conf << EOF
+cat > ~/pp_client.conf << EOF
 [DEFAULT]
 email = admin@localhost
 password = your-password
 EOF
-chmod 600 ~/ppclient.conf
-python ppclient.py /var/log
+chmod 600 ~/pp_client.conf
+python pp_client.py /var/log
 ```
 
 ### 3. Test Login with curl
@@ -289,7 +289,7 @@ echo "API Key: $API_KEY"
 
 ## Using API Keys
 
-**Note:** The PutPlace client (ppclient) now uses username/password authentication by default. API keys can still be used directly with curl or custom scripts for advanced use cases.
+**Note:** The PutPlace client (pp_client) now uses username/password authentication by default. API keys can still be used directly with curl or custom scripts for advanced use cases.
 
 ### With curl
 
@@ -545,7 +545,7 @@ echo 'export PUTPLACE_PASSWORD="your-password-here"' >> ~/.bashrc
 source ~/.bashrc
 
 # 3. Use client
-ppclient /var/log
+pp_client /var/log
 ```
 
 ### Single Server Setup (API Key - Advanced)

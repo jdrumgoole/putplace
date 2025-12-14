@@ -24,8 +24,11 @@ Usage:
 import argparse
 import asyncio
 import getpass
+import os
 import sys
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Optional
 
 from pymongo import AsyncMongoClient
 from pymongo.errors import ConnectionFailure, DuplicateKeyError, ServerSelectionTimeoutError
@@ -33,12 +36,69 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+# Import tomli for Python < 3.11, tomllib for Python >= 3.11
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    try:
+        import tomli as tomllib
+    except ImportError:
+        tomllib = None  # type: ignore
+
 
 DEFAULT_MONGODB_URL = "mongodb://localhost:27017"
 DEFAULT_DATABASE = "putplace"
+DEFAULT_CONFIG_FILE = "ppserver.toml"
 
 # Rich console for colored output
 console = Console()
+
+
+def load_config_from_file(config_file: Optional[Path]) -> dict[str, Any]:
+    """Load configuration from ppserver.toml file.
+
+    Args:
+        config_file: Path to config file, or None to search default locations
+
+    Returns:
+        Dictionary with mongodb_url and database, or empty dict if not found
+    """
+    if tomllib is None:
+        return {}
+
+    # If config_file is specified, use it directly
+    if config_file:
+        if not config_file.exists():
+            print_warning(f"Config file not found: {config_file}")
+            return {}
+        target_file = config_file
+    else:
+        # Search default location (current directory)
+        target_file = Path.cwd() / DEFAULT_CONFIG_FILE
+        if not target_file.exists():
+            return {}
+
+    try:
+        with open(target_file, "rb") as f:
+            toml_data = tomllib.load(f)
+
+        config = {}
+
+        # Extract mongodb_url from [database] section
+        if "database" in toml_data:
+            db_config = toml_data["database"]
+            if "mongodb_url" in db_config:
+                config["mongodb_url"] = db_config["mongodb_url"]
+            # Support both "database" and "mongodb_database" field names
+            if "database" in db_config:
+                config["database"] = db_config["database"]
+            elif "mongodb_database" in db_config:
+                config["database"] = db_config["mongodb_database"]
+
+        return config
+    except Exception as e:
+        print_warning(f"Failed to load config file {target_file}: {e}")
+        return {}
 
 
 def print_success(message: str) -> None:
@@ -593,6 +653,10 @@ async def cmd_add(args: argparse.Namespace) -> int:
                 console.print(f"  Name:  [white]{full_name}[/white]")
             admin_str = "[green]Yes[/green]" if args.admin else "[dim]No[/dim]"
             console.print(f"  Admin: {admin_str}")
+            console.print()
+            console.print(f"  [dim]Database: {args.database}[/dim]")
+            if hasattr(args, '_config_file_used') and args._config_file_used:
+                console.print(f"  [dim]Config:   {args._config_file_used}[/dim]")
 
             confirm = console.input("\n[bold]Proceed?[/bold] [dim][y/N][/dim]: ").strip().lower()
             if confirm != 'y':
@@ -661,6 +725,10 @@ async def cmd_delete(args: argparse.Namespace) -> int:
             console.print(f"  Name:  [white]{user['full_name']}[/white]")
         if user.get("is_admin"):
             console.print(f"  Role:  [yellow]Administrator[/yellow]")
+        console.print()
+        console.print(f"  [dim]Database: {args.database}[/dim]")
+        if hasattr(args, '_config_file_used') and args._config_file_used:
+            console.print(f"  [dim]Config:   {args._config_file_used}[/dim]")
 
         # Confirm deletion
         if not args.force:
@@ -743,6 +811,10 @@ async def cmd_reset_password(args: argparse.Namespace) -> int:
 
         # Confirm in interactive mode
         if not args.password:
+            console.print()
+            console.print(f"  [dim]Database: {args.database}[/dim]")
+            if hasattr(args, '_config_file_used') and args._config_file_used:
+                console.print(f"  [dim]Config:   {args._config_file_used}[/dim]")
             console.print()
             confirm = console.input(
                 f"[bold]Reset password for '[cyan]{email}[/cyan]'?[/bold] "
@@ -926,14 +998,17 @@ Examples:
 
     # Global arguments
     parser.add_argument(
+        "--config-file",
+        type=Path,
+        help=f"Path to ppserver.toml config file (default: {DEFAULT_CONFIG_FILE} in current directory)"
+    )
+    parser.add_argument(
         "--mongodb-url",
-        default=DEFAULT_MONGODB_URL,
-        help=f"MongoDB connection URL (default: {DEFAULT_MONGODB_URL})"
+        help=f"MongoDB connection URL (default: from config or {DEFAULT_MONGODB_URL})"
     )
     parser.add_argument(
         "--database",
-        default=DEFAULT_DATABASE,
-        help=f"Database name (default: {DEFAULT_DATABASE})"
+        help=f"Database name (default: from config or {DEFAULT_DATABASE})"
     )
 
     # Subcommands
@@ -1014,6 +1089,40 @@ async def main() -> int:
     if not args.command:
         parser.print_help()
         return 1
+
+    # Load config from file if available
+    config = load_config_from_file(args.config_file)
+
+    # Apply config values as defaults if not specified on command line
+    config_file_used = None
+    if config:
+        if args.config_file:
+            config_file_used = args.config_file.resolve()
+        else:
+            config_file_used = (Path.cwd() / DEFAULT_CONFIG_FILE).resolve()
+
+        if not args.mongodb_url and "mongodb_url" in config:
+            args.mongodb_url = config["mongodb_url"]
+        if not args.database and "database" in config:
+            args.database = config["database"]
+
+    # Apply final defaults if still not set
+    if not args.mongodb_url:
+        args.mongodb_url = DEFAULT_MONGODB_URL
+    if not args.database:
+        args.database = DEFAULT_DATABASE
+
+    # Store config file path in args for use in confirmation prompts
+    args._config_file_used = config_file_used
+
+    # Display configuration info
+    console.print()
+    if config_file_used:
+        print_info(f"Config file: [cyan]{config_file_used}[/cyan]")
+    else:
+        print_info(f"Config file: [dim]Not found (using defaults)[/dim]")
+    print_info(f"Database:    [cyan]{args.database}[/cyan]")
+    console.print()
 
     return await args.func(args)
 

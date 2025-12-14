@@ -276,15 +276,15 @@ ipcMain.handle('process-file', async (
   }
 });
 
-// Login to server
+// Login via pp_assist (which proxies to the remote server)
 ipcMain.handle('login', async (
   event,
   username: string,
   password: string,
-  serverUrl: string
+  ppassistUrl: string
 ) => {
   try {
-    const loginUrl = `${serverUrl.replace(/\/$/, '')}/api/login`;
+    const loginUrl = `${ppassistUrl.replace(/\/$/, '')}/login`;
     const response = await axios.post(loginUrl, {
       email: username,  // Server expects email field
       password,
@@ -295,10 +295,17 @@ ipcMain.handle('login', async (
       timeout: 10000,
     });
 
-    return { success: true, token: response.data.access_token };
+    // pp_assist returns { success, token, user_id, error }
+    if (response.data.success) {
+      return { success: true, token: response.data.token };
+    } else {
+      return { success: false, error: response.data.error || 'Login failed' };
+    }
   } catch (error: any) {
     let errorMsg = 'Unknown error';
-    if (error.response?.data?.detail) {
+    if (error.response?.data?.error) {
+      errorMsg = error.response.data.error;
+    } else if (error.response?.data?.detail) {
       const detail = error.response.data.detail;
       errorMsg = typeof detail === 'string' ? detail : JSON.stringify(detail);
     } else if (error.message) {
@@ -313,17 +320,17 @@ ipcMain.handle('login', async (
   }
 });
 
-// Register new user
+// Register new user via pp_assist (which proxies to the remote server)
 ipcMain.handle('register', async (
   event,
   username: string,
   email: string,
   password: string,
   fullName: string | null,
-  serverUrl: string
+  ppassistUrl: string
 ) => {
   try {
-    const registerUrl = `${serverUrl.replace(/\/$/, '')}/api/register`;
+    const registerUrl = `${ppassistUrl.replace(/\/$/, '')}/register`;
     const requestData: any = {
       username,
       email,
@@ -334,17 +341,24 @@ ipcMain.handle('register', async (
       requestData.full_name = fullName;
     }
 
-    await axios.post(registerUrl, requestData, {
+    const response = await axios.post(registerUrl, requestData, {
       headers: {
         'Content-Type': 'application/json',
       },
       timeout: 10000,
     });
 
-    return { success: true };
+    // pp_assist returns { success, user_id, error }
+    if (response.data.success) {
+      return { success: true };
+    } else {
+      return { success: false, error: response.data.error || 'Registration failed' };
+    }
   } catch (error: any) {
     let errorMsg = 'Unknown error';
-    if (error.response?.data?.detail) {
+    if (error.response?.data?.error) {
+      errorMsg = error.response.data.error;
+    } else if (error.response?.data?.detail) {
       const detail = error.response.data.detail;
       errorMsg = typeof detail === 'string' ? detail : JSON.stringify(detail);
     } else if (error.message) {
@@ -389,6 +403,260 @@ ipcMain.handle('upload-metadata', async (
 // Get CPU count for parallel uploads
 ipcMain.handle('get-cpu-count', async () => {
   return os.cpus().length;
+});
+
+// ===== PPassist Daemon API =====
+const DEFAULT_PPASSIST_URL = 'http://localhost:8765';
+
+// Check if ppassist daemon is running
+ipcMain.handle('ppassist-check', async (_event, daemonUrl?: string) => {
+  const url = daemonUrl || DEFAULT_PPASSIST_URL;
+  try {
+    const response = await axios.get(`${url}/health`, { timeout: 5000 });
+    return {
+      connected: true,
+      version: response.data.version,
+      database_ok: response.data.database_ok,
+    };
+  } catch (error) {
+    return { connected: false };
+  }
+});
+
+// Get ppassist daemon status
+ipcMain.handle('ppassist-status', async (_event, daemonUrl?: string) => {
+  const url = daemonUrl || DEFAULT_PPASSIST_URL;
+  try {
+    const response = await axios.get(`${url}/status`, { timeout: 10000 });
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Get file statistics
+ipcMain.handle('ppassist-file-stats', async (_event, daemonUrl?: string) => {
+  const url = daemonUrl || DEFAULT_PPASSIST_URL;
+  try {
+    const response = await axios.get(`${url}/files/stats`, { timeout: 10000 });
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Get SHA256 processor status
+ipcMain.handle('ppassist-sha256-status', async (_event, daemonUrl?: string) => {
+  const url = daemonUrl || DEFAULT_PPASSIST_URL;
+  try {
+    const response = await axios.get(`${url}/sha256/status`, { timeout: 10000 });
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Get upload queue status
+ipcMain.handle('ppassist-queue-status', async (_event, daemonUrl?: string) => {
+  const url = daemonUrl || DEFAULT_PPASSIST_URL;
+  try {
+    const response = await axios.get(`${url}/uploads/queue`, { timeout: 10000 });
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+});
+
+// List registered paths
+ipcMain.handle('ppassist-list-paths', async (_event, daemonUrl?: string) => {
+  const url = daemonUrl || DEFAULT_PPASSIST_URL;
+  try {
+    const response = await axios.get(`${url}/paths`, { timeout: 10000 });
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Register a path with ppassist
+ipcMain.handle('ppassist-register-path', async (_event, pathStr: string, recursive: boolean, daemonUrl?: string) => {
+  const url = daemonUrl || DEFAULT_PPASSIST_URL;
+  try {
+    const response = await axios.post(`${url}/paths`, {
+      path: pathStr,
+      recursive,
+    }, { timeout: 30000 });
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    if (error.response?.status === 409) {
+      return { success: true, data: { message: 'Path already registered' }, alreadyExists: true };
+    }
+    return { success: false, error: error.response?.data?.detail || error.message };
+  }
+});
+
+// Delete a registered path
+ipcMain.handle('ppassist-delete-path', async (_event, pathId: number, daemonUrl?: string) => {
+  const url = daemonUrl || DEFAULT_PPASSIST_URL;
+  try {
+    await axios.delete(`${url}/paths/${pathId}`, { timeout: 10000 });
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.detail || error.message };
+  }
+});
+
+// Trigger scan of a path
+ipcMain.handle('ppassist-scan-path', async (_event, pathId: number, daemonUrl?: string) => {
+  const url = daemonUrl || DEFAULT_PPASSIST_URL;
+  try {
+    const response = await axios.post(`${url}/paths/${pathId}/scan`, {}, { timeout: 10000 });
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.detail || error.message };
+  }
+});
+
+// Trigger full scan of all paths
+ipcMain.handle('ppassist-scan-all', async (_event, daemonUrl?: string) => {
+  const url = daemonUrl || DEFAULT_PPASSIST_URL;
+  try {
+    const response = await axios.post(`${url}/scan`, {}, { timeout: 10000 });
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.detail || error.message };
+  }
+});
+
+// List exclude patterns
+ipcMain.handle('ppassist-list-excludes', async (_event, daemonUrl?: string) => {
+  const url = daemonUrl || DEFAULT_PPASSIST_URL;
+  try {
+    const response = await axios.get(`${url}/excludes`, { timeout: 10000 });
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Add exclude pattern
+ipcMain.handle('ppassist-add-exclude', async (_event, pattern: string, daemonUrl?: string) => {
+  const url = daemonUrl || DEFAULT_PPASSIST_URL;
+  try {
+    const response = await axios.post(`${url}/excludes`, { pattern }, { timeout: 10000 });
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    if (error.response?.status === 409) {
+      return { success: true, alreadyExists: true };
+    }
+    return { success: false, error: error.response?.data?.detail || error.message };
+  }
+});
+
+// Delete exclude pattern
+ipcMain.handle('ppassist-delete-exclude', async (_event, excludeId: number, daemonUrl?: string) => {
+  const url = daemonUrl || DEFAULT_PPASSIST_URL;
+  try {
+    await axios.delete(`${url}/excludes/${excludeId}`, { timeout: 10000 });
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.detail || error.message };
+  }
+});
+
+// Trigger uploads
+ipcMain.handle('ppassist-trigger-uploads', async (_event, uploadContent: boolean, pathPrefix?: string, daemonUrl?: string) => {
+  const url = daemonUrl || DEFAULT_PPASSIST_URL;
+  try {
+    const payload: any = { upload_content: uploadContent };
+    if (pathPrefix) {
+      payload.path_prefix = pathPrefix;
+    }
+    const response = await axios.post(`${url}/uploads`, payload, { timeout: 30000 });
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.detail || error.message };
+  }
+});
+
+// Configure remote server in ppassist
+ipcMain.handle('ppassist-add-server', async (
+  _event,
+  name: string,
+  serverUrl: string,
+  username: string,
+  password: string,
+  daemonUrl?: string
+) => {
+  const url = daemonUrl || DEFAULT_PPASSIST_URL;
+  try {
+    const response = await axios.post(`${url}/servers`, {
+      name,
+      url: serverUrl,
+      username,
+      password,
+    }, { timeout: 10000 });
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    if (error.response?.status === 409) {
+      return { success: true, alreadyExists: true };
+    }
+    return { success: false, error: error.response?.data?.detail || error.message };
+  }
+});
+
+// List configured servers
+ipcMain.handle('ppassist-list-servers', async (_event, daemonUrl?: string) => {
+  const url = daemonUrl || DEFAULT_PPASSIST_URL;
+  try {
+    const response = await axios.get(`${url}/servers`, { timeout: 10000 });
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Get recent activity
+ipcMain.handle('ppassist-get-activity', async (_event, limit: number = 50, sinceId?: number, eventType?: string, daemonUrl?: string) => {
+  const url = daemonUrl || DEFAULT_PPASSIST_URL;
+  try {
+    // Build query params
+    const params = new URLSearchParams();
+    params.append('limit', limit.toString());
+    if (sinceId !== undefined) {
+      params.append('since_id', sinceId.toString());
+    }
+    if (eventType) {
+      params.append('event_type', eventType);
+    }
+
+    const response = await axios.get(`${url}/activity?${params.toString()}`, { timeout: 10000 });
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Get daemon configuration
+ipcMain.handle('ppassist-get-config', async (_event, daemonUrl?: string) => {
+  const url = daemonUrl || DEFAULT_PPASSIST_URL;
+  try {
+    const response = await axios.get(`${url}/config`, { timeout: 10000 });
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Save daemon configuration
+ipcMain.handle('ppassist-save-config', async (_event, config: any, daemonUrl?: string) => {
+  const url = daemonUrl || DEFAULT_PPASSIST_URL;
+  try {
+    const response = await axios.post(`${url}/config`, config, { timeout: 10000 });
+    return { success: true, data: response.data };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
 });
 
 // Upload file content to server using native Node.js streaming

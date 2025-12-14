@@ -127,10 +127,10 @@ The first file found is used.
 ```bash
 # Specify custom config file location
 export PUTPLACE_CONFIG=/opt/putplace/ppserver-prod.toml
-ppserver start
+pp_server start
 
 # Or inline
-PUTPLACE_CONFIG=/path/to/custom.toml ppserver start
+PUTPLACE_CONFIG=/path/to/custom.toml pp_server start
 ```
 
 This is particularly useful for:
@@ -404,7 +404,7 @@ AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
 
 ### Configuration Methods
 
-The PutPlace client (`ppclient.py`) supports three configuration methods (in priority order):
+The PutPlace client (`pp_client.py`) supports three configuration methods (in priority order):
 
 1. **Command-line arguments** - Highest priority
 2. **Environment variables** - Middle priority
@@ -413,7 +413,7 @@ The PutPlace client (`ppclient.py`) supports three configuration methods (in pri
 ### Command-Line Arguments
 
 ```bash
-python ppclient.py [options] PATH
+python pp_client.py [options] PATH
 
 # Positional Arguments:
   PATH                  Path to scan
@@ -432,7 +432,7 @@ python ppclient.py [options] PATH
   --dry-run           Scan files but don't send to server
   --verbose, -v       Verbose output
   --config PATH       Path to config file
-                      Default: ppclient.conf or ~/ppclient.conf
+                      Default: pp_client.conf or ~/pp_client.conf
   --help, -h          Show help message
 ```
 
@@ -444,7 +444,7 @@ export PUTPLACE_API_KEY="your-api-key-here"
 export PUTPLACE_URL="http://localhost:8000/put_file"
 
 # Run client
-python ppclient.py /path/to/scan
+python pp_client.py /path/to/scan
 ```
 
 **Add to shell profile for persistence:**
@@ -463,10 +463,10 @@ source ~/.zshrc
 
 **File locations (checked in order):**
 1. Path specified with `--config`
-2. `ppclient.conf` (current directory)
-3. `~/ppclient.conf` (home directory)
+2. `pp_client.conf` (current directory)
+3. `~/pp_client.conf` (home directory)
 
-**Example: ~/ppclient.conf**
+**Example: ~/pp_client.conf**
 
 ```ini
 [DEFAULT]
@@ -518,7 +518,7 @@ exclude = venv
 
 **Set secure permissions:**
 ```bash
-chmod 600 ~/ppclient.conf
+chmod 600 ~/pp_client.conf
 ```
 
 ### Exclude Patterns
@@ -563,7 +563,7 @@ exclude = .DS_Store
 #### Example 1: Quick Test with API Key
 
 ```bash
-python ppclient.py /tmp \
+python pp_client.py /tmp \
   --api-key "your-api-key-here" \
   --dry-run
 ```
@@ -574,7 +574,7 @@ python ppclient.py /tmp \
 export PUTPLACE_API_KEY="production-api-key"
 export PUTPLACE_URL="https://putplace.example.com/put_file"
 
-python ppclient.py /var/www \
+python pp_client.py /var/www \
   --exclude "*.log" \
   --exclude ".git" \
   --exclude "node_modules"
@@ -584,7 +584,7 @@ python ppclient.py /var/www \
 
 ```bash
 # Create config file once
-cat > ~/ppclient.conf << 'EOF'
+cat > ~/pp_client.conf << 'EOF'
 [DEFAULT]
 url = https://putplace.example.com/put_file
 api-key = production-api-key
@@ -592,29 +592,29 @@ exclude = .git
 exclude = *.log
 EOF
 
-chmod 600 ~/ppclient.conf
+chmod 600 ~/pp_client.conf
 
 # Run with all settings from config
-python ppclient.py /var/www
+python pp_client.py /var/www
 ```
 
 #### Example 4: Multi-Environment Setup
 
 ```bash
 # Development config
-cat > ~/ppclient.conf.dev << 'EOF'
+cat > ~/pp_client.conf.dev << 'EOF'
 url = http://dev-putplace:8000/put_file
 api-key = dev-api-key
 EOF
 
 # Production config
-cat > ~/ppclient.conf.prod << 'EOF'
+cat > ~/pp_client.conf.prod << 'EOF'
 url = https://putplace.example.com/put_file
 api-key = prod-api-key
 EOF
 
 # Use with --config flag
-python ppclient.py /var/www --config ~/ppclient.conf.prod
+python pp_client.py /var/www --config ~/pp_client.conf.prod
 ```
 
 ## Production Configuration
@@ -835,7 +835,7 @@ ERROR: S3_BUCKET_NAME is required when STORAGE_BACKEND=s3
 env | grep -E "(MONGODB|STORAGE|S3|AWS)"
 
 # Client: Test configuration
-python ppclient.py /tmp --dry-run --verbose
+python pp_client.py /tmp --dry-run --verbose
 ```
 
 ### Common Configuration Issues

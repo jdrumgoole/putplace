@@ -11,7 +11,7 @@ putplace/
 │   ├── css/                      # Stylesheets
 │   └── js/                       # Client-side JavaScript
 │
-├── ppgui-electron/
+├── pp_gui_client/
 │   ├── src/renderer/assets/      # Electron UI assets
 │   │   └── (logos, images, icons)
 │   └── build/                    # Electron app icons (create this)
@@ -61,7 +61,7 @@ static/
 
 ### 2a. Renderer Assets (UI Images)
 
-**Location:** `ppgui-electron/src/renderer/assets/`
+**Location:** `pp_gui_client/src/renderer/assets/`
 
 **Purpose:** Images and logos displayed in the Electron UI
 
@@ -85,13 +85,13 @@ assets/
 
 ### 2b. Application Icons (Installers)
 
-**Location:** `ppgui-electron/build/` (create this directory)
+**Location:** `pp_gui_client/build/` (create this directory)
 
 **Purpose:** Icons for the installed application (dock, taskbar, installer)
 
 **Create directory:**
 ```bash
-mkdir -p ppgui-electron/build
+mkdir -p pp_gui_client/build
 ```
 
 **Required Files:**
@@ -131,8 +131,8 @@ docs/images/
 | Use Case | Location | Access Method | Packaged? |
 |----------|----------|---------------|-----------|
 | **FastAPI web UI** | `src/putplace/static/images/` | `/static/images/logo.png` | ✅ Yes (pip package) |
-| **Electron UI elements** | `ppgui-electron/src/renderer/assets/` | `assets/logo.png` | ✅ Yes (Electron build) |
-| **Electron app icon** | `ppgui-electron/build/` | Auto-detected by electron-builder | ✅ Yes (installer) |
+| **Electron UI elements** | `pp_gui_client/src/renderer/assets/` | `assets/logo.png` | ✅ Yes (Electron build) |
+| **Electron app icon** | `pp_gui_client/build/` | Auto-detected by electron-builder | ✅ Yes (installer) |
 | **Documentation** | `docs/images/` | Markdown: `![](docs/images/logo.png)` | ✅ Yes (git) |
 
 ## Adding New Logos
@@ -145,9 +145,9 @@ docs/images/
 
 ### For Electron Client:
 
-1. Place logo in `ppgui-electron/src/renderer/assets/`
+1. Place logo in `pp_gui_client/src/renderer/assets/`
 2. Reference in HTML: `assets/your-logo.png`
-3. Rebuild: `cd ppgui-electron && npm run build`
+3. Rebuild: `cd pp_gui_client && npm run build`
 
 ### For App Icons:
 
@@ -155,11 +155,11 @@ docs/images/
 2. Generate platform icons:
    ```bash
    # macOS
-   iconutil -c icns icon.iconset -o ppgui-electron/build/icon.icns
+   iconutil -c icns icon.iconset -o pp_gui_client/build/icon.icns
 
    # Or use electron-icon-builder
    npm install -g electron-icon-builder
-   electron-icon-builder --input=./logo.png --output=./ppgui-electron/build
+   electron-icon-builder --input=./logo.png --output=./pp_gui_client/build
    ```
 3. electron-builder will use them automatically during packaging
 
@@ -169,12 +169,12 @@ docs/images/
 - Server static directory created: `src/putplace/static/`
 - Static files mounted in FastAPI (`main.py:338-341`)
 - Package configuration updated (`pyproject.toml:71-72`)
-- Electron assets directory created: `ppgui-electron/src/renderer/assets/`
+- Electron assets directory created: `pp_gui_client/src/renderer/assets/`
 - Electron build script updated to copy assets
 
 ❌ **TODO:**
 - Add actual logo files (currently empty directories)
-- Create `ppgui-electron/build/` directory for app icons
+- Create `pp_gui_client/build/` directory for app icons
 - Generate app icons from logo source
 
 ## File Format Recommendations
@@ -212,7 +212,7 @@ curl -I http://localhost:8000/static/images/putplace-logo.png
 
 ```bash
 # Build and run
-cd ppgui-electron
+cd pp_gui_client
 npm run build
 npm start
 
@@ -222,6 +222,6 @@ npm start
 ## See Also
 
 - [src/putplace/static/README.md](src/putplace/static/README.md) - Server static files
-- [ppgui-electron/src/renderer/assets/README.md](ppgui-electron/src/renderer/assets/README.md) - Electron assets
+- [pp_gui_client/src/renderer/assets/README.md](pp_gui_client/src/renderer/assets/README.md) - Electron assets
 - [Electron Builder Icons](https://www.electron.build/icons) - Icon requirements
 - [FastAPI Static Files](https://fastapi.tiangolo.com/tutorial/static-files/) - Official docs

@@ -475,24 +475,24 @@ Warning: No API key provided (authentication may fail)
 
 1. **Provide via command line:**
    ```bash
-   python ppclient.py /path --api-key "YOUR_KEY"
+   python pp_client.py /path --api-key "YOUR_KEY"
    ```
 
 2. **Provide via environment variable:**
    ```bash
    export PUTPLACE_API_KEY="YOUR_KEY"
-   python ppclient.py /path
+   python pp_client.py /path
    ```
 
 3. **Provide via config file:**
    ```bash
-   # Create ~/ppclient.conf
-   cat > ~/ppclient.conf << EOF
+   # Create ~/pp_client.conf
+   cat > ~/pp_client.conf << EOF
    [DEFAULT]
    api-key = YOUR_KEY
    EOF
 
-   chmod 600 ~/ppclient.conf
+   chmod 600 ~/pp_client.conf
    ```
 
 ---
@@ -566,7 +566,7 @@ sudo netstat -tlnp | grep 8000
 2. **Check URL:**
    ```bash
    # Verify URL in client config
-   python ppclient.py /path --url http://correct-server:8000/put_file
+   python pp_client.py /path --url http://correct-server:8000/put_file
    ```
 
 3. **Check firewall:**
@@ -591,7 +591,7 @@ Failed to send file.txt: Timeout
 
 1. **Increase client timeout:**
    ```python
-   # In ppclient.py, modify httpx client
+   # In pp_client.py, modify httpx client
    httpx.Client(timeout=300.0)  # 5 minutes
    ```
 

@@ -1,7 +1,7 @@
 [project]
 name = "putplace"
 # IMPORTANT: Keep this version in sync with src/putplace/version.py!
-version = "0.8.9"
+version = "0.8.10"
 description = "File and Metadata storage system"
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -57,10 +57,18 @@ dev = [
     "pytest-cov>=4.1.0",
     "pytest-asyncio>=0.23.0",
     "pytest-xdist>=3.5.0",
+    "pytest-playwright>=0.4.0",
     "invoke>=2.2.0",
     "ruff>=0.3.0",
     "mypy>=1.8.0",
     "twine>=5.0.0",
+]
+
+[tool.uv.workspace]
+members = [
+    "packages/putplace-server",
+    "packages/putplace-client",
+    "packages/putplace-assist",
 ]
 
 [build-system]
@@ -75,15 +83,16 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+markers = [
+    "e2e: end-to-end tests (deselect with '-m \"not e2e\"')",
+    "integration: integration tests requiring external services",
+]
 addopts = [
     "--strict-markers",
     "--strict-config",
     "--cov=putplace",
     "--cov-report=term-missing",
     "--cov-report=html",
-]
-markers = [
-    "integration: marks tests as integration tests (require server and database)",
 ]
 asyncio_mode = "auto"
 

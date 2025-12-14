@@ -21,7 +21,7 @@ jobs:
     runs-on: macos-latest
     defaults:
       run:
-        working-directory: ppgui-electron
+        working-directory: pp_gui_client
 
     steps:
       - name: Checkout repository
@@ -32,7 +32,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: ppgui-electron/package-lock.json
+          cache-dependency-path: pp_gui_client/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -48,8 +48,8 @@ jobs:
         with:
           name: macos-builds
           path: |
-            ppgui-electron/release/*.dmg
-            ppgui-electron/release/*.zip
+            pp_gui_client/release/*.dmg
+            pp_gui_client/release/*.zip
           if-no-files-found: error
 
   build-windows:
@@ -57,7 +57,7 @@ jobs:
     runs-on: windows-latest
     defaults:
       run:
-        working-directory: ppgui-electron
+        working-directory: pp_gui_client
 
     steps:
       - name: Checkout repository
@@ -68,7 +68,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: ppgui-electron/package-lock.json
+          cache-dependency-path: pp_gui_client/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -85,7 +85,7 @@ jobs:
         with:
           name: windows-builds
           path: |
-            ppgui-electron/release/*.exe
+            pp_gui_client/release/*.exe
           if-no-files-found: error
 
   build-linux:
@@ -93,7 +93,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ppgui-electron
+        working-directory: pp_gui_client
 
     steps:
       - name: Checkout repository
@@ -104,7 +104,7 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-          cache-dependency-path: ppgui-electron/package-lock.json
+          cache-dependency-path: pp_gui_client/package-lock.json
 
       - name: Install dependencies
         run: npm ci
@@ -120,8 +120,8 @@ jobs:
         with:
           name: linux-builds
           path: |
-            ppgui-electron/release/*.AppImage
-            ppgui-electron/release/*.deb
+            pp_gui_client/release/*.AppImage
+            pp_gui_client/release/*.deb
           if-no-files-found: error
 
   create-release:

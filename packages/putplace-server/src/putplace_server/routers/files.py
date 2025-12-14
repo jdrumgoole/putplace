@@ -69,7 +69,9 @@ async def put_file(
         doc_id = await db.insert_file_metadata(data)
 
         # Determine if upload is required
-        upload_required = not has_content
+        # Skip upload requirement for 0-byte files (no content to upload)
+        is_zero_byte_file = file_metadata.file_size == 0
+        upload_required = not has_content and not is_zero_byte_file
         upload_url = None
         if upload_required:
             # Provide the upload URL
