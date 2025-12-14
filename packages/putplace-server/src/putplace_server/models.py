@@ -30,7 +30,13 @@ class FileMetadata(BaseModel):
     filepath: str = Field(..., description="Full path to the file")
     hostname: str = Field(..., description="Hostname where the file is located")
     ip_address: str = Field(..., description="IP address of the host")
-    sha256: str = Field(..., description="SHA256 hash of the file", min_length=64, max_length=64)
+    sha256: str = Field(
+        ...,
+        description="SHA256 hash of the file",
+        min_length=64,
+        max_length=64,
+        pattern=r"^[a-f0-9]{64}$"  # Security: Prevent path traversal - must be exactly 64 hex chars
+    )
 
     # File stat information
     file_size: int = Field(..., description="File size in bytes", ge=0)

@@ -59,6 +59,34 @@ def test_file_metadata_sha256_validation():
         FileMetadata(**invalid_long)
     assert "sha256" in str(exc_info.value)
 
+    # Invalid: contains uppercase (must be lowercase hex)
+    invalid_upper = valid_data.copy()
+    invalid_upper["sha256"] = "A" * 64
+    with pytest.raises(ValidationError) as exc_info:
+        FileMetadata(**invalid_upper)
+    assert "sha256" in str(exc_info.value)
+
+    # Invalid: path traversal attempt
+    invalid_path = valid_data.copy()
+    invalid_path["sha256"] = "../" + "0" * 61  # Pad to 64 chars
+    with pytest.raises(ValidationError) as exc_info:
+        FileMetadata(**invalid_path)
+    assert "sha256" in str(exc_info.value)
+
+    # Invalid: contains special characters
+    invalid_special = valid_data.copy()
+    invalid_special["sha256"] = "abc123" + "@" * 58
+    with pytest.raises(ValidationError) as exc_info:
+        FileMetadata(**invalid_special)
+    assert "sha256" in str(exc_info.value)
+
+    # Invalid: contains spaces
+    invalid_space = valid_data.copy()
+    invalid_space["sha256"] = "abc " + "0" * 60
+    with pytest.raises(ValidationError) as exc_info:
+        FileMetadata(**invalid_space)
+    assert "sha256" in str(exc_info.value)
+
 
 def test_file_metadata_missing_fields():
     """Test that all required fields must be present."""

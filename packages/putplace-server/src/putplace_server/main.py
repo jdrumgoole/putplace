@@ -383,6 +383,51 @@ app.add_middleware(
     allow_headers=settings.cors_allow_headers,
 )
 
+
+# Security headers middleware
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    """Add security headers to all responses."""
+    response = await call_next(request)
+
+    # Prevent clickjacking attacks
+    response.headers["X-Frame-Options"] = "DENY"
+
+    # Prevent MIME type sniffing
+    response.headers["X-Content-Type-Options"] = "nosniff"
+
+    # Enable browser XSS protection (legacy, but doesn't hurt)
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+
+    # Content Security Policy - restrictive for API
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "  # Allow inline scripts for HTML pages
+        "style-src 'self' 'unsafe-inline'; "  # Allow inline styles for HTML pages
+        "img-src 'self' data: https:; "  # Allow images from self, data URIs, and HTTPS
+        "font-src 'self'; "
+        "connect-src 'self'; "
+        "frame-ancestors 'none'"  # Equivalent to X-Frame-Options: DENY
+    )
+
+    # Referrer Policy - don't leak URLs
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+
+    # Permissions Policy (formerly Feature-Policy)
+    response.headers["Permissions-Policy"] = (
+        "geolocation=(), "
+        "microphone=(), "
+        "camera=(), "
+        "payment=(), "
+        "usb=(), "
+        "magnetometer=(), "
+        "gyroscope=(), "
+        "accelerometer=()"
+    )
+
+    return response
+
+
 # Mount static files directory
 STATIC_DIR = Path(__file__).parent / "static"
 if STATIC_DIR.exists():
