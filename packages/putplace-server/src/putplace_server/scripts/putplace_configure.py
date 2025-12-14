@@ -387,6 +387,20 @@ def write_toml_file(config: dict, toml_path: Path) -> tuple[bool, str]:
             "jwt_access_token_expire_minutes": 1440  # 24 hours
         }
 
+        # CORS configuration section
+        # Default to allowing all origins for development, but recommend specific origins for production
+        cors_origins = config.get('cors_allow_origins', ['*'])
+        if isinstance(cors_origins, str):
+            # Handle comma-separated string
+            cors_origins = [origin.strip() for origin in cors_origins.split(',')]
+
+        toml_config["cors"] = {
+            "allow_origins": cors_origins,
+            "allow_credentials": config.get('cors_allow_credentials', True),
+            "allow_methods": config.get('cors_allow_methods', ['*']),
+            "allow_headers": config.get('cors_allow_headers', ['*'])
+        }
+
         # Write TOML file with header comment
         envtype = config.get('envtype', '')
         header = "# PutPlace Server Configuration\n"
@@ -758,6 +772,12 @@ async def run_noninteractive_config(args) -> dict:
     if args.pid_file:
         config['pid_file'] = args.pid_file
 
+    # CORS configuration
+    if args.cors_allow_origins:
+        config['cors_allow_origins'] = args.cors_allow_origins
+    if args.cors_allow_credentials is not None:
+        config['cors_allow_credentials'] = args.cors_allow_credentials
+
     # Generate or use provided password
     if args.admin_password:
         config['admin_password'] = args.admin_password
@@ -890,6 +910,12 @@ Examples:
     --storage-backend s3 \\
     --s3-bucket putplace \\
     --aws-region us-west-2
+
+  # Production with specific CORS origins
+  putplace-configure --non-interactive \\
+    --admin-email admin@example.com \\
+    --storage-backend local \\
+    --cors-allow-origins "https://app.example.com,https://admin.example.com"
 
   # Standalone AWS tests
   putplace-configure S3                # Test S3 access
@@ -1040,6 +1066,18 @@ Examples:
     parser.add_argument(
         '--pid-file',
         help='Path to PID file (default: ~/.putplace/ppserver.pid)'
+    )
+
+    # CORS options
+    parser.add_argument(
+        '--cors-allow-origins',
+        help='CORS allowed origins (comma-separated or "*" for all, default: "*")'
+    )
+    parser.add_argument(
+        '--cors-allow-credentials',
+        type=lambda x: x.lower() in ['true', '1', 'yes'],
+        default=True,
+        help='CORS allow credentials (default: true)'
     )
 
     args = parser.parse_args()

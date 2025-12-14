@@ -306,6 +306,14 @@ class Settings(BaseSettings):
             "jwt_access_token_expire_minutes": int(get_value("jwt_access_token_expire_minutes", 1440)),
         })
 
+        # CORS settings
+        values.update({
+            "cors_allow_origins": get_value("cors_allow_origins", ["*"]),
+            "cors_allow_credentials": get_value("cors_allow_credentials", True),
+            "cors_allow_methods": get_value("cors_allow_methods", ["*"]),
+            "cors_allow_headers": get_value("cors_allow_headers", ["*"]),
+        })
+
         # Merge with any remaining kwargs
         values.update({k: v for k, v in kwargs.items() if k not in values})
 
