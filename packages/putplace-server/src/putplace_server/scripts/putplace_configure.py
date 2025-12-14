@@ -374,6 +374,19 @@ def write_toml_file(config: dict, toml_path: Path) -> tuple[bool, str]:
             if config.get('aws_region'):
                 toml_config["email"]["aws_region"] = config['aws_region']
 
+        # JWT configuration section - generate secure random key
+        import secrets
+        jwt_secret = config.get('jwt_secret_key')
+        if not jwt_secret:
+            # Generate a cryptographically secure random key (32 bytes = 256 bits)
+            jwt_secret = secrets.token_urlsafe(32)
+
+        toml_config["jwt"] = {
+            "jwt_secret_key": jwt_secret,
+            "jwt_algorithm": "HS256",
+            "jwt_access_token_expire_minutes": 1440  # 24 hours
+        }
+
         # Write TOML file with header comment
         envtype = config.get('envtype', '')
         header = "# PutPlace Server Configuration\n"

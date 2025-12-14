@@ -7,6 +7,7 @@ Configuration priority (highest to lowest):
 """
 
 import os
+import secrets
 import sys
 from pathlib import Path
 from typing import Any, Optional
@@ -146,6 +147,16 @@ def load_toml_config() -> dict[str, Any]:
             if "registration_enabled" in server:
                 config["registration_enabled"] = server["registration_enabled"]
 
+        # JWT settings
+        if "jwt" in toml_data:
+            jwt = toml_data["jwt"]
+            if "jwt_secret_key" in jwt:
+                config["jwt_secret_key"] = jwt["jwt_secret_key"]
+            if "jwt_algorithm" in jwt:
+                config["jwt_algorithm"] = jwt["jwt_algorithm"]
+            if "jwt_access_token_expire_minutes" in jwt:
+                config["jwt_access_token_expire_minutes"] = jwt["jwt_access_token_expire_minutes"]
+
         return config
 
     except Exception as e:
@@ -206,6 +217,11 @@ class Settings(BaseSettings):
     # Registration control
     registration_enabled: bool = True  # Set to False to disable new user registration
 
+    # JWT settings
+    jwt_secret_key: str = ""  # Will be auto-generated if not set
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 1440  # 24 hours
+
     model_config = SettingsConfigDict(
         case_sensitive=False,
         extra="ignore",  # Ignore extra environment variables (e.g., PUTPLACE_API_KEY for client)
@@ -252,6 +268,25 @@ class Settings(BaseSettings):
             "base_url": get_value("base_url", "http://localhost:8000"),
             "email_aws_region": get_value("email_aws_region", "eu-west-1"),
         }
+
+        # JWT settings - generate secure random key if not provided
+        jwt_secret = get_value("jwt_secret_key")
+        if not jwt_secret:
+            # Generate a secure random key (32 bytes = 256 bits)
+            jwt_secret = secrets.token_urlsafe(32)
+            import warnings
+            warnings.warn(
+                "JWT_SECRET_KEY not set in environment or config. "
+                "Generated random key for this session. "
+                "Set JWT_SECRET_KEY environment variable for production!",
+                UserWarning
+            )
+
+        values.update({
+            "jwt_secret_key": jwt_secret,
+            "jwt_algorithm": get_value("jwt_algorithm", "HS256"),
+            "jwt_access_token_expire_minutes": int(get_value("jwt_access_token_expire_minutes", 1440)),
+        })
 
         # Merge with any remaining kwargs
         values.update({k: v for k, v in kwargs.items() if k not in values})

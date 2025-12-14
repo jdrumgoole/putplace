@@ -7,13 +7,19 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from jose import JWTError, jwt
 
+from .config import settings
+
 # Password hashing using Argon2
 pwd_hasher = PasswordHasher()
 
-# JWT settings
-SECRET_KEY = "your-secret-key-change-this-in-production"  # TODO: Move to config
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours - longer for desktop clients uploading large files
+
+def get_access_token_expire_minutes() -> int:
+    """Get JWT access token expiration time in minutes from settings."""
+    return settings.jwt_access_token_expire_minutes
+
+
+# For backward compatibility with existing code
+ACCESS_TOKEN_EXPIRE_MINUTES = settings.jwt_access_token_expire_minutes
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -38,14 +44,14 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     else:
         expire = datetime.utcnow() + timedelta(minutes=15)
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
     return encoded_jwt
 
 
 def decode_access_token(token: str) -> Optional[str]:
     """Decode a JWT token and return the email."""
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         email: str = payload.get("sub")
         return email
     except JWTError:
