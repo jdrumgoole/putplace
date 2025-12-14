@@ -383,3 +383,4 @@ Configuration is managed via Pydantic Settings in `src/putplace/config.py`
 - pp_client is a canonical test client, pp_assist is the client side server that mediates access to the server for all clients. pp_server is the server side hosted component that stores meta-data in MongoDB and rawfile data in S3.
 - use port 8100 for test and dev servers
 - Write all tests in python
+- we never push a release unless all tests pass.
