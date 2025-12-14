@@ -51,7 +51,7 @@ JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440
 ```
 
 **Security Warning:**
-The JWT_SECRET_KEY is critical for authentication security. See [SECURITY.md](../SECURITY.md#jwt-secret-key-security) for detailed security requirements and best practices.
+The JWT_SECRET_KEY is critical for authentication security. See {doc}`SECURITY` for detailed security requirements and best practices.
 
 #### MongoDB Configuration
 
@@ -392,7 +392,7 @@ S3_STORAGE_CLASS=GLACIER
 
 ### AWS Credentials Configuration
 
-See [SECURITY.md](../SECURITY.md) for detailed AWS credentials setup.
+See {doc}`SECURITY` for detailed AWS credentials setup.
 
 **Priority order:**
 1. IAM roles (if running on AWS)
@@ -894,6 +894,6 @@ curl -H "X-API-Key: $PUTPLACE_API_KEY" http://localhost:8000/api_keys
 
 ## Next Steps
 
-- [Deployment Guide](deployment.md) - Production deployment strategies
-- [Security Guide](../SECURITY.md) - Security best practices
-- [Troubleshooting](troubleshooting.md) - Common issues and solutions
+- {doc}`deployment` - Production deployment strategies
+- {doc}`SECURITY` - Security best practices
+- {doc}`troubleshooting` - Common issues and solutions

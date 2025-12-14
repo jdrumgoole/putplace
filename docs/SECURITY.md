@@ -164,8 +164,6 @@ Before deploying to production:
 
 ## AWS Credentials and Storage
 
----
-
 ## Overview
 
 PutPlace supports multiple methods for AWS credential management. The application uses `aioboto3` (async AWS SDK), which follows the standard **AWS credential chain** in this order:
