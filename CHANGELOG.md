@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.8.10] - 2025-12-13
+## [0.8.10] - 2025-12-14
 
 ### Fixed
 - **E2E Test Authentication**: Fixed authentication failure in Playwright E2E tests
@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Updated POST `/servers` endpoint to honor `is_default` flag from requests
   - Test server credentials now properly override auto-configured default server
   - E2E test now passes completely with successful upload verification
+- **Workspace Configuration**: Fixed root pyproject.toml console script issues
+  - Removed incorrect console scripts pointing to non-existent `putplace` module
+  - Removed incorrect hatch build config
+  - Console scripts now properly defined in individual workspace packages
+  - Fixed `ModuleNotFoundError` when running `uv run` commands
 
 ### Added
 - **Workspace Configuration**: Added uv workspace support for monorepo structure
@@ -21,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Test Markers**: Added pytest markers for test organization
   - `e2e`: End-to-end tests (can deselect with `-m "not e2e"`)
   - `integration`: Integration tests requiring external services
+- **Updated Test Suite**: Rewrote client tests for pp_assist daemon architecture
+  - 20 new tests for daemon client API functions
+  - Tests validate HTTP client interactions with mocked responses
+  - All tests passing: 253 backend tests + 1 E2E test = 254 total
 
 ### Changed
 - **E2E Test Suite**: Complete end-to-end workflow test now fully functional
@@ -28,6 +37,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Verifies file existence on server with correct metadata
   - Execution time: ~11-12 seconds
   - Test located at: `pp_gui_client/tests/e2e-full-workflow.spec.ts`
+
+### Removed
+- **Outdated Tests**: Removed tests for old standalone client architecture
+  - Removed `test_client_config.py` and `conftest.py` from putplace-client
+  - Removed `test_e2e.py` and `test_console_scripts.py` from putplace-server
+  - Tests were for old client that was replaced by pp_assist daemon
 
 ## [0.5.1] - 2025-01-06
 
