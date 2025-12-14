@@ -157,6 +157,18 @@ def load_toml_config() -> dict[str, Any]:
             if "jwt_access_token_expire_minutes" in jwt:
                 config["jwt_access_token_expire_minutes"] = jwt["jwt_access_token_expire_minutes"]
 
+        # CORS settings
+        if "cors" in toml_data:
+            cors = toml_data["cors"]
+            if "allow_origins" in cors:
+                config["cors_allow_origins"] = cors["allow_origins"]
+            if "allow_credentials" in cors:
+                config["cors_allow_credentials"] = cors["allow_credentials"]
+            if "allow_methods" in cors:
+                config["cors_allow_methods"] = cors["allow_methods"]
+            if "allow_headers" in cors:
+                config["cors_allow_headers"] = cors["allow_headers"]
+
         return config
 
     except Exception as e:
@@ -221,6 +233,12 @@ class Settings(BaseSettings):
     jwt_secret_key: str = ""  # Will be auto-generated if not set
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 1440  # 24 hours
+
+    # CORS settings
+    cors_allow_origins: list[str] = ["*"]  # List of allowed origins, ["*"] allows all
+    cors_allow_credentials: bool = True
+    cors_allow_methods: list[str] = ["*"]  # ["GET", "POST", "PUT", "DELETE"] or ["*"]
+    cors_allow_headers: list[str] = ["*"]
 
     model_config = SettingsConfigDict(
         case_sensitive=False,
