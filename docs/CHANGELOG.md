@@ -5,6 +5,45 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.11] - 2025-12-14
+
+### Security
+
+#### Critical Path Traversal Fix
+- **SHA256 Validation**: Fixed critical path traversal vulnerability in file metadata validation
+  - Added regex pattern validation to SHA256 field: `^[a-f0-9]{64}$`
+  - Previously only validated length (64 chars), allowing malicious inputs like `../../etc/passwd`
+  - Now requires exactly 64 lowercase hexadecimal characters
+  - Prevents directory traversal attacks via crafted SHA256 values
+  - Added comprehensive test coverage for invalid patterns
+
+#### HTTP Security Headers
+- **Security Middleware**: Added comprehensive HTTP security headers to all responses
+  - `X-Frame-Options: DENY` - Prevents clickjacking attacks
+  - `X-Content-Type-Options: nosniff` - Prevents MIME type sniffing
+  - `X-XSS-Protection: 1; mode=block` - Legacy XSS protection
+  - `Content-Security-Policy` - Restricts resource loading and execution
+  - `Referrer-Policy: strict-origin-when-cross-origin` - Prevents URL information leakage
+  - `Permissions-Policy` - Restricts dangerous browser features (geolocation, camera, microphone, etc.)
+
+### Added
+
+#### CORS Configuration
+- **Configuration Wizard Enhancement**: Added CORS settings to `putplace_configure.py`
+  - New `--cors-allow-origins` argument for comma-separated origins or wildcard `*`
+  - New `--cors-allow-credentials` argument (default: true)
+  - Generates `[cors]` section in `ppserver.toml` configuration file
+  - Simplifies production deployment with proper origin restrictions
+
+### Changed
+- **Security Audit**: Completed comprehensive security review
+  - ✅ NoSQL Injection: SAFE - All queries use proper field matching
+  - ✅ XSS Protection: SAFE - All user data escaped via `escapeHtml()`
+  - ✅ Path Traversal: FIXED - SHA256 pattern validation
+  - ✅ CORS Configuration: ENHANCED - Configurable via wizard
+  - ✅ Security Headers: FIXED - Comprehensive middleware
+  - ✅ Secrets in Logs: SAFE - No user credentials logged
+
 ## [0.8.9] - 2025-12-06
 
 ### Fixed
