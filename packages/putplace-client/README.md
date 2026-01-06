@@ -1,5 +1,9 @@
 # PutPlace Client
 
+> **⚠️ DEPRECATED**: This package has been merged into `putplace-assist` as of 2026-01-06.
+> **Please use `putplace-assist` instead**: `pip install putplace-assist`
+> The `pp_client` command is now included in the `putplace-assist` package.
+
 A command-line tool for scanning directories and uploading file metadata to a PutPlace server.
 
 ## Installation

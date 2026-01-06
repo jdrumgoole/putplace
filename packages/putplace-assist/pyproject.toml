@@ -1,7 +1,7 @@
 [project]
 name = "putplace-assist"
-version = "0.2.0"
-description = "Local assistant daemon for PutPlace file uploads"
+version = "0.2.1"
+description = "Local assistant daemon for PutPlace file uploads (includes pp_client CLI)"
 readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
@@ -38,6 +38,7 @@ dependencies = [
 pp_assist = "putplace_assist.cli:main"
 pp_assist_configure = "putplace_assist.configure:main"
 pp_assist_purge = "putplace_assist.scripts.pp_assist_purge:main"
+pp_client = "putplace_assist.ppclient:main"
 
 [project.optional-dependencies]
 dev = [

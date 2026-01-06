@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-01-06
+
+### Added
+
+#### Merged putplace-client into putplace-assist
+- **Unified Client Package**: `pp_client` CLI tool now included in putplace-assist
+  - No longer need to install separate `putplace-client` package
+  - All client-side tools (daemon + CLI) available in single package
+  - `pp_client` command available after installing `putplace-assist`
+  - Backwards compatible - existing `pp_client` users can switch seamlessly
+
+### Changed
+- **Package Consolidation**: putplace-client functionality merged into putplace-assist
+  - Install: `pip install putplace-assist` gives you both `pp_assist` and `pp_client`
+  - Simplifies client deployment - one package for all client-side operations
+
+### Deprecated
+- **putplace-client package** - Use putplace-assist instead
+  - The standalone `putplace-client` package (v0.8.4) is now deprecated
+  - New installations should use `putplace-assist` which includes `pp_client`
+  - Existing users: `pip uninstall putplace-client && pip install putplace-assist`
+
 ## [0.9.0] - 2026-01-06
 
 ### Added
