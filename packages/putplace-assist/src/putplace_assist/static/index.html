@@ -156,35 +156,80 @@
 
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(3, 1fr);
             gap: 15px;
             margin-bottom: 30px;
         }
 
-        @media (max-width: 768px) {
+        @media (max-width: 900px) {
             .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
+                grid-template-columns: 1fr;
             }
         }
 
-        .stat-card {
+        .stat-group {
             background: rgba(255, 255, 255, 0.95);
-            padding: 20px;
-            border-radius: 16px;
-            text-align: center;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid rgba(0, 0, 0, 0.08);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
         }
 
-        .stat-value {
-            font-size: 2rem;
-            font-weight: 700;
-            color: var(--primary);
-            margin-bottom: 5px;
+        .stat-group-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #4a5568;
+            margin: 0 0 12px 0;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 0;
+            font-size: 0.85rem;
         }
 
         .stat-label {
-            font-size: 0.85rem;
-            color: var(--text-muted);
+            color: #718096;
+            font-weight: 500;
+        }
+
+        .stat-value {
+            font-weight: 700;
+            color: var(--text-dark);
+            font-size: 0.95rem;
+        }
+
+        .stat-value.stat-pending {
+            color: #f59e0b;
+        }
+
+        .stat-value.stat-active {
+            color: #48bb78;
+        }
+
+        .stat-value.stat-success {
+            color: #48bb78;
+        }
+
+        .stat-value.stat-error {
+            color: #f56565;
+        }
+
+        .status-indicator-inline {
+            font-size: 11px;
+            margin-right: 4px;
+        }
+
+        .status-indicator-inline.active {
+            color: #48bb78;
+        }
+
+        .status-indicator-inline.inactive {
+            color: #cbd5e0;
         }
 
         .path-list {
@@ -834,21 +879,44 @@
         </header>
 
         <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-value" id="statPaths">-</div>
-                <div class="stat-label">Paths Watched</div>
+            <div class="stat-group">
+                <h3 class="stat-group-title">File Statistics</h3>
+                <div class="stat-item">
+                    <span class="stat-label">Files Tracked:</span>
+                    <span class="stat-value" id="statFiles">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Paths Watched:</span>
+                    <span class="stat-value" id="statPaths">-</span>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-value" id="statFiles">-</div>
-                <div class="stat-label">Files Tracked</div>
+
+            <div class="stat-group">
+                <h3 class="stat-group-title">Processing Queue</h3>
+                <div class="stat-item">
+                    <span class="stat-label"><span class="status-indicator-inline" id="watcherIndicator">○</span> Scanner → SHA256:</span>
+                    <span class="stat-value stat-pending" id="statPendingSha256">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label"><span class="status-indicator-inline" id="sha256Indicator">○</span> SHA256 → Upload:</span>
+                    <span class="stat-value stat-pending" id="statPendingUpload">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">In Progress:</span>
+                    <span class="stat-value stat-active" id="statInProgress">-</span>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-value" id="statPendingSha256">-</div>
-                <div class="stat-label">Pending SHA256</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-value" id="statPendingUpload">-</div>
-                <div class="stat-label">Pending Upload</div>
+
+            <div class="stat-group">
+                <h3 class="stat-group-title">Today's Activity</h3>
+                <div class="stat-item">
+                    <span class="stat-label">Completed:</span>
+                    <span class="stat-value stat-success" id="statCompletedToday">-</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Failed:</span>
+                    <span class="stat-value stat-error" id="statFailedToday">-</span>
+                </div>
             </div>
         </div>
 
@@ -1312,18 +1380,47 @@
         // Load statistics
         async function loadStats() {
             try {
-                const [statusRes, statsRes] = await Promise.all([
+                const [statusRes, statsRes, queueRes] = await Promise.all([
                     fetch(`${API_BASE}/status`),
-                    fetch(`${API_BASE}/files/stats`)
+                    fetch(`${API_BASE}/files/stats`),
+                    fetch(`${API_BASE}/uploads/queue`)
                 ]);
 
                 const status = await statusRes.json();
                 const stats = await statsRes.json();
+                const queue = await queueRes.json();
 
-                document.getElementById('statPaths').textContent = status.paths_watched;
+                // File Statistics
                 document.getElementById('statFiles').textContent = stats.total_files;
-                document.getElementById('statPendingSha256').textContent = stats.pending_sha256;
-                document.getElementById('statPendingUpload').textContent = stats.pending_uploads;
+                document.getElementById('statPaths').textContent = status.paths_watched;
+
+                // Processing Queue
+                document.getElementById('statPendingSha256').textContent = queue.pending_sha256 || stats.pending_sha256;
+                document.getElementById('statPendingUpload').textContent = queue.pending_upload || stats.pending_uploads;
+                document.getElementById('statInProgress').textContent = queue.in_progress || 0;
+
+                // Today's Activity
+                document.getElementById('statCompletedToday').textContent = queue.completed_today || 0;
+                document.getElementById('statFailedToday').textContent = queue.failed_today || 0;
+
+                // Component Status Indicators
+                const watcherIndicator = document.getElementById('watcherIndicator');
+                if (status.watcher_active) {
+                    watcherIndicator.textContent = '●';
+                    watcherIndicator.className = 'status-indicator-inline active';
+                } else {
+                    watcherIndicator.textContent = '○';
+                    watcherIndicator.className = 'status-indicator-inline inactive';
+                }
+
+                const sha256Indicator = document.getElementById('sha256Indicator');
+                if (status.sha256_processor_active) {
+                    sha256Indicator.textContent = '●';
+                    sha256Indicator.className = 'status-indicator-inline active';
+                } else {
+                    sha256Indicator.textContent = '○';
+                    sha256Indicator.className = 'status-indicator-inline inactive';
+                }
             } catch (error) {
                 console.error('Failed to load stats:', error);
             }
