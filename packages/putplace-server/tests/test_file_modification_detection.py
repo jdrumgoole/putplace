@@ -31,6 +31,7 @@ class TestFileModificationDetection:
     async def ppassist_daemon(self):
         """Start ppassist daemon for testing."""
         import subprocess
+        import httpx
 
         # Start daemon
         proc = subprocess.Popen(
@@ -40,8 +41,23 @@ class TestFileModificationDetection:
             text=True
         )
 
-        # Wait for daemon to start
-        await asyncio.sleep(2)
+        # Wait for daemon to be ready by checking health endpoint
+        daemon_ready = False
+        for attempt in range(30):  # 30 attempts with 0.5s delay = 15 seconds max
+            await asyncio.sleep(0.5)
+            try:
+                async with httpx.AsyncClient() as client:
+                    response = await client.get("http://localhost:8765/health", timeout=1.0)
+                    if response.status_code == 200:
+                        daemon_ready = True
+                        print("✓ Daemon ready")
+                        break
+            except (httpx.ConnectError, httpx.TimeoutException):
+                pass
+
+        if not daemon_ready:
+            proc.kill()
+            raise RuntimeError("ppassist daemon failed to start within 15 seconds")
 
         yield proc
 
@@ -105,12 +121,14 @@ class TestFileModificationDetection:
             print(f"Target file for modification: {target_file}")
             print(f"Original size: {original_size}, mtime: {original_mtime}")
 
-            # Register directory with ppassist
+            # Register directory with ppassist (daemon runs on port 8765)
             import httpx
+            PPASSIST_URL = "http://localhost:8765"
+
             async with httpx.AsyncClient() as client:
                 # Register path
                 response = await client.post(
-                    "http://localhost:8100/paths",
+                    f"{PPASSIST_URL}/paths",
                     json={"path": str(test_dir), "recursive": True}
                 )
                 assert response.status_code == 200
@@ -120,7 +138,7 @@ class TestFileModificationDetection:
 
                 # Trigger scan
                 response = await client.post(
-                    f"http://localhost:8100/paths/{path_id}/scan"
+                    f"{PPASSIST_URL}/paths/{path_id}/scan"
                 )
                 assert response.status_code == 200
                 print("Scan initiated")
@@ -129,14 +147,14 @@ class TestFileModificationDetection:
                 await asyncio.sleep(3)
 
                 # Check file stats
-                response = await client.get("http://localhost:8100/files/stats")
+                response = await client.get(f"{PPASSIST_URL}/files/stats")
                 assert response.status_code == 200
                 stats = response.json()
                 print(f"Files tracked: {stats['total_files']}")
 
                 # Trigger uploads
                 response = await client.post(
-                    "http://localhost:8100/uploads",
+                    f"{PPASSIST_URL}/uploads",
                     json={"upload_content": True, "limit": 100}
                 )
                 assert response.status_code == 200
@@ -163,7 +181,7 @@ class TestFileModificationDetection:
 
                 # Check activity log for FILE_MODIFIED event
                 response = await client.get(
-                    "http://localhost:8100/activity",
+                    f"{PPASSIST_URL}/activity",
                     params={"limit": 100, "event_type": "FILE_MODIFIED"}
                 )
                 assert response.status_code == 200
@@ -195,7 +213,7 @@ class TestFileModificationDetection:
 
                 # Verify file was requeued (should be pending again)
                 response = await client.get(
-                    "http://localhost:8100/files",
+                    f"{PPASSIST_URL}/files",
                     params={"path_prefix": str(target_file), "limit": 1}
                 )
                 assert response.status_code == 200
