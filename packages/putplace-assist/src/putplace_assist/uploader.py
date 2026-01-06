@@ -1,6 +1,12 @@
 """File uploader for putplace-assist.
 
-Handles uploading files to the remote putplace server.
+Component 3 of the 3-component queue-based architecture.
+
+This module provides background tasks that:
+1. Upload Worker: Processes queue_pending_upload (FIFO) and uploads files with chunked uploads
+2. Deletion Worker: Processes queue_pending_deletion (FIFO) and notifies server of deletions
+3. Implements retry logic with exponential backoff (3 retries)
+4. Handles authentication with access tokens
 """
 
 import asyncio
@@ -102,6 +108,7 @@ class Uploader:
         parallel_uploads: Optional[int] = None,
         retry_attempts: Optional[int] = None,
         retry_delay: Optional[float] = None,
+        timeout_seconds: Optional[int] = None,
     ):
         """Initialize uploader.
 
@@ -109,10 +116,12 @@ class Uploader:
             parallel_uploads: Number of parallel uploads
             retry_attempts: Number of retry attempts
             retry_delay: Delay between retries in seconds
+            timeout_seconds: Timeout for each file upload in seconds
         """
         self.parallel_uploads = parallel_uploads or settings.uploader_parallel_uploads
         self.retry_attempts = retry_attempts or settings.uploader_retry_attempts
         self.retry_delay = retry_delay or settings.uploader_retry_delay_seconds
+        self.timeout_seconds = timeout_seconds or settings.uploader_timeout_seconds
 
         self._queue: asyncio.Queue[UploadQueueItem] = asyncio.Queue()
         self._running = False
@@ -390,13 +399,20 @@ class Uploader:
 
         return await loop.run_in_executor(None, read_and_hash)
 
-    async def _get_access_token(self, server_url: str, username: str, password: str) -> Optional[str]:
+    async def _get_access_token(
+        self,
+        server_url: str,
+        username: str,
+        password: str,
+        server_id: Optional[int] = None,
+    ) -> Optional[str]:
         """Get or refresh access token for a server.
 
         Args:
             server_url: Base URL of the server
             username: Username for authentication
             password: Password for authentication
+            server_id: Server ID for credential invalidation (optional)
 
         Returns:
             Access token or None if authentication failed
@@ -420,6 +436,36 @@ class Uploader:
                     if token:
                         self._access_tokens[server_url] = token
                         return token
+                elif response.status_code == 401:
+                    # Unauthorized - credentials are invalid (user deleted or password changed)
+                    logger.warning(
+                        f"Authentication failed with 401 Unauthorized for {username}@{server_url}. "
+                        "This usually means the user has been deleted or credentials are invalid."
+                    )
+
+                    # Remove invalid credentials from database
+                    if server_id:
+                        logger.info(f"Removing invalid server credentials (ID: {server_id}) from database")
+                        try:
+                            await db.delete_server(server_id)
+                            logger.info(f"Successfully removed server credentials for {server_url}")
+
+                            # Log activity for visibility
+                            await db.log_activity(
+                                EventType.UPLOAD_FAILED,
+                                filepath="N/A",
+                                message=f"Server credentials auto-removed: {username}@{server_url}",
+                                details={
+                                    "reason": "401 Unauthorized - user deleted or credentials invalid",
+                                    "server_id": server_id,
+                                    "server_url": server_url,
+                                    "username": username,
+                                },
+                            )
+                        except Exception as e:
+                            logger.error(f"Failed to remove server credentials: {e}")
+
+                    return None
                 else:
                     logger.error(f"Login failed: {response.status_code} - {response.text}")
                     return None
@@ -439,6 +485,59 @@ class Uploader:
         """
         filepath = Path(item.filepath)
         logger.info(f"[UPLOAD] Starting processing for file_id={item.file_id}, filepath={filepath}")
+
+        # Check if file has changed since it was scanned
+        try:
+            current_stat = os.stat(filepath)
+            current_mtime = current_stat.st_mtime
+            current_size = current_stat.st_size
+
+            # Get stored file info from database
+            stored_entry = await db.get_sha256_by_id(item.file_id)
+            if stored_entry:
+                stored_mtime = stored_entry.mtime
+                stored_size = stored_entry.file_size
+
+                # Compare current stat with stored values
+                if current_mtime != stored_mtime or current_size != stored_size:
+                    logger.warning(
+                        f"File changed since scan: {filepath} "
+                        f"(mtime: {stored_mtime} -> {current_mtime}, size: {stored_size} -> {current_size})"
+                    )
+
+                    # Remove from upload queue (delete from filelog_sha256)
+                    await db.delete_sha256_entry(item.file_id)
+
+                    # Requeue for processing (will trigger rescan and SHA256 recalculation)
+                    await db.log_activity(
+                        EventType.FILE_MODIFIED,
+                        filepath=item.filepath,
+                        message=f"File modified, requeuing for scan: {filepath.name}",
+                        details={
+                            "old_mtime": stored_mtime,
+                            "new_mtime": current_mtime,
+                            "old_size": stored_size,
+                            "new_size": current_size
+                        }
+                    )
+
+                    # Add back to source table for rescanning
+                    await db.add_file_to_monthly_table(
+                        filepath=item.filepath,
+                        file_size=current_size,
+                        file_mtime=current_mtime
+                    )
+
+                    logger.info(f"File {filepath} requeued for processing due to changes")
+                    return False
+        except FileNotFoundError:
+            logger.error(f"File not found: {filepath}")
+            await self._handle_upload_failure(item, "File not found")
+            return False
+        except Exception as e:
+            logger.error(f"Failed to check file stat for {filepath}: {e}")
+            # Continue with upload if stat check fails
+            pass
 
         # Update progress
         self._progress[item.file_id] = UploadProgress(
@@ -471,8 +570,8 @@ class Uploader:
         server, encrypted_password = server_result
         password = decrypt_password(encrypted_password)
 
-        # Get access token
-        token = await self._get_access_token(server.url, server.username, password)
+        # Get access token (pass server_id for automatic credential invalidation on 401)
+        token = await self._get_access_token(server.url, server.username, password, server.id)
         if not token:
             error_msg = "Authentication failed"
             await self._handle_upload_failure(item, error_msg)
@@ -610,7 +709,7 @@ class Uploader:
         }
 
         # Read file and upload
-        async with httpx.AsyncClient(timeout=300.0) as client:
+        async with httpx.AsyncClient(timeout=float(self.timeout_seconds)) as client:
             with open(filepath, "rb") as f:
                 files = {"file": (filepath.name, f, "application/octet-stream")}
                 response = await client.post(

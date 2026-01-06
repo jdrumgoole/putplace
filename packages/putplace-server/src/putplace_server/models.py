@@ -226,3 +226,154 @@ class EmailConfirmationResponse(BaseModel):
     message: str = Field(..., description="Success message")
     user_id: str = Field(..., description="Created user ID")
     email: str = Field(..., description="Email address")
+
+
+# Chunked upload models
+
+
+class ChunkInfo(BaseModel):
+    """Information about an uploaded chunk."""
+
+    chunk_num: int = Field(..., description="Chunk number (0-indexed)")
+    etag: str = Field(..., description="Chunk hash/ETag for integrity verification")
+    uploaded_at: datetime = Field(default_factory=datetime.utcnow, description="When chunk was uploaded")
+
+
+class UploadSessionInitiate(BaseModel):
+    """Request to initiate a chunked upload."""
+
+    filepath: str = Field(..., description="Full path to the file")
+    hostname: str = Field(..., description="Hostname where file is located")
+    sha256: str = Field(
+        ...,
+        description="SHA256 hash of the complete file",
+        min_length=64,
+        max_length=64,
+        pattern=r"^[a-f0-9]{64}$"
+    )
+    file_size: int = Field(..., description="Total file size in bytes", ge=0)
+    chunk_size: int = Field(..., description="Size of each chunk in bytes", ge=1024, le=10485760)  # 1KB to 10MB
+    total_chunks: int = Field(..., description="Total number of chunks", ge=1)
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "filepath": "/path/to/file.txt",
+                "hostname": "client-machine",
+                "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "file_size": 104857600,
+                "chunk_size": 2097152,
+                "total_chunks": 50
+            }
+        }
+    )
+
+
+class UploadSessionResponse(BaseModel):
+    """Response after initiating an upload session."""
+
+    upload_id: str = Field(..., description="Unique upload session ID")
+    expires_at: datetime = Field(..., description="When this upload session expires (1 hour)")
+    message: str = Field(default="Upload session created", description="Status message")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "upload_id": "uuid-1234-5678-90ab-cdef",
+                "expires_at": "2026-01-05T14:00:00Z",
+                "message": "Upload session created"
+            }
+        }
+    )
+
+
+class ChunkUploadResponse(BaseModel):
+    """Response after uploading a chunk."""
+
+    chunk_num: int = Field(..., description="Chunk number that was uploaded")
+    etag: str = Field(..., description="Chunk hash/ETag")
+    received_bytes: int = Field(..., description="Number of bytes received")
+    uploaded_chunks: int = Field(..., description="Total chunks uploaded so far")
+    total_chunks: int = Field(..., description="Total chunks expected")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "chunk_num": 0,
+                "etag": "chunk-hash-abc123",
+                "received_bytes": 2097152,
+                "uploaded_chunks": 1,
+                "total_chunks": 50
+            }
+        }
+    )
+
+
+class UploadCompleteRequest(BaseModel):
+    """Request to complete a chunked upload."""
+
+    parts: list[dict[str, int | str]] = Field(..., description="List of uploaded chunks with etags")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "parts": [
+                    {"chunk_num": 0, "etag": "chunk-hash-abc123"},
+                    {"chunk_num": 1, "etag": "chunk-hash-def456"}
+                ]
+            }
+        }
+    )
+
+
+class UploadCompleteResponse(BaseModel):
+    """Response after completing an upload."""
+
+    file_id: str = Field(..., description="File metadata ID")
+    sha256: str = Field(..., description="SHA256 hash of the file")
+    file_size: int = Field(..., description="Total file size")
+    status: str = Field(default="completed", description="Upload status")
+    storage_location: str = Field(..., description="Where file is stored (path or S3 URI)")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "file_id": "file-uuid",
+                "sha256": "abc123...",
+                "file_size": 104857600,
+                "status": "completed",
+                "storage_location": "s3://bucket/files/abc123..."
+            }
+        }
+    )
+
+
+# File deletion notification models
+
+
+class FileDeletionNotification(BaseModel):
+    """Notification that a file has been deleted on the client."""
+
+    filepath: str = Field(..., description="Full path to the deleted file")
+    hostname: str = Field(..., description="Hostname where file was located")
+    deleted_at: datetime = Field(..., description="When file was deleted")
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "filepath": "/path/to/deleted/file.txt",
+                "hostname": "client-machine",
+                "deleted_at": "2026-01-05T12:00:00Z"
+            }
+        }
+    )
+
+
+class FileDeletionResponse(BaseModel):
+    """Response after recording file deletion."""
+
+    sha256: str = Field(..., description="SHA256 hash of deleted file")
+    filepath: str = Field(..., description="Filepath")
+    hostname: str = Field(..., description="Hostname")
+    status: str = Field(default="deleted", description="Deletion status")
+    deleted_at: datetime = Field(..., description="When file was marked as deleted")

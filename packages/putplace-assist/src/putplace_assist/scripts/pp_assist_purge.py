@@ -154,14 +154,43 @@ def start_daemon() -> bool:
         True if started successfully, False otherwise
     """
     try:
+        # Start daemon without capturing output (it forks and runs in background)
+        # Using stdout=subprocess.DEVNULL to avoid capturing which would block
         result = subprocess.run(
             ["pp_assist", "start"],
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             text=True,
-            timeout=10
+            timeout=5  # Reduced timeout since parent should exit quickly
         )
-        return result.returncode == 0
-    except (subprocess.TimeoutExpired, FileNotFoundError) as e:
+
+        if result.returncode != 0:
+            print_error(f"pp_assist start exited with code {result.returncode}")
+            if result.stderr:
+                print_error(f"Error: {result.stderr}")
+            return False
+
+        # Wait a moment for daemon to initialize
+        import time
+        time.sleep(2)
+
+        # Verify daemon actually started by checking status
+        return is_daemon_running()
+
+    except subprocess.TimeoutExpired:
+        # Timeout is expected if daemon doesn't properly fork
+        # Check if daemon is running anyway
+        import time
+        time.sleep(2)
+        if is_daemon_running():
+            return True
+        else:
+            print_error("Daemon start timed out and daemon is not running")
+            return False
+    except FileNotFoundError:
+        print_error("pp_assist command not found")
+        return False
+    except Exception as e:
         print_error(f"Failed to start daemon: {e}")
         return False
 

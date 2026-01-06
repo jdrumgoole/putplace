@@ -83,56 +83,80 @@ class TestFileOperations:
 
     async def test_upsert_file_new(self, test_db: Database):
         """Test inserting a new file."""
-        file_id = await test_db.upsert_file(
+        await test_db.upsert_file(
             filepath="/var/log/test.log",
-            sha256="a" * 64,
             file_size=1024,
+            file_mtime=1234567890.0,
             file_mode=0o644,
+            sha256="a" * 64,
         )
-        assert file_id > 0
+
+        # Verify file was inserted
+        file = await test_db.get_file("/var/log/test.log")
+        assert file is not None
+        assert file["filepath"] == "/var/log/test.log"
 
     async def test_upsert_file_update(self, test_db: Database):
         """Test updating an existing file."""
-        file_id1 = await test_db.upsert_file(
+        # Insert initial file
+        await test_db.upsert_file(
             filepath="/var/log/test.log",
-            sha256="a" * 64,
             file_size=1024,
+            file_mtime=1234567890.0,
+            sha256="a" * 64,
         )
-        file_id2 = await test_db.upsert_file(
+
+        # Update the file
+        await test_db.upsert_file(
             filepath="/var/log/test.log",
-            sha256="b" * 64,
             file_size=2048,
+            file_mtime=1234567900.0,
+            sha256="b" * 64,
         )
 
-        assert file_id1 == file_id2
+        # Verify file was updated
+        file = await test_db.get_file("/var/log/test.log")
+        assert file["sha256"] == "b" * 64
+        assert file["file_size"] == 2048
 
-        file = await test_db.get_file(file_id1)
-        assert file.sha256 == "b" * 64
-        assert file.file_size == 2048
+    async def test_get_file(self, test_db: Database):
+        """Test getting a single file by filepath."""
+        # Insert a file
+        await test_db.upsert_file(
+            filepath="/var/log/a.log",
+            file_size=100,
+            file_mtime=1234567890.0,
+            sha256="a" * 64,
+        )
 
-    async def test_get_files(self, test_db: Database):
-        """Test getting files with filters."""
-        await test_db.upsert_file("/var/log/a.log", "a" * 64, 100)
-        await test_db.upsert_file("/var/log/b.log", "b" * 64, 200)
-        await test_db.upsert_file("/tmp/c.log", "c" * 64, 300)
+        # Get the file
+        file = await test_db.get_file("/var/log/a.log")
+        assert file is not None
+        assert file["filepath"] == "/var/log/a.log"
+        assert file["sha256"] == "a" * 64
+        assert file["file_size"] == 100
 
-        # Get all files
-        files, total = await test_db.get_files()
-        assert total == 3
-
-        # Get files with path prefix
-        files, total = await test_db.get_files(path_prefix="/var/log")
-        assert total == 2
-
-        # Get file by SHA256
-        files, total = await test_db.get_files(sha256="a" * 64)
-        assert total == 1
+        # Get non-existent file
+        file = await test_db.get_file("/var/log/nonexistent.log")
+        assert file is None
 
     async def test_get_file_stats(self, test_db: Database):
         """Test getting file statistics."""
         path_id = await test_db.add_path("/var/log")
-        await test_db.upsert_file("/var/log/a.log", "a" * 64, 100)
-        await test_db.upsert_file("/var/log/b.log", "b" * 64, 200)
+
+        # Insert files
+        await test_db.upsert_file(
+            filepath="/var/log/a.log",
+            file_size=100,
+            file_mtime=1234567890.0,
+            sha256="a" * 64,
+        )
+        await test_db.upsert_file(
+            filepath="/var/log/b.log",
+            file_size=200,
+            file_mtime=1234567890.0,
+            sha256="b" * 64,
+        )
 
         stats = await test_db.get_file_stats()
         assert stats.total_files == 2

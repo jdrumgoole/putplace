@@ -30,6 +30,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
+from dotenv import load_dotenv
 from pymongo import AsyncMongoClient
 from pymongo.errors import ConnectionFailure, DuplicateKeyError, ServerSelectionTimeoutError
 from rich.console import Console
@@ -45,6 +46,9 @@ else:
     except ImportError:
         tomllib = None  # type: ignore
 
+# Load environment variables from .env file if it exists
+# This allows using .env for local development configuration
+load_dotenv()
 
 DEFAULT_MONGODB_URL = "mongodb://localhost:27017"
 DEFAULT_DATABASE = "putplace"
@@ -1105,6 +1109,12 @@ async def main() -> int:
             args.mongodb_url = config["mongodb_url"]
         if not args.database and "database" in config:
             args.database = config["database"]
+
+    # Check environment variables (from .env or shell)
+    if not args.mongodb_url:
+        args.mongodb_url = os.getenv("MONGODB_URL")
+    if not args.database:
+        args.database = os.getenv("MONGODB_DATABASE")
 
     # Apply final defaults if still not set
     if not args.mongodb_url:

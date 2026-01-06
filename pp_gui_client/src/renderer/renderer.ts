@@ -127,6 +127,7 @@ interface PPassistConfigResult {
         parallel_uploads: number;
         retry_attempts: number;
         retry_delay_seconds: number;
+        timeout_seconds?: number;
       };
       sha256: {
         chunk_size: number;
@@ -164,6 +165,7 @@ interface ElectronAPI {
 
   // PPassist Daemon API
   ppassistCheck: (daemonUrl?: string) => Promise<PPassistCheckResult>;
+  ppassistStart: () => Promise<{success: boolean; message?: string; version?: string}>;
   ppassistStatus: (daemonUrl?: string) => Promise<PPassistStatusResult>;
   ppassistFileStats: (daemonUrl?: string) => Promise<any>;
   ppassistSha256Status: (daemonUrl?: string) => Promise<PPassistSha256StatusResult>;
@@ -176,12 +178,13 @@ interface ElectronAPI {
   ppassistListExcludes: (daemonUrl?: string) => Promise<any>;
   ppassistAddExclude: (pattern: string, daemonUrl?: string) => Promise<any>;
   ppassistDeleteExclude: (excludeId: number, daemonUrl?: string) => Promise<any>;
-  ppassistTriggerUploads: (uploadContent: boolean, pathPrefix?: string, daemonUrl?: string) => Promise<any>;
+  ppassistTriggerUploads: (uploadContent: boolean, pathPrefix?: string, limit?: number, daemonUrl?: string) => Promise<any>;
   ppassistAddServer: (name: string, url: string, username: string, password: string, daemonUrl?: string) => Promise<any>;
   ppassistListServers: (daemonUrl?: string) => Promise<any>;
   ppassistGetActivity: (limit?: number, sinceId?: number, eventType?: string, daemonUrl?: string) => Promise<PPassistActivityResult>;
   ppassistGetConfig: (daemonUrl?: string) => Promise<PPassistConfigResult>;
   ppassistSaveConfig: (config: any, daemonUrl?: string) => Promise<PPassistSaveConfigResult>;
+  ppassistGetFileByPath: (filePath: string, daemonUrl?: string) => Promise<any>;
 }
 
 interface UploadHistoryItem {
@@ -210,6 +213,12 @@ let daemonConnected = false;
 let daemonVersion: string | null = null;
 let registeredPathId: number | null = null;
 let statusRefreshInterval: ReturnType<typeof setInterval> | null = null;
+let daemonReconnectInterval: ReturnType<typeof setInterval> | null = null;
+let daemonStartAttempted = false;
+
+// Configuration
+const DAEMON_RECONNECT_INTERVAL_MS = 10000; // 10 seconds - configurable
+const STATUS_REFRESH_INTERVAL_MS = 2000; // 2 seconds
 
 // DOM elements
 const authSection = document.getElementById('auth-section') as HTMLElement;
@@ -278,6 +287,7 @@ const configRemotePasswordInput = document.getElementById('config-remote-passwor
 const configUploaderParallelInput = document.getElementById('config-uploader-parallel-input') as HTMLInputElement;
 const configUploaderRetryInput = document.getElementById('config-uploader-retry-input') as HTMLInputElement;
 const configUploaderRetryDelayInput = document.getElementById('config-uploader-retry-delay-input') as HTMLInputElement;
+const configUploaderTimeoutInput = document.getElementById('config-uploader-timeout-input') as HTMLInputElement;
 const configDatabasePathInput = document.getElementById('config-database-path-input') as HTMLInputElement;
 const configWatcherEnabledInput = document.getElementById('config-watcher-enabled-input') as HTMLInputElement;
 const configWatcherDebounceInput = document.getElementById('config-watcher-debounce-input') as HTMLInputElement;
@@ -347,16 +357,56 @@ async function checkDaemonConnection(): Promise<boolean> {
       log(`Connected to ppassist daemon v${daemonVersion}`, 'success');
       // Sync exclude patterns with daemon
       await syncExcludePatterns();
+      // Clear reconnect interval if it exists
+      if (daemonReconnectInterval) {
+        clearInterval(daemonReconnectInterval);
+        daemonReconnectInterval = null;
+      }
+      return true;
     } else {
-      log('PPassist daemon not running. Start it with: ppassist start', 'warning');
-    }
+      // Daemon not running - try to start it (first time only)
+      if (!daemonStartAttempted) {
+        daemonStartAttempted = true;
+        log('PPassist daemon not running. Attempting to start...', 'info');
 
-    return daemonConnected;
+        try {
+          const startResult = await electronAPI.ppassistStart();
+          if (startResult.success) {
+            log(`Daemon started successfully (v${startResult.version})`, 'success');
+            // Recheck connection
+            return await checkDaemonConnection();
+          } else {
+            log(`Failed to start daemon: ${startResult.message}`, 'warning');
+          }
+        } catch (startError) {
+          log('Could not start daemon. Please start it manually with: pp_assist start', 'warning');
+        }
+      }
+
+      // Set up auto-reconnect if not already running
+      if (!daemonReconnectInterval) {
+        log(`Will retry connection every ${DAEMON_RECONNECT_INTERVAL_MS / 1000} seconds...`, 'info');
+        daemonReconnectInterval = setInterval(async () => {
+          log('Attempting to reconnect to daemon...', 'info');
+          await checkDaemonConnection();
+        }, DAEMON_RECONNECT_INTERVAL_MS);
+      }
+
+      return false;
+    }
   } catch (error) {
     daemonConnected = false;
     daemonVersion = null;
     updateDaemonStatus();
     log('Failed to connect to ppassist daemon', 'error');
+
+    // Set up auto-reconnect
+    if (!daemonReconnectInterval) {
+      daemonReconnectInterval = setInterval(async () => {
+        await checkDaemonConnection();
+      }, DAEMON_RECONNECT_INTERVAL_MS);
+    }
+
     return false;
   }
 }
@@ -399,12 +449,12 @@ function startStatusRefresh() {
     clearInterval(statusRefreshInterval);
   }
 
-  // Refresh every 2 seconds
+  // Refresh at configured interval
   statusRefreshInterval = setInterval(async () => {
     if (daemonConnected) {
       await refreshDaemonStatus();
     }
-  }, 2000);
+  }, STATUS_REFRESH_INTERVAL_MS);
 }
 
 // Refresh daemon status display
@@ -529,6 +579,7 @@ async function openConfigModal() {
     configUploaderParallelInput.value = config.uploader.parallel_uploads.toString();
     configUploaderRetryInput.value = config.uploader.retry_attempts.toString();
     configUploaderRetryDelayInput.value = config.uploader.retry_delay_seconds.toString();
+    configUploaderTimeoutInput.value = (config.uploader.timeout_seconds || 600).toString();
 
     // Database settings
     configDatabasePathInput.value = config.database.path;
@@ -541,6 +592,9 @@ async function openConfigModal() {
     const systemInfo = await electronAPI.getSystemInfo();
     configHostnameInput.value = systemInfo.hostname;
     configIpAddressInput.value = systemInfo.ipAddress;
+
+    // Render exclude patterns (stored in localStorage)
+    renderPatterns();
 
     // Show modal
     configModal.style.display = 'flex';
@@ -579,6 +633,7 @@ async function saveConfig() {
         parallel_uploads: parseInt(configUploaderParallelInput.value),
         retry_attempts: parseInt(configUploaderRetryInput.value),
         retry_delay_seconds: parseInt(configUploaderRetryDelayInput.value),
+        timeout_seconds: parseInt(configUploaderTimeoutInput.value),
       },
     };
 
@@ -592,7 +647,6 @@ async function saveConfig() {
 
     if (result.success && result.data) {
       log(`Configuration saved to ${result.data.config_file}`, 'success');
-      log(result.data.message, 'info');
       closeConfigModal();
       // Refresh daemon status to show updated config
       await refreshDaemonStatus();
@@ -1084,6 +1138,9 @@ function createProgressElement(filePath: string, fileName: string): HTMLElement 
     <div class="col-size">
       <span class="file-size">0 B</span>
     </div>
+    <div class="col-timestamp">
+      <span class="file-timestamp">--</span>
+    </div>
     <div class="col-progress">
       <div class="progress-cell">
         <span class="file-percentage">0%</span>
@@ -1144,11 +1201,11 @@ function updateFileProgress(progress: UploadProgress) {
     historyItem.percentage = displayPercentage;
   }
 
-  // If complete, show completion briefly then remove
+  // If complete, mark as completed and keep in history
   // For 0-byte files, consider them complete immediately
   if (displayPercentage >= 100 || isZeroByteFile) {
     progressElement.classList.remove('in-progress');
-    progressElement.classList.add('completing');
+    progressElement.classList.add('completed');
 
     // Add checkmark icon to status column
     const statusCol = progressElement.querySelector('.col-status');
@@ -1164,16 +1221,44 @@ function updateFileProgress(progress: UploadProgress) {
       statusCol.appendChild(icon);
     }
 
-    // Remove from history
-    const historyIndex = uploadHistory.findIndex(h => h.filePath === progress.filePath);
-    if (historyIndex !== -1) {
-      uploadHistory.splice(historyIndex, 1);
+    // Query file size from daemon and update display
+    electronAPI.ppassistGetFileByPath(progress.filePath).then(result => {
+      if (result.success && result.data && result.data.file_size !== undefined) {
+        const sizeEl = progressElement.querySelector('.file-size') as HTMLSpanElement;
+        if (sizeEl) {
+          sizeEl.textContent = formatBytes(result.data.file_size);
+        }
+      }
+    }).catch(err => {
+      console.warn('Failed to get file size:', err);
+    });
+
+    // Add completion timestamp
+    const timestampEl = progressElement.querySelector('.file-timestamp') as HTMLSpanElement;
+    if (timestampEl) {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('en-US', {
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
+      timestampEl.textContent = timeStr;
     }
 
-    // Remove after a short delay to show completion
-    setTimeout(() => {
-      removeFileProgress(progress.filePath);
-    }, 500);
+    // Hide the progress bar once upload is complete
+    const progressCell = progressElement.querySelector('.col-progress') as HTMLElement;
+    if (progressCell) {
+      progressCell.style.display = 'none';
+    }
+
+    // Mark as completed in history (keep it visible)
+    const historyItem = uploadHistory.find(h => h.filePath === progress.filePath);
+    if (historyItem) {
+      historyItem.status = 'completed';
+      historyItem.percentage = 100;
+    }
+
+    // Do NOT remove - keep it in the history list
   }
 }
 
@@ -1192,10 +1277,10 @@ function clearAllFileProgress() {
   activeUploads.clear();
 }
 
-// Clear failed uploads from history (keep in-progress)
+// Clear completed and failed uploads from history (keep in-progress)
 function clearCompletedHistory() {
-  // Remove only failed items (keep in-progress, completed are auto-removed)
-  const toRemove = uploadHistory.filter(h => h.status === 'failed');
+  // Remove completed and failed items (keep in-progress)
+  const toRemove = uploadHistory.filter(h => h.status === 'completed' || h.status === 'failed');
 
   toRemove.forEach(item => {
     const element = activeUploads.get(item.filePath);
@@ -1210,7 +1295,7 @@ function clearCompletedHistory() {
     ...uploadHistory.filter(h => h.status === 'in-progress')
   );
 
-  log('Failed uploads cleared', 'info');
+  log('Upload history cleared', 'info');
 }
 
 // Mark an upload as failed and add to history
@@ -1355,7 +1440,8 @@ async function startUpload() {
   // Background SHA256 processor is disabled for immediate feedback
   // Files will be processed inline during upload
   log(`Triggering ${uploadContent ? 'full content' : 'metadata'} uploads with inline SHA256 calculation...`, 'info');
-  const uploadResult = await electronAPI.ppassistTriggerUploads(uploadContent, selectedPath);
+  // Set limit to 1000 to support large bulk uploads
+  const uploadResult = await electronAPI.ppassistTriggerUploads(uploadContent, selectedPath, 1000);
 
   if (!uploadResult.success) {
     log(`Upload trigger failed: ${uploadResult.error}`, 'error');
@@ -1538,9 +1624,10 @@ function resetUploadState() {
   stopBtn.disabled = true;
   progressText.textContent = 'Ready';
   progressFill.style.width = '0%';
-  // Clean up progress listener and clear all file progress bars
+  // Clean up progress listener
   electronAPI.removeUploadProgressListener();
-  clearAllFileProgress();
+  // Note: Do NOT clear file progress bars here - keep upload history visible
+  // Users can manually clear using the "Clear History" button
 }
 
 // Google OAuth handling

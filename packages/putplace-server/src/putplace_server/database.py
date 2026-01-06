@@ -24,6 +24,7 @@ class MongoDB:
     collection: Optional[AsyncCollection] = None
     users_collection: Optional[AsyncCollection] = None
     pending_users_collection: Optional[AsyncCollection] = None
+    upload_sessions_collection: Optional[AsyncCollection] = None
 
     async def connect(self) -> None:
         """Connect to MongoDB.
@@ -48,6 +49,7 @@ class MongoDB:
             self.collection = db[settings.mongodb_collection]
             self.users_collection = db["users"]
             self.pending_users_collection = db["pending_users"]
+            self.upload_sessions_collection = db["upload_sessions"]
 
             # Create indexes on sha256 for efficient lookups
             await self.collection.create_index("sha256")
@@ -70,6 +72,12 @@ class MongoDB:
             await self.pending_users_collection.create_index("email", unique=True)
             await self.pending_users_collection.create_index("expires_at")  # For cleanup queries
             logger.info("Pending users indexes created successfully")
+
+            # Create indexes for upload_sessions collection
+            await self.upload_sessions_collection.create_index("upload_id", unique=True)
+            await self.upload_sessions_collection.create_index("expires_at")  # For cleanup queries
+            await self.upload_sessions_collection.create_index("status")
+            logger.info("Upload sessions indexes created successfully")
 
         except ServerSelectionTimeoutError as e:
             logger.error(f"MongoDB connection timeout: {e}")
@@ -567,6 +575,235 @@ class MongoDB:
             "expires_at": {"$lt": datetime.utcnow()}
         })
         return result.deleted_count
+
+    # Chunked upload session methods
+
+    async def create_upload_session(
+        self,
+        upload_id: str,
+        filepath: str,
+        hostname: str,
+        sha256: str,
+        file_size: int,
+        chunk_size: int,
+        total_chunks: int,
+        storage_backend: str,
+        user_id: str
+    ) -> str:
+        """Create a new upload session for chunked uploads.
+
+        Args:
+            upload_id: Unique upload identifier (UUID)
+            filepath: Full path to the file
+            hostname: Hostname where file is located
+            sha256: SHA256 hash of the complete file
+            file_size: Total file size in bytes
+            chunk_size: Size of each chunk in bytes
+            total_chunks: Total number of chunks
+            storage_backend: Storage backend type ('local' or 's3')
+            user_id: User ID who initiated the upload
+
+        Returns:
+            Inserted upload session document ID
+
+        Raises:
+            RuntimeError: If database not connected
+            DuplicateKeyError: If upload_id already exists
+        """
+        if self.upload_sessions_collection is None:
+            raise RuntimeError("Database not connected")
+
+        from datetime import datetime, timedelta
+
+        session_data = {
+            "upload_id": upload_id,
+            "filepath": filepath,
+            "hostname": hostname,
+            "sha256": sha256,
+            "file_size": file_size,
+            "chunk_size": chunk_size,
+            "total_chunks": total_chunks,
+            "uploaded_chunks": [],
+            "status": "initiated",  # initiated, uploading, completed, aborted, expired
+            "storage_backend": storage_backend,
+            "user_id": user_id,
+            "created_at": datetime.utcnow(),
+            "expires_at": datetime.utcnow() + timedelta(hours=1),
+            "completed_at": None,
+        }
+
+        try:
+            result = await self.upload_sessions_collection.insert_one(session_data)
+            return str(result.inserted_id)
+        except DuplicateKeyError as e:
+            if "upload_id" in str(e):
+                raise DuplicateKeyError("Upload ID already exists")
+            raise
+
+    async def get_upload_session(self, upload_id: str) -> Optional[dict]:
+        """Get upload session by upload_id.
+
+        Args:
+            upload_id: Upload identifier
+
+        Returns:
+            Upload session document or None if not found
+        """
+        if self.upload_sessions_collection is None:
+            raise RuntimeError("Database not connected")
+
+        return await self.upload_sessions_collection.find_one({"upload_id": upload_id})
+
+    async def add_uploaded_chunk(
+        self,
+        upload_id: str,
+        chunk_num: int,
+        etag: str
+    ) -> bool:
+        """Add an uploaded chunk to the session.
+
+        Args:
+            upload_id: Upload identifier
+            chunk_num: Chunk number (0-indexed)
+            etag: Chunk hash/ETag
+
+        Returns:
+            True if updated successfully, False if not found
+        """
+        if self.upload_sessions_collection is None:
+            raise RuntimeError("Database not connected")
+
+        from datetime import datetime
+
+        result = await self.upload_sessions_collection.update_one(
+            {"upload_id": upload_id},
+            {
+                "$push": {
+                    "uploaded_chunks": {
+                        "chunk_num": chunk_num,
+                        "etag": etag,
+                        "uploaded_at": datetime.utcnow(),
+                    }
+                },
+                "$set": {
+                    "status": "uploading",
+                }
+            }
+        )
+        return result.modified_count > 0
+
+    async def complete_upload_session(self, upload_id: str) -> bool:
+        """Mark upload session as completed.
+
+        Args:
+            upload_id: Upload identifier
+
+        Returns:
+            True if updated successfully, False if not found
+        """
+        if self.upload_sessions_collection is None:
+            raise RuntimeError("Database not connected")
+
+        from datetime import datetime
+
+        result = await self.upload_sessions_collection.update_one(
+            {"upload_id": upload_id},
+            {
+                "$set": {
+                    "status": "completed",
+                    "completed_at": datetime.utcnow(),
+                }
+            }
+        )
+        return result.modified_count > 0
+
+    async def abort_upload_session(self, upload_id: str) -> bool:
+        """Mark upload session as aborted.
+
+        Args:
+            upload_id: Upload identifier
+
+        Returns:
+            True if updated successfully, False if not found
+        """
+        if self.upload_sessions_collection is None:
+            raise RuntimeError("Database not connected")
+
+        result = await self.upload_sessions_collection.update_one(
+            {"upload_id": upload_id},
+            {
+                "$set": {
+                    "status": "aborted",
+                }
+            }
+        )
+        return result.modified_count > 0
+
+    async def delete_upload_session(self, upload_id: str) -> bool:
+        """Delete an upload session.
+
+        Args:
+            upload_id: Upload identifier
+
+        Returns:
+            True if deleted, False if not found
+        """
+        if self.upload_sessions_collection is None:
+            raise RuntimeError("Database not connected")
+
+        result = await self.upload_sessions_collection.delete_one({"upload_id": upload_id})
+        return result.deleted_count > 0
+
+    async def cleanup_expired_upload_sessions(self) -> int:
+        """Delete all expired upload sessions.
+
+        Returns:
+            Number of deleted sessions
+        """
+        if self.upload_sessions_collection is None:
+            raise RuntimeError("Database not connected")
+
+        from datetime import datetime
+
+        result = await self.upload_sessions_collection.delete_many({
+            "expires_at": {"$lt": datetime.utcnow()},
+            "status": {"$ne": "completed"}
+        })
+        return result.deleted_count
+
+    # File deletion methods
+
+    async def mark_file_deleted(
+        self,
+        sha256: str,
+        hostname: str,
+        filepath: str,
+        deleted_at
+    ) -> bool:
+        """Mark a file as deleted (soft delete).
+
+        Args:
+            sha256: SHA256 hash of the file
+            hostname: Hostname where file was located
+            filepath: Full path to the file
+            deleted_at: Deletion timestamp
+
+        Returns:
+            True if updated successfully, False if not found
+        """
+        if self.collection is None:
+            raise RuntimeError("Database not connected")
+
+        result = await self.collection.update_one(
+            {"sha256": sha256, "hostname": hostname, "filepath": filepath},
+            {
+                "$set": {
+                    "status": "deleted",
+                    "deleted_at": deleted_at,
+                }
+            }
+        )
+        return result.modified_count > 0
 
 
 # Global database instance

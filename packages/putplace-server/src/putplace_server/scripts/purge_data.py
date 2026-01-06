@@ -246,33 +246,48 @@ async def purge_s3_files(
 def purge_ppassist_database(dry_run: bool = False) -> bool:
     """Purge the ppassist SQLite database.
 
+    This now uses the proper pp_assist_purge script which handles:
+    - Stopping the pp_assist daemon if running
+    - Backing up the database
+    - Deleting the database
+    - Restarting the daemon if it was running
+
     Args:
         dry_run: If True, only show what would be deleted without deleting
 
     Returns:
         True if database was deleted (or would be in dry run), False otherwise
     """
-    db_path = Path.home() / ".local/share/putplace/assist.db"
+    import subprocess
 
     try:
-        if not db_path.exists():
-            print_info("ppassist database does not exist (already clean)")
-            return False
-
+        # Use pp_assist_purge script which properly stops/restarts daemon
+        cmd = ["pp_assist_purge", "--force"]
         if dry_run:
-            print_info(f"[DRY RUN] Would delete ppassist database: {db_path}")
+            cmd.append("--dry-run")
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+
+        if result.returncode == 0:
+            # Script output is already nicely formatted, don't duplicate
             return True
         else:
-            # Backup the database first
-            backup_path = db_path.with_suffix(".db.backup")
-            shutil.copy2(db_path, backup_path)
-            print_info(f"Backed up ppassist database to: {backup_path}")
+            print_warning(f"pp_assist_purge exited with code {result.returncode}")
+            if result.stderr:
+                print_error(f"Error: {result.stderr}")
+            return False
 
-            # Delete the database
-            db_path.unlink()
-            print_success(f"Deleted ppassist database: {db_path}")
-            return True
-
+    except subprocess.TimeoutExpired:
+        print_error("pp_assist_purge timed out after 30 seconds")
+        return False
+    except FileNotFoundError:
+        print_warning("pp_assist_purge command not found - ppassist may not be installed")
+        return False
     except Exception as e:
         print_warning(f"Failed to purge ppassist database: {e}")
         return False

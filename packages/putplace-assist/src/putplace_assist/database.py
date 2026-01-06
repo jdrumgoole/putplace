@@ -109,6 +109,68 @@ CREATE TABLE IF NOT EXISTS activity_log (
 
 CREATE INDEX IF NOT EXISTS idx_activity_type ON activity_log(event_type);
 CREATE INDEX IF NOT EXISTS idx_activity_time ON activity_log(created_at DESC);
+
+-- Queue 1: Pending Checksum (Scanner -> Checksum Calculator)
+CREATE TABLE IF NOT EXISTS queue_pending_checksum (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    filepath TEXT NOT NULL UNIQUE,
+    reason TEXT NOT NULL,  -- 'new' or 'modified'
+    queued_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    retry_count INTEGER DEFAULT 0,
+    next_retry_at TEXT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_checksum_queued ON queue_pending_checksum(queued_at ASC);
+CREATE INDEX IF NOT EXISTS idx_checksum_retry ON queue_pending_checksum(next_retry_at);
+
+-- Queue 2: Pending Upload (Checksum Calculator -> Uploader)
+CREATE TABLE IF NOT EXISTS queue_pending_upload (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    filepath TEXT NOT NULL UNIQUE,
+    sha256 TEXT NOT NULL,
+    queued_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    retry_count INTEGER DEFAULT 0,
+    next_retry_at TEXT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_upload_queued ON queue_pending_upload(queued_at ASC);
+CREATE INDEX IF NOT EXISTS idx_upload_retry ON queue_pending_upload(next_retry_at);
+
+-- Queue 3: Pending Deletion (Scanner -> Uploader)
+CREATE TABLE IF NOT EXISTS queue_pending_deletion (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    filepath TEXT NOT NULL UNIQUE,
+    sha256 TEXT,
+    deleted_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    retry_count INTEGER DEFAULT 0,
+    next_retry_at TEXT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_deletion_deleted ON queue_pending_deletion(deleted_at ASC);
+CREATE INDEX IF NOT EXISTS idx_deletion_retry ON queue_pending_deletion(next_retry_at);
+
+-- Files table for tracking file state
+CREATE TABLE IF NOT EXISTS files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    filepath TEXT UNIQUE NOT NULL,
+    file_size INTEGER NOT NULL,
+    file_mode INTEGER,
+    file_uid INTEGER,
+    file_gid INTEGER,
+    file_mtime REAL NOT NULL,
+    file_atime REAL,
+    file_ctime REAL,
+    sha256 TEXT,
+    status TEXT DEFAULT 'discovered',  -- 'discovered', 'ready_for_upload', 'completed', 'unchanged'
+    discovered_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    last_checked_at TEXT,
+    uploaded_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_files_path ON files(filepath);
+CREATE INDEX IF NOT EXISTS idx_files_sha256 ON files(sha256);
+CREATE INDEX IF NOT EXISTS idx_files_status ON files(status);
+CREATE INDEX IF NOT EXISTS idx_files_mtime ON files(file_mtime);
 """
 
 
@@ -669,6 +731,56 @@ class Database:
             processed_at=datetime.fromisoformat(row["processed_at"]),
         )
 
+    async def get_sha256_by_id(self, entry_id: int) -> Optional[FileLogSha256Entry]:
+        """Get an entry by its ID.
+
+        Args:
+            entry_id: The filelog_sha256 entry ID
+
+        Returns:
+            The entry or None
+        """
+        cursor = await self.connection.execute(
+            "SELECT * FROM filelog_sha256 WHERE id = ? LIMIT 1",
+            (entry_id,),
+        )
+        row = await cursor.fetchone()
+        if not row:
+            return None
+
+        return FileLogSha256Entry(
+            id=row["id"],
+            filepath=row["filepath"],
+            ctime=row["ctime"],
+            mtime=row["mtime"],
+            atime=row["atime"],
+            file_size=row["file_size"],
+            permissions=row["permissions"],
+            uid=row["uid"],
+            gid=row["gid"],
+            sha256=row["sha256"],
+            upload_status=row["upload_status"],
+            source_table=row["source_table"],
+            source_id=row["source_id"],
+            processed_at=datetime.fromisoformat(row["processed_at"]),
+        )
+
+    async def delete_sha256_entry(self, entry_id: int) -> bool:
+        """Delete an entry from filelog_sha256.
+
+        Args:
+            entry_id: The filelog_sha256 entry ID
+
+        Returns:
+            True if deleted, False if not found
+        """
+        cursor = await self.connection.execute(
+            "DELETE FROM filelog_sha256 WHERE id = ?",
+            (entry_id,),
+        )
+        await self.connection.commit()
+        return cursor.rowcount > 0
+
     # ===== Monthly Table Management =====
 
     async def get_filelog_tables(self) -> list[str]:
@@ -892,57 +1004,362 @@ class Database:
     # ===== Statistics =====
 
     async def get_file_stats(self) -> FileStats:
-        """Get file statistics."""
+        """Get file statistics from the new files table (3-component architecture)."""
         # Count paths
         cursor = await self.connection.execute(
             "SELECT COUNT(*) FROM registered_paths WHERE enabled = 1"
         )
         paths_watched = (await cursor.fetchone())[0]
 
-        # Count files in sha256 table
+        # Count files in the files table
         cursor = await self.connection.execute(
-            "SELECT COUNT(*), COALESCE(SUM(file_size), 0) FROM filelog_sha256"
+            "SELECT COUNT(*), COALESCE(SUM(file_size), 0) FROM files"
         )
         row = await cursor.fetchone()
         total_files = row[0]
         total_size = row[1]
 
-        # Count pending (unprocessed filelog entries)
-        pending = 0
-        tables = await self.get_filelog_tables()
-        for table_name in tables:
-            cursor = await self.connection.execute(
-                f"""
-                SELECT COUNT(*) FROM {table_name} f
-                LEFT JOIN filelog_sha256 s
-                    ON s.source_table = ? AND s.source_id = f.id
-                WHERE s.id IS NULL
-                """,
-                (table_name,),
-            )
-            pending += (await cursor.fetchone())[0]
+        # Count pending SHA256 (files in checksum queue)
+        cursor = await self.connection.execute(
+            "SELECT COUNT(*) FROM queue_pending_checksum"
+        )
+        pending_sha256 = (await cursor.fetchone())[0]
 
-        # Count upload statuses
+        # Count pending uploads (files in upload queue)
+        cursor = await self.connection.execute(
+            "SELECT COUNT(*) FROM queue_pending_upload"
+        )
+        pending_uploads = (await cursor.fetchone())[0]
+
+        # Count completed uploads by status (from files table)
+        # Note: In the new architecture, we don't track 'meta' vs 'full' separately
+        # All uploads are full. We'll return 0 for meta_uploads and count
+        # files with status='completed' as full_uploads
         cursor = await self.connection.execute(
             """
-            SELECT
-                COALESCE(SUM(CASE WHEN upload_status IS NULL THEN 1 ELSE 0 END), 0) as pending,
-                COALESCE(SUM(CASE WHEN upload_status = 'meta' THEN 1 ELSE 0 END), 0) as meta,
-                COALESCE(SUM(CASE WHEN upload_status = 'full' THEN 1 ELSE 0 END), 0) as full
-            FROM filelog_sha256
+            SELECT COUNT(*) FROM files
+            WHERE status = 'completed'
             """
         )
-        upload_row = await cursor.fetchone()
+        full_uploads = (await cursor.fetchone())[0]
 
         return FileStats(
             total_files=total_files,
             total_size=total_size,
-            pending_sha256=pending,
-            pending_uploads=upload_row["pending"],
-            meta_uploads=upload_row["meta"],
-            full_uploads=upload_row["full"],
+            pending_sha256=pending_sha256,
+            pending_uploads=pending_uploads,
+            meta_uploads=0,  # Not tracked in new architecture
+            full_uploads=full_uploads,
             paths_watched=paths_watched,
         )
+
+    # ===== Queue Operations (3-Component Architecture) =====
+
+    async def enqueue_for_checksum(self, filepath: str, reason: str = "new") -> None:
+        """Add file to checksum queue.
+
+        Args:
+            filepath: Path to file
+            reason: Reason for queuing ('new' or 'modified')
+        """
+        await self.connection.execute(
+            """
+            INSERT OR IGNORE INTO queue_pending_checksum (filepath, reason)
+            VALUES (?, ?)
+            """,
+            (filepath, reason),
+        )
+        await self.connection.commit()
+
+    async def dequeue_for_checksum(self, limit: int = 1) -> list[dict]:
+        """Get next files from checksum queue (FIFO).
+
+        Args:
+            limit: Maximum number of items to dequeue
+
+        Returns:
+            List of queue entries
+        """
+        cursor = await self.connection.execute(
+            """
+            SELECT id, filepath, reason, queued_at, retry_count
+            FROM queue_pending_checksum
+            WHERE next_retry_at IS NULL OR next_retry_at <= datetime('now')
+            ORDER BY queued_at ASC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def remove_from_checksum_queue(self, filepath: str) -> None:
+        """Remove file from checksum queue.
+
+        Args:
+            filepath: Path to file
+        """
+        await self.connection.execute(
+            "DELETE FROM queue_pending_checksum WHERE filepath = ?", (filepath,)
+        )
+        await self.connection.commit()
+
+    async def enqueue_for_upload(self, filepath: str, sha256: str) -> None:
+        """Add file to upload queue.
+
+        Args:
+            filepath: Path to file
+            sha256: SHA256 hash of file
+        """
+        await self.connection.execute(
+            """
+            INSERT OR IGNORE INTO queue_pending_upload (filepath, sha256)
+            VALUES (?, ?)
+            """,
+            (filepath, sha256),
+        )
+        await self.connection.commit()
+
+    async def dequeue_for_upload(self, limit: int = 1) -> list[dict]:
+        """Get next files from upload queue (FIFO).
+
+        Args:
+            limit: Maximum number of items to dequeue
+
+        Returns:
+            List of queue entries
+        """
+        cursor = await self.connection.execute(
+            """
+            SELECT id, filepath, sha256, queued_at, retry_count
+            FROM queue_pending_upload
+            WHERE next_retry_at IS NULL OR next_retry_at <= datetime('now')
+            ORDER BY queued_at ASC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def remove_from_upload_queue(self, filepath: str) -> None:
+        """Remove file from upload queue.
+
+        Args:
+            filepath: Path to file
+        """
+        await self.connection.execute(
+            "DELETE FROM queue_pending_upload WHERE filepath = ?", (filepath,)
+        )
+        await self.connection.commit()
+
+    async def enqueue_for_deletion(self, filepath: str, sha256: Optional[str] = None) -> None:
+        """Add file to deletion queue.
+
+        Args:
+            filepath: Path to file
+            sha256: SHA256 hash of file (if known)
+        """
+        await self.connection.execute(
+            """
+            INSERT OR IGNORE INTO queue_pending_deletion (filepath, sha256)
+            VALUES (?, ?)
+            """,
+            (filepath, sha256),
+        )
+        await self.connection.commit()
+
+    async def dequeue_for_deletion(self, limit: int = 1) -> list[dict]:
+        """Get next files from deletion queue (FIFO).
+
+        Args:
+            limit: Maximum number of items to dequeue
+
+        Returns:
+            List of queue entries
+        """
+        cursor = await self.connection.execute(
+            """
+            SELECT id, filepath, sha256, deleted_at, retry_count
+            FROM queue_pending_deletion
+            WHERE next_retry_at IS NULL OR next_retry_at <= datetime('now')
+            ORDER BY deleted_at ASC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+    async def remove_from_deletion_queue(self, filepath: str) -> None:
+        """Remove file from deletion queue.
+
+        Args:
+            filepath: Path to file
+        """
+        await self.connection.execute(
+            "DELETE FROM queue_pending_deletion WHERE filepath = ?", (filepath,)
+        )
+        await self.connection.commit()
+
+    async def retry_queue_item(self, table_name: str, filepath: str, delay_seconds: int = 60) -> None:
+        """Mark queue item for retry after delay.
+
+        Args:
+            table_name: Name of queue table
+            filepath: Path to file
+            delay_seconds: Seconds to wait before retry
+        """
+        await self.connection.execute(
+            f"""
+            UPDATE {table_name}
+            SET retry_count = retry_count + 1,
+                next_retry_at = datetime('now', '+{delay_seconds} seconds')
+            WHERE filepath = ?
+            """,
+            (filepath,),
+        )
+        await self.connection.commit()
+
+    # ===== Files Table Operations =====
+
+    async def upsert_file(
+        self,
+        filepath: str,
+        file_size: int,
+        file_mtime: float,
+        file_mode: Optional[int] = None,
+        file_uid: Optional[int] = None,
+        file_gid: Optional[int] = None,
+        file_atime: Optional[float] = None,
+        file_ctime: Optional[float] = None,
+        sha256: Optional[str] = None,
+        status: str = "discovered",
+    ) -> None:
+        """Insert or update file in files table.
+
+        Args:
+            filepath: Path to file
+            file_size: Size in bytes
+            file_mtime: Modification time
+            file_mode: File mode/permissions
+            file_uid: User ID
+            file_gid: Group ID
+            file_atime: Access time
+            file_ctime: Creation time
+            sha256: SHA256 hash (if calculated)
+            status: File status
+        """
+        await self.connection.execute(
+            """
+            INSERT INTO files (
+                filepath, file_size, file_mtime, file_mode, file_uid, file_gid,
+                file_atime, file_ctime, sha256, status, last_checked_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+            ON CONFLICT(filepath) DO UPDATE SET
+                file_size = excluded.file_size,
+                file_mtime = excluded.file_mtime,
+                file_mode = excluded.file_mode,
+                file_uid = excluded.file_uid,
+                file_gid = excluded.file_gid,
+                file_atime = excluded.file_atime,
+                file_ctime = excluded.file_ctime,
+                sha256 = COALESCE(excluded.sha256, files.sha256),
+                status = excluded.status,
+                last_checked_at = datetime('now')
+            """,
+            (filepath, file_size, file_mtime, file_mode, file_uid, file_gid,
+             file_atime, file_ctime, sha256, status),
+        )
+        await self.connection.commit()
+
+    async def get_file(self, filepath: str) -> Optional[dict]:
+        """Get file from files table.
+
+        Args:
+            filepath: Path to file
+
+        Returns:
+            File record or None
+        """
+        cursor = await self.connection.execute(
+            "SELECT * FROM files WHERE filepath = ?", (filepath,)
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+    async def update_file_sha256(self, filepath: str, sha256: str) -> None:
+        """Update file SHA256 and mark as ready for upload.
+
+        Args:
+            filepath: Path to file
+            sha256: SHA256 hash
+        """
+        await self.connection.execute(
+            """
+            UPDATE files
+            SET sha256 = ?, status = 'ready_for_upload', last_checked_at = datetime('now')
+            WHERE filepath = ?
+            """,
+            (sha256, filepath),
+        )
+        await self.connection.commit()
+
+    async def mark_file_uploaded(self, filepath: str) -> None:
+        """Mark file as uploaded.
+
+        Args:
+            filepath: Path to file
+        """
+        await self.connection.execute(
+            """
+            UPDATE files
+            SET status = 'completed', uploaded_at = datetime('now')
+            WHERE filepath = ?
+            """,
+            (filepath,),
+        )
+        await self.connection.commit()
+
+    async def delete_file(self, filepath: str) -> None:
+        """Delete file from files table.
+
+        Args:
+            filepath: Path to file
+        """
+        await self.connection.execute(
+            "DELETE FROM files WHERE filepath = ?", (filepath,)
+        )
+        await self.connection.commit()
+
+    async def get_queue_counts(self) -> dict:
+        """Get count of items in each queue.
+
+        Returns:
+            Dictionary with queue counts
+        """
+        counts = {}
+
+        # Checksum queue
+        cursor = await self.connection.execute(
+            "SELECT COUNT(*) FROM queue_pending_checksum"
+        )
+        counts["pending_checksum"] = (await cursor.fetchone())[0]
+
+        # Upload queue
+        cursor = await self.connection.execute(
+            "SELECT COUNT(*) FROM queue_pending_upload"
+        )
+        counts["pending_upload"] = (await cursor.fetchone())[0]
+
+        # Deletion queue
+        cursor = await self.connection.execute(
+            "SELECT COUNT(*) FROM queue_pending_deletion"
+        )
+        counts["pending_deletion"] = (await cursor.fetchone())[0]
+
+        return counts
 
 
 # Global database instance

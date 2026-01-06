@@ -23,6 +23,7 @@ class EventType(str, Enum):
     FILE_DISCOVERED = "file_discovered"
     FILE_CHANGED = "file_changed"
     FILE_DELETED = "file_deleted"
+    FILE_MODIFIED = "file_modified"
     SHA256_STARTED = "sha256_started"
     SHA256_COMPLETE = "sha256_complete"
     SHA256_FAILED = "sha256_failed"

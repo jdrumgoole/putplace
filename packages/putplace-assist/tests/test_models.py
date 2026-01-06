@@ -8,7 +8,6 @@ from pydantic import ValidationError
 from putplace_assist.models import (
     EventType,
     ExcludeCreate,
-    FileInfo,
     FileStats,
     PathCreate,
     PathResponse,
@@ -63,32 +62,21 @@ class TestExcludeModels:
 class TestFileModels:
     """Tests for file-related models."""
 
-    def test_file_info(self):
-        """Test file info model."""
-        now = datetime.utcnow()
-        file = FileInfo(
-            id=1,
-            filepath="/var/log/test.log",
-            sha256="a" * 64,
-            file_size=1024,
-            first_seen_at=now,
-        )
-        assert file.id == 1
-        assert file.filepath == "/var/log/test.log"
-        assert file.file_size == 1024
-
     def test_file_stats(self):
         """Test file stats model."""
         stats = FileStats(
             total_files=100,
             total_size=1024 * 1024,
+            pending_sha256=10,
             pending_uploads=10,
-            successful_uploads=80,
-            failed_uploads=5,
+            meta_uploads=30,
+            full_uploads=50,
             paths_watched=3,
         )
         assert stats.total_files == 100
         assert stats.paths_watched == 3
+        assert stats.pending_sha256 == 10
+        assert stats.pending_uploads == 10
 
 
 class TestServerModels:

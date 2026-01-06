@@ -5,28 +5,13 @@ import logging
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from ..database import MongoDB
+from ..dependencies import get_db, get_storage, get_current_user
 from ..models import FileMetadata, FileMetadataResponse, FileMetadataUploadResponse
 from ..storage import StorageBackend
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["files"])
-
-
-# These will be injected by main.py
-def get_db() -> MongoDB:
-    """Get database instance - injected by main.py."""
-    raise NotImplementedError("get_db must be overridden")
-
-
-def get_storage() -> StorageBackend:
-    """Get storage backend - injected by main.py."""
-    raise NotImplementedError("get_storage must be overridden")
-
-
-async def get_current_user() -> dict:
-    """Get current user - injected by main.py."""
-    raise NotImplementedError("get_current_user must be overridden")
 
 
 @router.post(

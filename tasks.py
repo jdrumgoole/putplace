@@ -333,94 +333,95 @@ def docker_start(c):
 
 
 # MongoDB management tasks
-@task(pre=[docker_start])
-def mongo_start(c, name="mongodb", port=27017):
-    """Start MongoDB in Docker.
-
-    Automatically starts Docker if not running.
+@task
+def mongo_start(c, dbpath=None, port=27017):
+    """Start local MongoDB.
 
     Args:
-        name: Container name (default: mongodb)
-        port: Port to expose (default: 27017)
+        dbpath: Database path (default: ~/.mongodb/data)
+        port: Port to listen on (default: 27017)
     """
-    # Check if container exists
-    result = c.run(f"docker ps -a -q -f name=^{name}$", hide=True, warn=True)
+    import os
+    from pathlib import Path
 
+    # Set default dbpath
+    if dbpath is None:
+        dbpath = os.path.expanduser("~/.mongodb/data")
+
+    # Check if MongoDB is already running
+    result = c.run("pgrep -f mongod", hide=True, warn=True)
     if result.stdout.strip():
-        # Container exists, check if running
-        running = c.run(f"docker ps -q -f name=^{name}$", hide=True, warn=True)
-        if running.stdout.strip():
-            print(f"✓ MongoDB container '{name}' is already running")
-        else:
-            print(f"Starting existing MongoDB container '{name}'...")
-            c.run(f"docker start {name}")
-            print(f"✓ MongoDB started on port {port}")
-    else:
-        # Create and start new container
-        print(f"Creating MongoDB container '{name}'...")
-        c.run(f"docker run -d -p {port}:27017 --name {name} mongo:latest")
+        print("✓ MongoDB is already running")
+        return
+
+    # Create data directory if it doesn't exist
+    Path(dbpath).mkdir(parents=True, exist_ok=True)
+    logpath = os.path.expanduser("~/.mongodb/mongodb.log")
+
+    # Start MongoDB in background
+    print(f"Starting MongoDB...")
+    print(f"  Data path: {dbpath}")
+    print(f"  Log path: {logpath}")
+    c.run(f"mongod --dbpath {dbpath} --logpath {logpath} --port {port} > /dev/null 2>&1 &", warn=True)
+
+    # Wait a moment and verify it started
+    import time
+    time.sleep(2)
+    result = c.run("pgrep -f mongod", hide=True, warn=True)
+    if result.stdout.strip():
         print(f"✓ MongoDB started on port {port}")
-
-
-@task
-def mongo_stop(c, name="mongodb"):
-    """Stop MongoDB Docker container.
-
-    Args:
-        name: Container name (default: mongodb)
-    """
-    result = c.run(f"docker ps -q -f name=^{name}$", hide=True, warn=True)
-    if result.stdout.strip():
-        c.run(f"docker stop {name}")
-        print(f"✓ MongoDB container '{name}' stopped")
     else:
-        print(f"MongoDB container '{name}' is not running")
+        print("✗ Failed to start MongoDB")
+        print(f"Check logs: tail {logpath}")
 
 
 @task
-def mongo_remove(c, name="mongodb"):
-    """Remove MongoDB Docker container.
-
-    Args:
-        name: Container name (default: mongodb)
-    """
-    result = c.run(f"docker ps -a -q -f name=^{name}$", hide=True, warn=True)
+def mongo_stop(c):
+    """Stop local MongoDB."""
+    result = c.run("pgrep -f mongod", hide=True, warn=True)
     if result.stdout.strip():
-        # Stop if running
-        running = c.run(f"docker ps -q -f name=^{name}$", hide=True, warn=True)
-        if running.stdout.strip():
-            c.run(f"docker stop {name}", hide=True)
-        c.run(f"docker rm {name}")
-        print(f"✓ MongoDB container '{name}' removed")
+        print("Stopping MongoDB...")
+        c.run("pkill mongod")
+        print("✓ MongoDB stopped")
     else:
-        print(f"MongoDB container '{name}' does not exist")
+        print("MongoDB is not running")
 
 
 @task
-def mongo_status(c, name="mongodb"):
-    """Check MongoDB Docker container status.
-
-    Args:
-        name: Container name (default: mongodb)
-    """
-    result = c.run(f"docker ps -a -f name=^{name}$ --format 'table {{{{.Names}}}}\\t{{{{.Status}}}}\\t{{{{.Ports}}}}'", warn=True)
-    if not result.stdout.strip() or "NAMES" == result.stdout.strip():
-        print(f"MongoDB container '{name}' does not exist")
+def mongo_status(c):
+    """Check local MongoDB status."""
+    result = c.run("pgrep -fl mongod", hide=True, warn=True)
+    if result.stdout.strip():
+        print("✓ MongoDB is running:")
+        print(result.stdout.strip())
+        # Check port
+        port_result = c.run("lsof -i :27017 | grep mongod", hide=True, warn=True)
+        if port_result.stdout.strip():
+            print("\n✓ Listening on port 27017")
+    else:
+        print("✗ MongoDB is not running")
         print("\nStart MongoDB with: invoke mongo-start")
-    else:
-        print(result.stdout)
 
 
 @task
-def mongo_logs(c, name="mongodb", follow=False):
-    """Show MongoDB Docker container logs.
+def mongo_logs(c, follow=False, lines=50):
+    """Show local MongoDB logs.
 
     Args:
-        name: Container name (default: mongodb)
         follow: Follow log output (default: False)
+        lines: Number of lines to show (default: 50)
     """
-    follow_flag = "-f" if follow else ""
-    c.run(f"docker logs {follow_flag} {name}")
+    import os
+    logpath = os.path.expanduser("~/.mongodb/mongodb.log")
+
+    if not os.path.exists(logpath):
+        print(f"✗ Log file not found: {logpath}")
+        return
+
+    if follow:
+        c.run(f"tail -f {logpath}")
+    else:
+        c.run(f"tail -n {lines} {logpath}")
 
 
 # Server tasks
@@ -1022,6 +1023,13 @@ def ppserver_start(c, host="127.0.0.1", port=8000, dev=True, prod=False, backgro
     """
     import os
     from pathlib import Path
+
+    # Start MongoDB if not running
+    result = c.run("pgrep -f mongod", hide=True, warn=True)
+    if not result.stdout.strip():
+        print("Starting MongoDB...")
+        mongo_start(c)
+        print()
 
     # Production or background mode disable dev
     if prod or background:

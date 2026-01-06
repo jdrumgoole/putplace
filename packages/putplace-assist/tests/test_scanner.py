@@ -5,38 +5,10 @@ from pathlib import Path
 import pytest
 
 from putplace_assist.scanner import (
-    calculate_sha256,
     collect_files,
     get_file_stats,
     matches_exclude_pattern,
-    scan_file,
 )
-
-
-class TestSHA256:
-    """Tests for SHA256 calculation."""
-
-    def test_calculate_sha256(self, temp_test_dir: Path):
-        """Test SHA256 calculation."""
-        file_path = temp_test_dir / "file1.txt"
-        sha256 = calculate_sha256(file_path)
-
-        assert sha256 is not None
-        assert len(sha256) == 64
-        assert all(c in "0123456789abcdef" for c in sha256)
-
-    def test_calculate_sha256_nonexistent(self, tmp_path: Path):
-        """Test SHA256 of nonexistent file."""
-        sha256 = calculate_sha256(tmp_path / "nonexistent")
-        assert sha256 is None
-
-    def test_calculate_sha256_consistent(self, temp_test_dir: Path):
-        """Test SHA256 is consistent for same content."""
-        file_path = temp_test_dir / "file1.txt"
-        sha256_1 = calculate_sha256(file_path)
-        sha256_2 = calculate_sha256(file_path)
-
-        assert sha256_1 == sha256_2
 
 
 class TestFileStats:
@@ -134,23 +106,3 @@ class TestCollectFiles:
         """Test file collection with excludes."""
         files = collect_files(temp_test_dir, recursive=True, exclude_patterns=[".*"])
         assert len(files) == 3  # Excludes .hidden
-
-
-@pytest.mark.asyncio
-class TestScanFile:
-    """Tests for async file scanning."""
-
-    async def test_scan_file(self, temp_test_dir: Path):
-        """Test scanning a single file."""
-        file_path = temp_test_dir / "file1.txt"
-        scanned = await scan_file(file_path)
-
-        assert scanned is not None
-        assert scanned.filepath == file_path
-        assert scanned.file_size == len("Hello, World!")
-        assert len(scanned.sha256) == 64
-
-    async def test_scan_file_nonexistent(self, tmp_path: Path):
-        """Test scanning nonexistent file."""
-        scanned = await scan_file(tmp_path / "nonexistent")
-        assert scanned is None

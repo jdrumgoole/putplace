@@ -145,6 +145,14 @@ header h1 {
     margin-bottom: 6px;
 }
 
+.form-hint {
+    display: block;
+    margin-top: 4px;
+    font-size: 9px;
+    color: #888;
+    font-style: italic;
+}
+
 .form-row {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -398,7 +406,7 @@ input[type="number"] {
 
 .upload-history-header {
     display: grid;
-    grid-template-columns: 50px 1fr 100px 200px;
+    grid-template-columns: 50px 1fr 100px 150px 200px;
     gap: 8px;
     padding: 8px 12px;
     background: #f7fafc;
@@ -422,6 +430,10 @@ input[type="number"] {
     text-align: right;
 }
 
+.upload-history-header .col-timestamp {
+    text-align: center;
+}
+
 .upload-history-header .col-progress {
     text-align: right;
 }
@@ -436,7 +448,7 @@ input[type="number"] {
 
 .file-progress-item {
     display: grid;
-    grid-template-columns: 50px 1fr 100px 200px;
+    grid-template-columns: 50px 1fr 100px 150px 200px;
     gap: 8px;
     padding: 8px 12px;
     background: #ffffff;
@@ -465,6 +477,12 @@ input[type="number"] {
 
 .col-size {
     text-align: right;
+}
+
+.col-timestamp {
+    text-align: center;
+    font-size: 10px;
+    color: #718096;
 }
 
 .col-progress {

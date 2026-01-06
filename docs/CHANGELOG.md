@@ -5,6 +5,72 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-01-06
+
+### Added
+
+#### Admin Dashboard (putplace-server)
+- **Complete Admin Dashboard**: New `/admin/dashboard` endpoint with professional UI
+  - Real-time statistics: Total Users, Active Users, Admin Users, Pending Registrations, Total Files, Files with Content
+  - User management table showing all registered users with file upload counts
+  - Pending registrations table for email confirmation tracking
+  - Secure admin-only access with proper authentication and authorization
+  - Modern gradient design with responsive layout
+
+#### 3-Component Queue Architecture (putplace-assist v0.2.0)
+- **Component 1 - Scanner**: Directory scanning with file discovery and change detection
+  - Detects new files, modified files (by mtime), and unchanged files
+  - Queues new/modified files to `queue_pending_checksum` for processing
+  - Uses persistent SQLite `files` table for state tracking
+
+- **Component 2 - SHA256 Processor**: Background checksum calculation
+  - Processes files from `queue_pending_checksum` queue (FIFO)
+  - Implements rate-limited SHA256 calculation to avoid CPU saturation
+  - Detects duplicate checksums and skips unnecessary uploads
+  - Queues changed files to `queue_pending_upload`
+  - Configurable retry logic with exponential backoff
+
+- **Component 3 - Uploader**: Chunked upload manager
+  - Processes files from `queue_pending_upload` queue (FIFO)
+  - 2MB chunk size for efficient large file uploads
+  - Parallel upload support (configurable concurrency)
+  - Handles deletion notifications via `queue_pending_deletion`
+  - Proper error handling and retry mechanisms
+
+### Changed
+
+#### Server Refactoring (putplace-server)
+- **Router Organization**: Completed main.py refactoring (3,682 → 430 lines, 88% reduction)
+  - `routers/admin.py`: Admin dashboard endpoints
+  - `routers/files.py`: File operations endpoints
+  - `routers/uploads.py`: Chunked upload protocol
+  - `routers/users.py`: User authentication and management
+  - `routers/api_keys.py`: API key management
+  - `routers/pages.py`: HTML page rendering
+  - `dependencies.py`: Centralized dependency injection (no circular imports)
+
+#### Database Schema (putplace-assist)
+- **New Queue Tables**: Persistent FIFO queues for 3-component architecture
+  - `queue_pending_checksum`: Files awaiting SHA256 calculation
+  - `queue_pending_upload`: Files ready for upload
+  - `queue_pending_deletion`: Deletion notifications
+
+- **Files Table**: Central file tracking with state machine
+  - Status flow: `discovered` → `ready_for_upload` → `completed`
+  - Tracks file metadata, checksums, and modification times
+  - Enables change detection and duplicate prevention
+
+### Fixed
+- **Test Suite**: All unit tests passing (245/245 server, 36/36 assist)
+  - Fixed model imports after FileInfo removal
+  - Updated database tests for new queue-based API
+  - Fixed `get_file_stats()` to query new files table
+  - All admin dashboard authentication tests passing
+
+### Removed
+- **Legacy Monthly Tables**: Replaced filelog_YYYYMM pattern with queue-based architecture
+- **Deprecated Models**: Removed FileInfo and related monthly table models
+
 ## [0.8.11] - 2025-12-14
 
 ### Security

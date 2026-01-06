@@ -22,7 +22,7 @@ This project uses PyMongo's native async support (introduced in PyMongo 4.9+), w
 
 ### Prerequisites
 - Python 3.10+
-- Docker (for MongoDB container)
+- MongoDB (locally installed via Homebrew)
 
 ### Quick Setup (Automated)
 ```bash
@@ -138,12 +138,12 @@ All development tasks are managed through `invoke` (see tasks.py):
 - `invoke quickstart` - Start MongoDB and run dev server
 
 ### MongoDB Management
-- `invoke mongo-start` - Start MongoDB in Docker (creates container if needed)
-- `invoke mongo-stop` - Stop MongoDB container
-- `invoke mongo-status` - Check MongoDB container status
-- `invoke mongo-logs` - View MongoDB logs
-- `invoke mongo-logs --follow` - Follow MongoDB logs
-- `invoke mongo-remove` - Remove MongoDB container
+- `invoke mongo-start` - Start local MongoDB
+- `invoke mongo-stop` - Stop local MongoDB
+- `invoke mongo-status` - Check local MongoDB status
+- `invoke mongo-logs` - View MongoDB logs (last 50 lines)
+- `invoke mongo-logs --follow` - Follow MongoDB logs (live tail)
+- `invoke mongo-logs --lines=100` - View last 100 lines
 
 ### Running the API Server
 - `invoke serve` - Run development server (auto-reload enabled)

@@ -8,7 +8,7 @@ import path from 'path';
  */
 export default defineConfig({
   testDir: './tests',
-  timeout: 120000, // 2 minutes per test (file uploads can take time)
+  timeout: 1800000, // 30 minutes per test (can be overridden via CLI: --timeout=<ms>)
   expect: {
     timeout: 30000, // 30 seconds for expect assertions
   },

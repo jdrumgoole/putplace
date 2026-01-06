@@ -11,6 +11,56 @@ Basic upload tests against the dev server (app.putplace.org). Tests login, direc
 - `DEV_TEST_USER` - Email/username for login
 - `DEV_TEST_PASSWORD` - Password for login
 
+### `e2e-desktop-upload.spec.ts`
+Tests uploading files from `~/Desktop` using the Electron GUI client.
+
+**⚠️ Important Notes:**
+- This test scans ALL files on your Desktop
+- **Large files (GB+) can take several minutes to calculate SHA256 hashes**
+- The test has a 5-minute timeout per test
+- Test is **READ-ONLY** - does not delete, modify, or move any files
+
+**Prerequisites:**
+```bash
+# Start server (if not already running)
+invoke ppserver-start --port 8100
+
+# Start daemon (if not already running)
+pp_assist start
+
+# Clean databases before test
+pp_purge_data --environment test --force
+```
+
+**Running:**
+```bash
+# Test with 3 files (faster, recommended)
+DESKTOP_UPLOAD_LIMIT=3 npm run test:desktop
+
+# Test with 10 files
+DESKTOP_UPLOAD_LIMIT=10 npm run test:desktop
+
+# Use default limit (50 files - may timeout with large files)
+npm run test:desktop
+```
+
+**Known Limitations:**
+- Desktops with many large files (8GB+ videos) will timeout during SHA256 calculation
+- SHA256 runs in background daemon - very large files can take 10+ minutes
+- If timeout occurs, reduce `DESKTOP_UPLOAD_LIMIT` or test with a directory containing smaller files
+
+### `e2e-bulk-upload.spec.ts`
+Tests bulk upload functionality with synthetic files (3KB-150KB).
+
+**Running:**
+```bash
+# Test with different file counts
+npm run test:bulk:10      # 10 files
+npm run test:bulk:100     # 100 files
+npm run test:bulk:1000    # 1,000 files
+npm run test:bulk:10000   # 10,000 files (slow!)
+```
+
 ### `e2e-full-workflow.spec.ts`
 Comprehensive end-to-end test that performs a complete workflow from scratch:
 1. Purges pp_assist environment (local daemon database)

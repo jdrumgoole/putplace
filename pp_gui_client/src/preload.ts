@@ -26,6 +26,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ===== PPassist Daemon API =====
   ppassistCheck: (daemonUrl?: string) =>
     ipcRenderer.invoke('ppassist-check', daemonUrl),
+  ppassistStart: () =>
+    ipcRenderer.invoke('ppassist-start'),
   ppassistStatus: (daemonUrl?: string) =>
     ipcRenderer.invoke('ppassist-status', daemonUrl),
   ppassistFileStats: (daemonUrl?: string) =>
@@ -50,8 +52,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('ppassist-add-exclude', pattern, daemonUrl),
   ppassistDeleteExclude: (excludeId: number, daemonUrl?: string) =>
     ipcRenderer.invoke('ppassist-delete-exclude', excludeId, daemonUrl),
-  ppassistTriggerUploads: (uploadContent: boolean, pathPrefix?: string, daemonUrl?: string) =>
-    ipcRenderer.invoke('ppassist-trigger-uploads', uploadContent, pathPrefix, daemonUrl),
+  ppassistTriggerUploads: (uploadContent: boolean, pathPrefix?: string, limit?: number, daemonUrl?: string) =>
+    ipcRenderer.invoke('ppassist-trigger-uploads', uploadContent, pathPrefix, limit, daemonUrl),
   ppassistAddServer: (name: string, url: string, username: string, password: string, daemonUrl?: string) =>
     ipcRenderer.invoke('ppassist-add-server', name, url, username, password, daemonUrl),
   ppassistListServers: (daemonUrl?: string) =>
@@ -62,4 +64,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('ppassist-get-config', daemonUrl),
   ppassistSaveConfig: (config: any, daemonUrl?: string) =>
     ipcRenderer.invoke('ppassist-save-config', config, daemonUrl),
+  ppassistGetFileByPath: (filePath: string, daemonUrl?: string) =>
+    ipcRenderer.invoke('ppassist-get-file-by-path', filePath, daemonUrl),
 });

@@ -138,6 +138,14 @@ class Settings(BaseSettings):
         default=5.0,
         description="Delay between retries"
     )
+    uploader_timeout_seconds: int = Field(
+        default=600,
+        description="Timeout for uploading each file (in seconds, default 10 minutes)"
+    )
+    uploader_chunk_size_mb: int = Field(
+        default=2,
+        description="Chunk size for uploading files (in MB, default 2MB)"
+    )
 
     # SHA256 processor settings
     sha256_chunk_size: int = Field(

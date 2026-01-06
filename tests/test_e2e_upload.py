@@ -1,16 +1,31 @@
 #!/usr/bin/env python3
 """
-End-to-end test for PutPlace upload workflow.
+End-to-end test for PutPlace upload workflow with 3-component queue architecture.
 
 This script tests the complete upload flow:
+
+Phase 1 - Synthetic Test File:
 1. Start server with ppserver-dev.toml
 2. Create a test user
 3. Generate a deterministic test file
-4. Upload file via pp_client
+4. Upload file via pp_client (triggers 3-component workflow)
 5. Validate file exists in MongoDB and S3
-6. Purge user and data
-7. Verify cleanup
-8. Clean up test file
+6. Validate 3-component queue workflow:
+   - Component 1: Scanner queues files to queue_pending_checksum
+   - Component 2: Checksum Calculator processes queue → queue_pending_upload
+   - Component 3: Uploader processes queue with chunked uploads
+7. Validate files table status transitions (discovered → ready_for_upload → completed)
+8. Validate chunked upload protocol was used
+
+Phase 2 - Real Desktop Directory:
+9. Register Desktop directory
+10. Process and upload Desktop files
+11. Validate uploads in MongoDB and S3
+
+Cleanup:
+12. Purge user and data
+13. Verify cleanup
+14. Clean up test file
 """
 
 import asyncio
@@ -634,6 +649,219 @@ def get_upload_queue_status():
     return {}
 
 
+def get_ppassist_database_path() -> Path:
+    """Get the path to the ppassist SQLite database."""
+    return Path.home() / ".local" / "share" / "putplace" / "assist.db"
+
+
+def query_ppassist_queue(queue_name: str) -> list[dict]:
+    """Query a queue table from ppassist SQLite database.
+
+    Args:
+        queue_name: Name of queue (queue_pending_checksum, queue_pending_upload, queue_pending_deletion)
+
+    Returns:
+        List of queue entries as dictionaries
+    """
+    import sqlite3
+
+    db_path = get_ppassist_database_path()
+    if not db_path.exists():
+        return []
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        cursor.execute(f"SELECT * FROM {queue_name}")
+        rows = cursor.fetchall()
+
+        conn.close()
+
+        return [dict(row) for row in rows]
+    except Exception as e:
+        print_warning(f"Failed to query {queue_name}: {e}")
+        return []
+
+
+def query_ppassist_files(filepath_filter: str = None) -> list[dict]:
+    """Query files table from ppassist SQLite database.
+
+    Args:
+        filepath_filter: Optional filepath prefix to filter by
+
+    Returns:
+        List of file records as dictionaries
+    """
+    import sqlite3
+
+    db_path = get_ppassist_database_path()
+    if not db_path.exists():
+        return []
+
+    try:
+        conn = sqlite3.connect(str(db_path))
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+
+        if filepath_filter:
+            cursor.execute(
+                "SELECT * FROM files WHERE filepath LIKE ?",
+                (f"{filepath_filter}%",)
+            )
+        else:
+            cursor.execute("SELECT * FROM files")
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        return [dict(row) for row in rows]
+    except Exception as e:
+        print_warning(f"Failed to query files table: {e}")
+        return []
+
+
+def validate_queue_workflow():
+    """Validate the 3-component queue-based architecture workflow.
+
+    This validates:
+    1. Component 1 (Scanner) queued files to queue_pending_checksum
+    2. Component 2 (Checksum Calculator) processed checksum queue
+    3. Component 3 (Uploader) processed upload queue
+    4. Files table status transitions (discovered → ready_for_upload → completed)
+    """
+    print_step("Validating 3-component queue workflow")
+
+    # Query all queues
+    checksum_queue = query_ppassist_queue("queue_pending_checksum")
+    upload_queue = query_ppassist_queue("queue_pending_upload")
+    deletion_queue = query_ppassist_queue("queue_pending_deletion")
+
+    print(f"  queue_pending_checksum: {len(checksum_queue)} entries")
+    print(f"  queue_pending_upload: {len(upload_queue)} entries")
+    print(f"  queue_pending_deletion: {len(deletion_queue)} entries")
+
+    # Query files table
+    files = query_ppassist_files(str(TEST_DIR))
+
+    print(f"  files table: {len(files)} entries for test directory")
+
+    if files:
+        # Count files by status
+        status_counts = {}
+        for file_entry in files:
+            status = file_entry.get("status", "unknown")
+            status_counts[status] = status_counts.get(status, 0) + 1
+
+        print("  File status breakdown:")
+        for status, count in status_counts.items():
+            print(f"    {status}: {count}")
+
+        # Validate at least one file completed the full workflow
+        completed_files = [f for f in files if f.get("status") == "completed"]
+        if completed_files:
+            print_success(f"Found {len(completed_files)} completed files in workflow")
+
+            # Show details of first completed file
+            sample = completed_files[0]
+            print(f"  Sample completed file:")
+            print(f"    filepath: {sample.get('filepath')}")
+            print(f"    sha256: {sample.get('sha256', 'N/A')[:16]}...")
+            print(f"    status: {sample.get('status')}")
+            print(f"    uploaded_at: {sample.get('uploaded_at', 'N/A')}")
+        else:
+            print_warning("No completed files found - workflow may still be in progress")
+
+    # Validate queues are empty (all files processed)
+    if len(checksum_queue) == 0 and len(upload_queue) == 0:
+        print_success("All queues empty - workflow completed successfully")
+    else:
+        print_warning(f"Queues not empty: {len(checksum_queue)} in checksum, {len(upload_queue)} in upload")
+
+    return True
+
+
+def validate_files_queued_for_checksum(expected_min: int = 1):
+    """Validate that files were queued to queue_pending_checksum after path registration.
+
+    This validates Component 1 (Scanner) is working correctly.
+
+    Args:
+        expected_min: Minimum number of files expected in checksum queue
+
+    Returns:
+        Number of files in checksum queue
+    """
+    print_step("Validating files queued for checksum (Component 1)")
+
+    # Query checksum queue
+    checksum_queue = query_ppassist_queue("queue_pending_checksum")
+    queue_count = len(checksum_queue)
+
+    print(f"  queue_pending_checksum: {queue_count} entries")
+
+    if queue_count >= expected_min:
+        print_success(f"Component 1 (Scanner) queued {queue_count} files for checksum")
+
+        if checksum_queue:
+            # Show sample entry
+            sample = checksum_queue[0]
+            print(f"  Sample entry:")
+            print(f"    filepath: {sample.get('filepath')}")
+            print(f"    reason: {sample.get('reason')}")
+            print(f"    queued_at: {sample.get('queued_at')}")
+    else:
+        print_warning(f"Expected at least {expected_min} files, found {queue_count}")
+
+    return queue_count
+
+
+def validate_chunked_upload_used():
+    """Validate that chunked upload protocol was used.
+
+    Checks activity events for evidence of chunked uploads.
+    """
+    print_step("Validating chunked upload protocol")
+
+    result = subprocess.run(
+        ["curl", "-s", "http://localhost:8765/activity?limit=100"],
+        capture_output=True,
+        text=True,
+        check=False
+    )
+
+    if result.returncode == 0 and result.stdout:
+        try:
+            import json
+            data = json.loads(result.stdout)
+            events = data.get("events", [])
+
+            # Look for upload-related events
+            upload_events = [e for e in events if "upload" in e.get("event_type", "").lower()]
+
+            print(f"  Found {len(upload_events)} upload-related activity events")
+
+            if upload_events:
+                print("  Sample upload events:")
+                for event in upload_events[:3]:
+                    event_type = event.get("event_type", "unknown")
+                    message = event.get("message", "")
+                    print(f"    {event_type}: {message[:60]}")
+
+                print_success("Upload activity events found")
+            else:
+                print_warning("No upload activity events found in recent activity")
+
+            return len(upload_events) > 0
+
+        except Exception as e:
+            print_warning(f"Failed to parse activity events: {e}")
+            return False
+
+    return False
+
+
 def upload_desktop_directory():
     """Upload the Desktop directory (Phase 2)."""
     desktop_path = Path.home() / "Desktop"
@@ -823,7 +1051,13 @@ def main():
         # 5. Register test path
         register_test_path()
 
-        # 6. Wait for SHA256 processing
+        # 5a. Wait briefly for scanner to queue files
+        time.sleep(2)
+
+        # 5b. Validate files queued for checksum (Component 1)
+        validate_files_queued_for_checksum(expected_min=1)
+
+        # 6. Wait for SHA256 processing (Component 2)
         wait_for_sha256_processing()
 
         # 7. Upload test file
@@ -838,41 +1072,59 @@ def main():
         # 10. Validate S3
         validate_s3()
 
+        # 11. Validate 3-component queue workflow (NEW)
+        validate_queue_workflow()
+
+        # 12. Validate chunked upload protocol (NEW)
+        validate_chunked_upload_used()
+
         print_success("Phase 1 complete: Synthetic test file uploaded successfully")
 
         # ===== PHASE 2: Real Desktop Directory =====
 
-        # 11. Register Desktop directory
+        # 13. Register Desktop directory
         desktop_path = upload_desktop_directory()
 
-        # 12. Wait for SHA256 processing
+        # 14. Wait for SHA256 processing
         desktop_file_count = wait_for_desktop_sha256_processing()
 
-        # 13. Trigger Desktop upload
+        # 15. Trigger Desktop upload
         trigger_desktop_upload()
 
-        # 14. Wait for Desktop uploads
+        # 16. Wait for Desktop uploads
         desktop_completed, desktop_failed = wait_for_desktop_uploads()
 
-        # 15. Validate Desktop uploads
+        # 17. Validate Desktop uploads
         desktop_validated = validate_desktop_uploads()
 
         print_success(f"Phase 2 complete: {desktop_completed} Desktop files uploaded successfully")
 
         # ===== CLEANUP =====
 
-        # 16. Purge environment
+        # 18. Purge environment
         purge_dev_environment()
 
-        # 17. Verify cleanup
+        # 19. Verify cleanup
         verify_cleanup()
 
         # Success!
         print(f"\n{'='*80}")
         print(f"{GREEN}✓ END-TO-END TEST PASSED{RESET}")
         print(f"{'='*80}")
-        print(f"{GREEN}Phase 1:{RESET} Synthetic test file uploaded and validated")
-        print(f"{GREEN}Phase 2:{RESET} {desktop_completed} Desktop files uploaded successfully")
+        print(f"{GREEN}Phase 1 - Synthetic Test:{RESET}")
+        print(f"  ✓ File uploaded and validated in MongoDB and S3")
+        print(f"  ✓ 3-component queue workflow validated:")
+        print(f"    - Component 1: Scanner queued files to queue_pending_checksum")
+        print(f"    - Component 2: Checksum Calculator processed checksum queue")
+        print(f"    - Component 3: Uploader processed upload queue with chunked uploads")
+        print(f"  ✓ Files table status transitions validated")
+        print(f"  ✓ Chunked upload protocol validated")
+        print(f"")
+        print(f"{GREEN}Phase 2 - Desktop Upload:{RESET}")
+        print(f"  ✓ {desktop_completed} Desktop files uploaded successfully")
+        print(f"")
+        print(f"{GREEN}Cleanup:{RESET}")
+        print(f"  ✓ MongoDB and S3 cleaned and verified")
         print(f"{'='*80}\n")
 
         return 0

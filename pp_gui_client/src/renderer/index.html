@@ -149,21 +149,9 @@
                 <h2>Upload Options</h2>
                 <div class="form-group">
                     <label class="checkbox-label">
-                        <input type="checkbox" id="upload-content" />
+                        <input type="checkbox" id="upload-content" checked />
                         <span>Upload file content (not just metadata)</span>
                     </label>
-                </div>
-            </section>
-
-            <!-- Exclude Patterns -->
-            <section class="card">
-                <h2>Exclude Patterns</h2>
-                <div class="form-group">
-                    <div class="exclude-controls">
-                        <input type="text" id="pattern-input" placeholder="e.g., .git, *.log, node_modules" />
-                        <button id="add-pattern-btn" class="btn btn-small">Add Pattern</button>
-                    </div>
-                    <div id="patterns-list" class="patterns-list"></div>
                 </div>
             </section>
 
@@ -179,6 +167,7 @@
                         <div class="col-status">Status</div>
                         <div class="col-file">File</div>
                         <div class="col-size">Size</div>
+                        <div class="col-timestamp">Completed</div>
                         <div class="col-progress">Progress</div>
                     </div>
                     <div id="active-uploads-container" class="active-uploads-container">
@@ -286,6 +275,11 @@
                         <label for="config-uploader-retry-delay-input">Retry Delay (seconds):</label>
                         <input type="number" id="config-uploader-retry-delay-input" min="1" max="60" />
                     </div>
+                    <div class="form-group">
+                        <label for="config-uploader-timeout-input">Upload Timeout (seconds):</label>
+                        <input type="number" id="config-uploader-timeout-input" min="60" max="7200" />
+                        <small class="form-hint">Timeout per file (default: 600 = 10 minutes)</small>
+                    </div>
                 </div>
 
                 <div class="config-section-modal">
@@ -307,6 +301,18 @@
                     <div class="form-group">
                         <label for="config-watcher-debounce-input">Debounce Seconds:</label>
                         <input type="number" id="config-watcher-debounce-input" min="1" max="60" />
+                    </div>
+                </div>
+
+                <div class="config-section-modal">
+                    <h3>Exclude Patterns</h3>
+                    <div class="form-group">
+                        <label>Patterns to exclude from upload:</label>
+                        <div class="exclude-controls">
+                            <input type="text" id="pattern-input" placeholder="e.g., .git, *.log, node_modules" />
+                            <button id="add-pattern-btn" class="btn btn-small">Add Pattern</button>
+                        </div>
+                        <div id="patterns-list" class="patterns-list"></div>
                     </div>
                 </div>
 

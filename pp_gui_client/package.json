@@ -19,6 +19,13 @@
     "test:debug": "npm run build && npx playwright test --debug",
     "test:e2e": "npm run build && npx playwright test tests/e2e-full-workflow.spec.ts",
     "test:e2e:headed": "npm run build && npx playwright test tests/e2e-full-workflow.spec.ts --headed",
+    "test:bulk": "npm run build && npx playwright test tests/e2e-bulk-upload.spec.ts",
+    "test:bulk:10": "npm run build && npx playwright test tests/e2e-bulk-upload.spec.ts -g \"10 files\"",
+    "test:bulk:100": "npm run build && npx playwright test tests/e2e-bulk-upload.spec.ts -g \"100 files\"",
+    "test:bulk:1000": "npm run build && npx playwright test tests/e2e-bulk-upload.spec.ts -g \"1,000 files\"",
+    "test:bulk:10000": "npm run build && npx playwright test tests/e2e-bulk-upload.spec.ts -g \"10,000 files\"",
+    "test:desktop": "npm run build && npx playwright test tests/e2e-desktop-upload.spec.ts",
+    "test:desktop:headed": "npm run build && npx playwright test tests/e2e-desktop-upload.spec.ts --headed",
     "test:report": "npx playwright show-report"
   },
   "keywords": [

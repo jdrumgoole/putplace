@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as crypto from 'crypto';
 import * as os from 'os';
+import { spawn } from 'child_process';
 import axios from 'axios';
 
 // Set the application name BEFORE app is ready (required for macOS menu bar)
@@ -423,6 +424,49 @@ ipcMain.handle('ppassist-check', async (_event, daemonUrl?: string) => {
   }
 });
 
+// Start ppassist daemon
+ipcMain.handle('ppassist-start', async () => {
+  try {
+    console.log('Starting pp_assist daemon...');
+
+    // Start daemon in background using uv run
+    const process = spawn('uv', ['run', 'pp_assist', 'start'], {
+      detached: true,
+      stdio: 'ignore',
+      shell: true
+    });
+
+    // Unref so the parent process can exit independently
+    process.unref();
+
+    console.log('pp_assist daemon start command sent');
+
+    // Wait a bit for the daemon to start
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Check if it's running
+    try {
+      const response = await axios.get(`${DEFAULT_PPASSIST_URL}/health`, { timeout: 5000 });
+      return {
+        success: true,
+        message: 'Daemon started successfully',
+        version: response.data.version
+      };
+    } catch (checkError) {
+      return {
+        success: false,
+        message: 'Daemon start command sent but not responding yet. Please wait...'
+      };
+    }
+  } catch (error: any) {
+    console.error('Failed to start pp_assist daemon:', error);
+    return {
+      success: false,
+      message: `Failed to start daemon: ${error.message}`
+    };
+  }
+});
+
 // Get ppassist daemon status
 ipcMain.handle('ppassist-status', async (_event, daemonUrl?: string) => {
   const url = daemonUrl || DEFAULT_PPASSIST_URL;
@@ -565,12 +609,15 @@ ipcMain.handle('ppassist-delete-exclude', async (_event, excludeId: number, daem
 });
 
 // Trigger uploads
-ipcMain.handle('ppassist-trigger-uploads', async (_event, uploadContent: boolean, pathPrefix?: string, daemonUrl?: string) => {
+ipcMain.handle('ppassist-trigger-uploads', async (_event, uploadContent: boolean, pathPrefix?: string, limit?: number, daemonUrl?: string) => {
   const url = daemonUrl || DEFAULT_PPASSIST_URL;
   try {
     const payload: any = { upload_content: uploadContent };
     if (pathPrefix) {
       payload.path_prefix = pathPrefix;
+    }
+    if (limit !== undefined) {
+      payload.limit = limit;
     }
     const response = await axios.post(`${url}/uploads`, payload, { timeout: 30000 });
     return { success: true, data: response.data };
@@ -656,6 +703,23 @@ ipcMain.handle('ppassist-save-config', async (_event, config: any, daemonUrl?: s
     return { success: true, data: response.data };
   } catch (error: any) {
     return { success: false, error: error.message };
+  }
+});
+
+// Get file info by filepath from daemon
+ipcMain.handle('ppassist-get-file-by-path', async (_event, filePath: string, daemonUrl?: string) => {
+  const url = daemonUrl || DEFAULT_PPASSIST_URL;
+  try {
+    const response = await axios.get(`${url}/files`, {
+      params: { path_prefix: filePath, limit: 1 },
+      timeout: 5000
+    });
+    if (response.data.entries && response.data.entries.length > 0) {
+      return { success: true, data: response.data.entries[0] };
+    }
+    return { success: false, error: 'File not found' };
+  } catch (error: any) {
+    return { success: false, error: error.response?.data?.detail || error.message };
   }
 });
 

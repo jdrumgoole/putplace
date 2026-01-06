@@ -6,22 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from ..auth import APIKeyAuth
 from ..database import MongoDB
+from ..dependencies import get_db, get_current_user
 from ..models import APIKeyCreate, APIKeyInfo, APIKeyResponse
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api_keys", tags=["auth"])
-
-
-# These will be injected by main.py
-def get_db() -> MongoDB:
-    """Get database instance - injected by main.py."""
-    raise NotImplementedError("get_db must be overridden")
-
-
-async def get_current_user() -> dict:
-    """Get current user - injected by main.py."""
-    raise NotImplementedError("get_current_user must be overridden")
 
 
 @router.post(

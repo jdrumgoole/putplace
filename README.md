@@ -50,7 +50,7 @@ A distributed file metadata storage and content deduplication system with SHA256
 
 - Python 3.10 - 3.14
 - [uv](https://github.com/astral-sh/uv) - Fast Python package installer
-- Docker (for MongoDB container)
+- MongoDB (locally installed via Homebrew)
 
 ### Installation
 
@@ -233,9 +233,10 @@ invoke setup-venv         # Create virtual environment only
 invoke install            # Install dependencies
 
 # MongoDB
-invoke mongo-start        # Start MongoDB in Docker
-invoke mongo-stop         # Stop MongoDB
+invoke mongo-start        # Start local MongoDB
+invoke mongo-stop         # Stop local MongoDB
 invoke mongo-status       # Check MongoDB status
+invoke mongo-logs         # View MongoDB logs
 
 # Running
 invoke serve              # Development server (auto-reload)

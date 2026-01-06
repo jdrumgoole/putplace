@@ -53,6 +53,7 @@ from .models import (
 from .scanner import scan_all_paths, scan_directory
 from .sha256_processor import sha256_processor
 from .uploader import Uploader, encrypt_password
+from .uploader_v3 import uploader_v3
 from .version import __version__
 from .watcher import watcher
 
@@ -109,23 +110,36 @@ async def lifespan(app: FastAPI):
     if settings.watcher_enabled:
         await watcher.start()
 
-    # Don't start SHA256 processor - inline calculation happens during upload
-    # This provides immediate feedback instead of pre-processing files in background
-    # await sha256_processor.start()
+    # Start all 3 components of the queue-based architecture
+    # Component 1: Scanner (used via scan_directory/scan_all_paths - no background task needed)
+    # Component 2: SHA256 Processor (processes queue_pending_checksum)
+    await sha256_processor.start()
+    logger.info("Component 2 (SHA256 Processor) started")
 
-    # Start uploader
+    # Component 3: Uploader (processes queue_pending_upload and queue_pending_deletion)
+    await uploader_v3.start()
+    logger.info("Component 3 (Uploader) started")
+
+    # Keep old uploader for backward compatibility (can be removed later)
     await uploader.start()
 
-    logger.info("PutPlace Assist daemon started")
+    logger.info("PutPlace Assist daemon started (3-component queue-based architecture)")
 
     yield
 
     # Shutdown
     logger.info("Shutting down...")
 
+    # Stop all 3 components
+    await uploader_v3.stop()
+    logger.info("Component 3 (Uploader) stopped")
+
+    await sha256_processor.stop()
+    logger.info("Component 2 (SHA256 Processor) stopped")
+
+    # Stop old uploader
     await uploader.stop()
-    # SHA256 processor not started, no need to stop
-    # await sha256_processor.stop()
+
     await watcher.stop()
     await activity_manager.stop()
     await db.disconnect()

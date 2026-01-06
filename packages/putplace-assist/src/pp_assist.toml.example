@@ -56,6 +56,10 @@ retry_attempts = 3
 # Delay between retries in seconds
 retry_delay_seconds = 5.0
 
+# Timeout for each file upload in seconds (default: 600 = 10 minutes)
+# Increase this for very large files or slow network connections
+timeout_seconds = 600
+
 [sha256]
 # Chunk size for reading files during SHA256 calculation (bytes)
 # Larger chunks = faster processing but more memory usage
