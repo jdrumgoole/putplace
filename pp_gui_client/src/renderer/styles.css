@@ -841,6 +841,19 @@ input[type="number"] {
     color: #ed8936;
 }
 
+.daemon-stats .stat-value.active {
+    color: #48bb78;
+    font-weight: 700;
+}
+
+.daemon-stats .stat-value.success {
+    color: #48bb78;
+}
+
+.daemon-stats .stat-value.error {
+    color: #f56565;
+}
+
 .daemon-stats .current-file {
     flex-basis: 100%;
     background: #f7fafc;
@@ -853,6 +866,53 @@ input[type="number"] {
     font-family: monospace;
     font-size: 10px;
     color: #667eea;
+}
+
+/* New styles for 3-component architecture display */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 15px;
+}
+
+.stat-group {
+    background: #f7fafc;
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+}
+
+.stat-group h3 {
+    font-size: 11px;
+    font-weight: 600;
+    color: #4a5568;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.stat-group .stat-item {
+    padding: 4px 0;
+}
+
+/* Component status indicators */
+.status-active {
+    color: #48bb78;
+    font-size: 12px;
+    margin-right: 4px;
+}
+
+.status-inactive {
+    color: #cbd5e0;
+    font-size: 12px;
+    margin-right: 4px;
+}
+
+/* Responsive layout for smaller screens */
+@media (max-width: 900px) {
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* Configuration card */

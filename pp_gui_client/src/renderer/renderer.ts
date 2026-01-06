@@ -488,27 +488,63 @@ function updateStatusDisplay(
   const statsEl = document.getElementById('daemon-stats');
   if (!statsEl || !status) return;
 
-  const pendingSha256 = sha256Status?.pending_count || 0;
+  const pendingSha256 = sha256Status?.pending_count || queueStatus?.pending_sha256 || 0;
   const pendingUpload = queueStatus?.pending_upload || 0;
+  const inProgress = queueStatus?.in_progress || 0;
+  const completedToday = queueStatus?.completed_today || 0;
+  const failedToday = queueStatus?.failed_today || 0;
   const currentFile = sha256Status?.current_file || null;
 
+  // Component status indicators
+  const scannerActive = status.watcher_active ? '<span class="status-active">●</span>' : '<span class="status-inactive">○</span>';
+  const sha256Active = status.sha256_processor_active ? '<span class="status-active">●</span>' : '<span class="status-inactive">○</span>';
+
   statsEl.innerHTML = `
-    <div class="stat-item">
-      <span class="stat-label">Files Tracked:</span>
-      <span class="stat-value">${status.files_tracked}</span>
+    <div class="stats-grid">
+      <div class="stat-group">
+        <h3>File Statistics</h3>
+        <div class="stat-item">
+          <span class="stat-label">Files Tracked:</span>
+          <span class="stat-value">${status.files_tracked}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Paths Watched:</span>
+          <span class="stat-value">${status.paths_watched}</span>
+        </div>
+      </div>
+
+      <div class="stat-group">
+        <h3>Processing Queue</h3>
+        <div class="stat-item">
+          <span class="stat-label">${scannerActive} Scanner → SHA256:</span>
+          <span class="stat-value ${pendingSha256 > 0 ? 'pending' : ''}">${pendingSha256}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">${sha256Active} SHA256 → Upload:</span>
+          <span class="stat-value ${pendingUpload > 0 ? 'pending' : ''}">${pendingUpload}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">In Progress:</span>
+          <span class="stat-value ${inProgress > 0 ? 'active' : ''}">${inProgress}</span>
+        </div>
+        ${currentFile ? `<div class="stat-item current-file">
+          <span class="stat-label">Processing:</span>
+          <span class="stat-value">${currentFile.split('/').pop()}</span>
+        </div>` : ''}
+      </div>
+
+      <div class="stat-group">
+        <h3>Today's Activity</h3>
+        <div class="stat-item">
+          <span class="stat-label">Completed:</span>
+          <span class="stat-value success">${completedToday}</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Failed:</span>
+          <span class="stat-value ${failedToday > 0 ? 'error' : ''}">${failedToday}</span>
+        </div>
+      </div>
     </div>
-    <div class="stat-item">
-      <span class="stat-label">Pending SHA256:</span>
-      <span class="stat-value ${pendingSha256 > 0 ? 'pending' : ''}">${pendingSha256}</span>
-    </div>
-    <div class="stat-item">
-      <span class="stat-label">Pending Upload:</span>
-      <span class="stat-value ${pendingUpload > 0 ? 'pending' : ''}">${pendingUpload}</span>
-    </div>
-    ${currentFile ? `<div class="stat-item current-file">
-      <span class="stat-label">Processing:</span>
-      <span class="stat-value">${currentFile.split('/').pop()}</span>
-    </div>` : ''}
   `;
 }
 
