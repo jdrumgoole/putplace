@@ -2,11 +2,11 @@ name: Publish to PyPI
 
 on:
   # Trigger on version tags
-  # Use v* for both packages, or client-v*/server-v* for individual packages
+  # Use v* for both packages, or assist-v*/server-v* for individual packages
   push:
     tags:
       - 'v*'
-      - 'client-v*'
+      - 'assist-v*'
       - 'server-v*'
 
   # Allow manual triggering with package selection
@@ -19,24 +19,24 @@ on:
         type: choice
         options:
           - both
-          - client
+          - assist
           - server
 
 jobs:
-  publish-client:
-    name: Publish putplace-client to PyPI
+  publish-assist:
+    name: Publish putplace-assist to PyPI
     runs-on: ubuntu-latest
     if: |
-      github.event_name == 'workflow_dispatch' && (github.event.inputs.package == 'both' || github.event.inputs.package == 'client') ||
-      github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/client-v'))
+      github.event_name == 'workflow_dispatch' && (github.event.inputs.package == 'both' || github.event.inputs.package == 'assist') ||
+      github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || startsWith(github.ref, 'refs/tags/assist-v'))
 
     permissions:
       id-token: write
       contents: read
 
     environment:
-      name: pypi-client
-      url: https://pypi.org/p/putplace-client
+      name: pypi-assist
+      url: https://pypi.org/p/putplace-assist
 
     steps:
       - name: Checkout repository
@@ -45,12 +45,12 @@ jobs:
       - name: Verify version tag
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/client-v* ]]; then
-            TAG_VERSION="${GITHUB_REF#refs/tags/client-v}"
+          if [[ "$GITHUB_REF" == refs/tags/assist-v* ]]; then
+            TAG_VERSION="${GITHUB_REF#refs/tags/assist-v}"
           else
             TAG_VERSION="${GITHUB_REF#refs/tags/v}"
           fi
-          PROJECT_VERSION=$(grep '^version =' packages/putplace-client/pyproject.toml | cut -d'"' -f2)
+          PROJECT_VERSION=$(grep '^version =' packages/putplace-assist/pyproject.toml | cut -d'"' -f2)
           echo "Tag version: $TAG_VERSION"
           echo "Project version: $PROJECT_VERSION"
           if [ "$TAG_VERSION" != "$PROJECT_VERSION" ]; then
@@ -69,30 +69,30 @@ jobs:
           python -m pip install --upgrade pip
           pip install build twine
 
-      - name: Build putplace-client
+      - name: Build putplace-assist
         run: |
-          cd packages/putplace-client
+          cd packages/putplace-assist
           python -m build
-          echo "✓ putplace-client built successfully"
+          echo "✓ putplace-assist built successfully"
           ls -lh dist/
 
       - name: Check package with twine
         run: |
-          twine check packages/putplace-client/dist/*
+          twine check packages/putplace-assist/dist/*
 
-      - name: Publish putplace-client to PyPI
+      - name: Publish putplace-assist to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: packages/putplace-client/dist/
+          packages-dir: packages/putplace-assist/dist/
           verbose: true
 
       - name: Success message
         run: |
-          echo "✓ putplace-client published to PyPI"
-          echo "View at: https://pypi.org/project/putplace-client/"
+          echo "✓ putplace-assist published to PyPI"
+          echo "View at: https://pypi.org/project/putplace-assist/"
           echo ""
           echo "Install with:"
-          echo "  pip install putplace-client"
+          echo "  pip install putplace-assist"
 
   publish-server:
     name: Publish putplace-server to PyPI
