@@ -85,6 +85,7 @@ jobs:
         with:
           packages-dir: packages/putplace-assist/dist/
           verbose: true
+          attestations: false
 
       - name: Success message
         run: |
