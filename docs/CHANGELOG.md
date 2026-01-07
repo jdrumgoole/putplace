@@ -5,6 +5,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-01-07
+
+### Changed
+
+#### Web UI Enhancement (putplace-assist)
+- **Three-Component Architecture Display**: Updated daemon web UI to fully represent the queue-based architecture
+  - Replaced 4-card stats layout with 3-group component view matching Electron GUI
+  - **File Statistics**: Files Tracked, Paths Watched
+  - **Processing Queue**: Scanner→SHA256, SHA256→Upload, In Progress (with pipeline visualization)
+  - **Today's Activity**: Completed uploads, Failed uploads
+  - Real-time component status indicators:
+    - ● (green) = Component actively running
+    - ○ (gray) = Component inactive
+  - Shows Scanner (watcher_active) and SHA256 Processor (sha256_processor_active) status
+  - Color-coded statistics: green (success/active), orange (pending), red (errors)
+  - Responsive design (stacks to single column on mobile)
+  - Web UI accessible at `http://localhost:8765/ui`
+
+### Technical Details
+- Enhanced `loadStats()` JavaScript function to fetch from 3 endpoints:
+  - `/status` - component status and uptime
+  - `/files/stats` - file counts and sizes
+  - `/uploads/queue` - in_progress, completed_today, failed_today
+- Added CSS for component status indicators and color-coded values
+- UI now matches Electron GUI (v1.0.16) in displaying full three-component model
+
 ## [0.2.1] - 2026-01-06
 
 ### Added
