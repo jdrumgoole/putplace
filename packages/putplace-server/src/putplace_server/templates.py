@@ -663,11 +663,6 @@ def get_register_page() -> str:
 
                 <form id="registerForm">
                     <div class="form-group">
-                        <label for="username">Username</label>
-                        <input type="text" id="username" name="username" required placeholder="Choose a username" minlength="3">
-                    </div>
-
-                    <div class="form-group">
                         <label for="email">Email</label>
                         <input type="email" id="email" name="email" required placeholder="Enter your email">
                     </div>
@@ -698,7 +693,6 @@ def get_register_page() -> str:
             document.getElementById('registerForm').addEventListener('submit', async function(e) {{
                 e.preventDefault();
 
-                const username = document.getElementById('username').value;
                 const email = document.getElementById('email').value;
                 const password = document.getElementById('password').value;
                 const fullName = document.getElementById('fullName').value;
@@ -710,7 +704,6 @@ def get_register_page() -> str:
                             'Content-Type': 'application/json',
                         }},
                         body: JSON.stringify({{
-                            username,
                             email,
                             password,
                             full_name: fullName || null
