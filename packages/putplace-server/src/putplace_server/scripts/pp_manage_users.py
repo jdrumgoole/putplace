@@ -3,6 +3,9 @@
 
 This script allows administrators to manage users directly in the MongoDB database.
 
+Note: In PutPlace, email addresses serve as usernames. Users are identified and
+      authenticated by their email address.
+
 Usage:
     # List all users
     pp_manage_users list
@@ -210,10 +213,12 @@ async def approve_pending_user(
 ) -> tuple[bool, str]:
     """Approve a pending user by moving them to the users collection.
 
+    Note: Email address is used as the username for authentication.
+
     Args:
         client: MongoDB client
         database: Database name
-        email: User's email address
+        email: User's email address (also used as username)
         is_admin: Whether to make the user an admin
 
     Returns:
@@ -262,10 +267,12 @@ async def create_user(
 ) -> str:
     """Create a new user.
 
+    Note: Email address is used as the username for authentication.
+
     Args:
         client: MongoDB client
         database: Database name
-        email: User's email address
+        email: User's email address (also used as username)
         hashed_password: Hashed password
         full_name: User's full name (optional)
         is_admin: Whether user is an admin
@@ -958,7 +965,8 @@ def create_parser() -> argparse.ArgumentParser:
     """Create the argument parser with subcommands."""
     parser = argparse.ArgumentParser(
         prog="pp_manage_users",
-        description="Manage users in the PutPlace database.",
+        description="Manage users in the PutPlace database.\n\n"
+                    "Note: Email addresses serve as usernames in PutPlace.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
