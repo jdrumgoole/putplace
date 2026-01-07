@@ -8,6 +8,7 @@ from ..templates import (
     get_awaiting_confirmation_page,
     get_home_page,
     get_login_page,
+    get_my_files_page,
     get_register_page,
 )
 
@@ -42,3 +43,9 @@ async def register_page() -> str:
 async def awaiting_confirmation_page(email: str = "") -> str:
     """Display the awaiting email confirmation page."""
     return get_awaiting_confirmation_page(email)
+
+
+@router.get("/my_files", response_class=HTMLResponse)
+async def my_files_page() -> str:
+    """Display the user's uploaded files."""
+    return get_my_files_page()

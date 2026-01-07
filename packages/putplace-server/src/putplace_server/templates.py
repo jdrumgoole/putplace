@@ -856,3 +856,286 @@ def get_awaiting_confirmation_page(email: str = "") -> str:
     </body>
     </html>
     """
+
+def get_my_files_page() -> str:
+    """Generate the My Files page HTML."""
+    return """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>My Files - PutPlace</title>
+        <link rel="icon" type="image/svg+xml" href="/static/images/favicon.svg">
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                line-height: 1.6;
+                color: #333;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                padding: 20px;
+            }
+            .container {
+                max-width: 1200px;
+                margin: 0 auto;
+                background: white;
+                border-radius: 10px;
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+                overflow: hidden;
+            }
+            .header {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 30px 40px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            .header h1 {
+                font-size: 2rem;
+            }
+            .header-buttons {
+                display: flex;
+                gap: 10px;
+            }
+            .btn {
+                padding: 10px 20px;
+                background: rgba(255, 255, 255, 0.2);
+                color: white;
+                border: 2px solid white;
+                border-radius: 5px;
+                cursor: pointer;
+                font-weight: 500;
+                text-decoration: none;
+                transition: all 0.3s ease;
+            }
+            .btn:hover {
+                background: white;
+                color: #667eea;
+            }
+            .content {
+                padding: 40px;
+            }
+            .loading {
+                text-align: center;
+                padding: 40px;
+                color: #6c757d;
+            }
+            .error {
+                background: #fee;
+                color: #c33;
+                border: 1px solid #fcc;
+                padding: 15px;
+                border-radius: 5px;
+                margin-bottom: 20px;
+            }
+            .no-files {
+                text-align: center;
+                padding: 60px 20px;
+                color: #6c757d;
+            }
+            .no-files h3 {
+                color: #495057;
+                margin-bottom: 15px;
+                font-size: 1.5rem;
+            }
+            .no-files p {
+                margin-bottom: 25px;
+                font-size: 1.1rem;
+            }
+            .stats {
+                display: flex;
+                gap: 20px;
+                margin-bottom: 30px;
+                flex-wrap: wrap;
+            }
+            .stat-card {
+                flex: 1;
+                min-width: 200px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 20px;
+                border-radius: 8px;
+                text-align: center;
+            }
+            .stat-number {
+                font-size: 2rem;
+                font-weight: bold;
+                margin-bottom: 5px;
+            }
+            .stat-label {
+                font-size: 0.9rem;
+                opacity: 0.9;
+            }
+            .files-list {
+                margin-top: 20px;
+            }
+            .file-item {
+                background: #f8f9fa;
+                border-left: 4px solid #667eea;
+                padding: 15px 20px;
+                margin-bottom: 10px;
+                border-radius: 5px;
+                transition: all 0.2s;
+            }
+            .file-item:hover {
+                background: #e9ecef;
+                transform: translateX(5px);
+            }
+            .file-path {
+                font-family: 'Courier New', monospace;
+                font-size: 0.95rem;
+                color: #495057;
+                margin-bottom: 5px;
+            }
+            .file-meta {
+                font-size: 0.85rem;
+                color: #6c757d;
+                display: flex;
+                gap: 20px;
+                flex-wrap: wrap;
+            }
+            .file-host {
+                font-weight: 600;
+                color: #667eea;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <h1>📁 My Files</h1>
+                <div class="header-buttons">
+                    <a href="/" class="btn">Home</a>
+                    <a href="/api_keys_page" class="btn">API Keys</a>
+                    <button onclick="logout()" class="btn">Logout</button>
+                </div>
+            </div>
+
+            <div class="content">
+                <div id="loading" class="loading">
+                    <p>Loading your files...</p>
+                </div>
+                <div id="error" class="error" style="display: none;"></div>
+                <div id="stats" class="stats" style="display: none;"></div>
+                <div id="filesList" class="files-list"></div>
+            </div>
+        </div>
+
+        <script>
+            async function loadFiles() {
+                const token = localStorage.getItem('access_token');
+
+                if (!token) {
+                    window.location.href = '/login';
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/api/my_files', {
+                        headers: {
+                            'Authorization': `Bearer ${token}`
+                        }
+                    });
+
+                    if (response.status === 401) {
+                        localStorage.removeItem('access_token');
+                        window.location.href = '/login';
+                        return;
+                    }
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const files = await response.json();
+
+                    document.getElementById('loading').style.display = 'none';
+
+                    if (files.length === 0) {
+                        document.getElementById('filesList').innerHTML = `
+                            <div class="no-files">
+                                <h3>No files yet</h3>
+                                <p>Upload some files to see them here!</p>
+                                <p style="font-size: 0.9rem; color: #6c757d;">
+                                    Use the PutPlace client or API to upload file metadata.
+                                </p>
+                            </div>
+                        `;
+                        return;
+                    }
+
+                    // Calculate stats
+                    const totalSize = files.reduce((sum, f) => sum + (f.file_size || 0), 0);
+                    const hosts = new Set(files.map(f => f.hostname)).size;
+
+                    // Display stats
+                    document.getElementById('stats').innerHTML = `
+                        <div class="stat-card">
+                            <div class="stat-number">${files.length}</div>
+                            <div class="stat-label">Total Files</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${formatBytes(totalSize)}</div>
+                            <div class="stat-label">Total Size</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-number">${hosts}</div>
+                            <div class="stat-label">Hosts</div>
+                        </div>
+                    `;
+                    document.getElementById('stats').style.display = 'flex';
+
+                    // Display files
+                    const filesHtml = files.map(file => `
+                        <div class="file-item">
+                            <div class="file-path">${escapeHtml(file.filepath)}</div>
+                            <div class="file-meta">
+                                <span class="file-host">🖥️ ${escapeHtml(file.hostname)}</span>
+                                <span>📦 ${formatBytes(file.file_size || 0)}</span>
+                                <span>🔐 ${file.sha256.substring(0, 16)}...</span>
+                            </div>
+                        </div>
+                    `).join('');
+
+                    document.getElementById('filesList').innerHTML = filesHtml;
+
+                } catch (error) {
+                    console.error('Error loading files:', error);
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('error').textContent = 'Failed to load files. Please try again.';
+                    document.getElementById('error').style.display = 'block';
+                }
+            }
+
+            function formatBytes(bytes) {
+                if (bytes === 0) return '0 B';
+                const k = 1024;
+                const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+            }
+
+            function escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            function logout() {
+                localStorage.removeItem('access_token');
+                window.location.href = '/login';
+            }
+
+            // Load files on page load
+            loadFiles();
+        </script>
+    </body>
+    </html>
+    """
