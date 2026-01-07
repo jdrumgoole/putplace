@@ -295,8 +295,7 @@ async def test_api_login_endpoint(client: AsyncClient, test_db):
     password = "testpass123"
     await test_db.create_user(
         email=email,
-        hashed_password=get_password_hash(password),
-        full_name="Login Test User"
+        hashed_password=get_password_hash(password)
     )
 
     # Try to log in with JSON
@@ -319,8 +318,7 @@ async def test_api_login_wrong_password(client: AsyncClient, test_db):
     # Create a test user
     await test_db.create_user(
         email="wrongpass@example.com",
-        hashed_password=get_password_hash("correctpass"),
-        full_name="Wrong Pass Test"
+        hashed_password=get_password_hash("correctpass")
     )
 
     # Try to log in with wrong password

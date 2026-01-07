@@ -15,8 +15,7 @@ async def test_register_new_user(client: AsyncClient):
 
         user_data = {
             "email": "test@example.com",
-            "password": "testpassword123",
-            "full_name": "Test User"
+            "password": "testpassword123"
         }
 
         response = await client.post("/api/register", json=user_data)
@@ -264,8 +263,7 @@ async def test_user_registration_and_login_flow(client: AsyncClient, test_db):
     password = "flowpassword123"
     await test_db.create_user(
         email="flow@example.com",
-        hashed_password=get_password_hash(password),
-        full_name="Flow Test User"
+        hashed_password=get_password_hash(password)
     )
 
     # Login with credentials

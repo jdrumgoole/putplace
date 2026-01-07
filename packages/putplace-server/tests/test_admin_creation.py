@@ -186,11 +186,9 @@ async def test_ensure_admin_creates_full_user_document(test_db: MongoDB):
     # Check all required fields
     assert "email" in admin_user
     assert "hashed_password" in admin_user
-    assert "full_name" in admin_user
     assert "is_active" in admin_user
     assert "created_at" in admin_user
 
     # Check field values
-    assert admin_user["full_name"] == "Administrator"
     assert admin_user["is_active"] is True
     assert admin_user["created_at"] is not None

@@ -56,7 +56,6 @@ async def register_user(user_data: UserCreate, db: MongoDB = Depends(get_db)) ->
             hashed_password=hashed_password,
             confirmation_token=confirmation_token,
             expires_at=expires_at,
-            full_name=user_data.full_name,
         )
 
         # Send confirmation email
@@ -239,8 +238,7 @@ async def confirm_email(token: str, db: MongoDB = Depends(get_db)):
     try:
         user_id = await db.create_user(
             email=pending_user["email"],
-            hashed_password=pending_user["hashed_password"],
-            full_name=pending_user.get("full_name")
+            hashed_password=pending_user["hashed_password"]
         )
 
         # Delete pending user after successful creation
@@ -399,8 +397,6 @@ async def google_oauth_login(
             user_id = await db.create_user(
                 email=email,
                 hashed_password="",  # No password for OAuth users
-                full_name=name,
-                google_id=google_id,
             )
             user = await db.get_user_by_id(user_id)
 

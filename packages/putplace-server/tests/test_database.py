@@ -461,8 +461,7 @@ async def test_create_user(test_db: MongoDB):
     """Test creating a new user."""
     user_id = await test_db.create_user(
         email="test@example.com",
-        hashed_password="hashed_password_123",
-        full_name="Test User"
+        hashed_password="hashed_password_123"
     )
 
     assert user_id is not None
@@ -472,7 +471,6 @@ async def test_create_user(test_db: MongoDB):
     user = await test_db.get_user_by_email("test@example.com")
     assert user is not None
     assert user["email"] == "test@example.com"
-    assert user["full_name"] == "Test User"
     assert user["is_active"] is True
     assert "created_at" in user
 

@@ -375,7 +375,6 @@ async def test_admin_dashboard_shows_user_stats(
     user_id = await test_db.create_user(
         email="regular@example.com",
         hashed_password=get_password_hash("password123"),
-        full_name="Regular User",
         is_admin=False
     )
 

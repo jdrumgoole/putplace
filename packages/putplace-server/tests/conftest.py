@@ -309,8 +309,7 @@ async def test_user_token(test_db: MongoDB) -> str:
     # Create test user
     user_id = await test_db.create_user(
         email="testuser@example.com",
-        hashed_password=get_password_hash("testpassword123"),
-        full_name="Test User"
+        hashed_password=get_password_hash("testpassword123")
     )
 
     # Generate JWT token for the user (using email as subject)
@@ -350,7 +349,6 @@ async def test_admin_user_token(test_db: MongoDB) -> str:
     await test_db.create_user(
         email="admin@example.com",
         hashed_password=get_password_hash("adminpassword123"),
-        full_name="Admin User",
         is_admin=True
     )
 

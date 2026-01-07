@@ -672,11 +672,6 @@ def get_register_page() -> str:
                         <input type="password" id="password" name="password" required placeholder="Choose a password (min 8 characters)" minlength="8">
                     </div>
 
-                    <div class="form-group">
-                        <label for="fullName">Full Name (optional)</label>
-                        <input type="text" id="fullName" name="fullName" placeholder="Your full name">
-                    </div>
-
                     <button type="submit" class="btn" style="width: 100%;">Register</button>
                 </form>
 
@@ -695,7 +690,6 @@ def get_register_page() -> str:
 
                 const email = document.getElementById('email').value;
                 const password = document.getElementById('password').value;
-                const fullName = document.getElementById('fullName').value;
 
                 try {{
                     const response = await fetch('/api/register', {{
@@ -705,8 +699,7 @@ def get_register_page() -> str:
                         }},
                         body: JSON.stringify({{
                             email,
-                            password,
-                            full_name: fullName || null
+                            password
                         }})
                     }});
 

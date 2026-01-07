@@ -333,7 +333,6 @@ class MongoDB:
         self,
         email: str,
         hashed_password: str,
-        full_name: Optional[str] = None,
         is_admin: bool = False
     ) -> str:
         """Create a new user.
@@ -341,7 +340,6 @@ class MongoDB:
         Args:
             email: User's email
             hashed_password: Hashed password
-            full_name: User's full name (optional)
             is_admin: Whether the user has admin privileges (default: False)
 
         Returns:
@@ -360,7 +358,6 @@ class MongoDB:
             "email": email,
             "username": email,  # Use email as username
             "hashed_password": hashed_password,
-            "full_name": full_name,
             "is_active": True,
             "is_admin": is_admin,
             "created_at": datetime.utcnow(),
@@ -488,8 +485,7 @@ class MongoDB:
         email: str,
         hashed_password: str,
         confirmation_token: str,
-        expires_at,
-        full_name: Optional[str] = None
+        expires_at
     ) -> str:
         """Create a pending user awaiting email confirmation.
 
@@ -498,7 +494,6 @@ class MongoDB:
             hashed_password: Hashed password
             confirmation_token: Email confirmation token
             expires_at: Expiration datetime
-            full_name: User's full name (optional)
 
         Returns:
             Inserted pending user document ID
@@ -514,7 +509,6 @@ class MongoDB:
         pending_user_data = {
             "email": email,
             "hashed_password": hashed_password,
-            "full_name": full_name,
             "confirmation_token": confirmation_token,
             "created_at": datetime.utcnow(),
             "expires_at": expires_at,

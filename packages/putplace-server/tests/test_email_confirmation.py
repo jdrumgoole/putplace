@@ -76,8 +76,7 @@ class TestRegistrationWithEmailConfirmation:
         """Test registration creates pending user instead of active user."""
         user_data = {
             "email": "newuser@example.com",
-            "password": "testpassword123",
-            "full_name": "New User"
+            "password": "testpassword123"
         }
 
         response = await client.post("/api/register", json=user_data)
@@ -158,8 +157,7 @@ class TestEmailConfirmation:
             email="pending@example.com",
             hashed_password=hashed_password,
             confirmation_token=token,
-            expires_at=calculate_expiration_time(hours=24),
-            full_name="Pending User"
+            expires_at=calculate_expiration_time(hours=24)
         )
 
         # Confirm email
@@ -321,8 +319,7 @@ class TestEmailConfirmationIntegration:
             # Step 1: Register
             user_data = {
                 "email": "flowtest@example.com",
-                "password": "flowpassword123",
-                "full_name": "Flow Test User"
+                "password": "flowpassword123"
             }
 
             register_response = await client.post("/api/register", json=user_data)

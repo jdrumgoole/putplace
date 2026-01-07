@@ -160,7 +160,7 @@ async def list_users_detailed(client: AsyncMongoClient, database: str) -> list[d
     users = []
     async for user in users_collection.find(
         {},
-        {"email": 1, "full_name": 1, "is_admin": 1, "is_active": 1, "created_at": 1}
+        {"email": 1, "is_admin": 1, "is_active": 1, "created_at": 1}
     ):
         users.append(user)
 
@@ -183,7 +183,7 @@ async def list_pending_users(client: AsyncMongoClient, database: str) -> list[di
     pending = []
     async for user in pending_collection.find(
         {},
-        {"email": 1, "full_name": 1, "created_at": 1, "expires_at": 1}
+        {"email": 1, "created_at": 1, "expires_at": 1}
     ):
         pending.append(user)
 
@@ -243,7 +243,6 @@ async def approve_pending_user(
         "email": pending_user["email"],
         "username": pending_user["email"],  # Use email as username for uniqueness
         "hashed_password": pending_user["hashed_password"],
-        "full_name": pending_user.get("full_name"),
         "is_active": True,
         "is_admin": is_admin,
         "created_at": datetime.utcnow(),
@@ -262,7 +261,6 @@ async def create_user(
     database: str,
     email: str,
     hashed_password: str,
-    full_name: str | None = None,
     is_admin: bool = False
 ) -> str:
     """Create a new user.
@@ -274,7 +272,6 @@ async def create_user(
         database: Database name
         email: User's email address (also used as username)
         hashed_password: Hashed password
-        full_name: User's full name (optional)
         is_admin: Whether user is an admin
 
     Returns:
@@ -290,7 +287,6 @@ async def create_user(
         "email": email,
         "username": email,  # Use email as username for uniqueness
         "hashed_password": hashed_password,
-        "full_name": full_name,
         "is_active": True,
         "is_admin": is_admin,
         "created_at": datetime.utcnow(),
@@ -449,35 +445,32 @@ async def cmd_list(args: argparse.Namespace) -> int:
 
         if args.no_table:
             # Plain text output for scripting
-            print(f"{'Email':<40} {'Name':<25} {'Admin':<7} {'Active':<7} {'Created'}")
-            print("-" * 100)
+            print(f"{'Email':<50} {'Admin':<7} {'Active':<7} {'Created'}")
+            print("-" * 80)
             for user in sorted(users, key=lambda u: u.get("email", "")):
                 email = user.get("email", "N/A")
-                name = user.get("full_name", "") or "-"
                 is_admin = "Yes" if user.get("is_admin") else "No"
                 is_active = "Yes" if user.get("is_active", True) else "No"
                 created = user.get("created_at")
                 created_str = created.strftime("%Y-%m-%d %H:%M") if created else "N/A"
-                print(f"{email:<40} {name:<25} {is_admin:<7} {is_active:<7} {created_str}")
+                print(f"{email:<50} {is_admin:<7} {is_active:<7} {created_str}")
             print(f"\nTotal: {len(users)} users")
         else:
             # Rich table output
             table = Table(title=f"Users in [cyan]{args.database}[/cyan]", show_header=True)
             table.add_column("Email", style="cyan", no_wrap=True)
-            table.add_column("Name", style="white")
             table.add_column("Admin", justify="center")
             table.add_column("Active", justify="center")
             table.add_column("Created", style="dim")
 
             for user in sorted(users, key=lambda u: u.get("email", "")):
                 email = user.get("email", "N/A")
-                name = user.get("full_name", "") or "-"
                 is_admin = "[green]Yes[/green]" if user.get("is_admin") else "[dim]No[/dim]"
                 is_active = "[green]Yes[/green]" if user.get("is_active", True) else "[red]No[/red]"
                 created = user.get("created_at")
                 created_str = created.strftime("%Y-%m-%d %H:%M") if created else "N/A"
 
-                table.add_row(email, name, is_admin, is_active, created_str)
+                table.add_row(email, is_admin, is_active, created_str)
 
             console.print(table)
             console.print(f"\n[bold]Total:[/bold] {len(users)} users")
@@ -505,11 +498,10 @@ async def cmd_pending(args: argparse.Namespace) -> int:
 
         if args.no_table:
             # Plain text output for scripting
-            print(f"{'Email':<40} {'Name':<25} {'Created':<18} {'Expires'}")
-            print("-" * 100)
+            print(f"{'Email':<50} {'Created':<18} {'Expires'}")
+            print("-" * 80)
             for user in sorted(pending, key=lambda u: u.get("email", "")):
                 email = user.get("email", "N/A")
-                name = user.get("full_name", "") or "-"
                 created = user.get("created_at")
                 created_str = created.strftime("%Y-%m-%d %H:%M") if created else "N/A"
                 expires = user.get("expires_at")
@@ -520,7 +512,7 @@ async def cmd_pending(args: argparse.Namespace) -> int:
                         expires_str = expires.strftime("%Y-%m-%d %H:%M")
                 else:
                     expires_str = "N/A"
-                print(f"{email:<40} {name:<25} {created_str:<18} {expires_str}")
+                print(f"{email:<50} {created_str:<18} {expires_str}")
             print(f"\nTotal: {len(pending)} pending users")
         else:
             # Rich table output
@@ -529,13 +521,11 @@ async def cmd_pending(args: argparse.Namespace) -> int:
                 show_header=True
             )
             table.add_column("Email", style="cyan", no_wrap=True)
-            table.add_column("Name", style="white")
             table.add_column("Created", style="dim")
             table.add_column("Expires", style="yellow")
 
             for user in sorted(pending, key=lambda u: u.get("email", "")):
                 email = user.get("email", "N/A")
-                name = user.get("full_name", "") or "-"
                 created = user.get("created_at")
                 created_str = created.strftime("%Y-%m-%d %H:%M") if created else "N/A"
                 expires = user.get("expires_at")
@@ -547,7 +537,7 @@ async def cmd_pending(args: argparse.Namespace) -> int:
                 else:
                     expires_str = "N/A"
 
-                table.add_row(email, name, created_str, expires_str)
+                table.add_row(email, created_str, expires_str)
 
             console.print(table)
             console.print(f"\n[bold]Total:[/bold] {len(pending)} pending users")
@@ -590,8 +580,6 @@ async def cmd_approve(args: argparse.Namespace) -> int:
             return 1
 
         console.print(f"Pending user: [cyan]{email}[/cyan]")
-        if pending_user.get("full_name"):
-            console.print(f"  Name: [white]{pending_user['full_name']}[/white]")
 
         # Approve the user
         success, message = await approve_pending_user(
@@ -634,12 +622,6 @@ async def cmd_add(args: argparse.Namespace) -> int:
             print_error(f"User with email '[cyan]{email}[/cyan]' already exists.")
             return 1
 
-        # Get full name
-        full_name = args.name
-        if not full_name and not args.email:  # Interactive mode
-            full_name = console.input("[bold]Full name[/bold] [dim](optional)[/dim]: ").strip()
-            full_name = full_name or None
-
         # Get password
         password = args.password
         if not password:
@@ -660,8 +642,6 @@ async def cmd_add(args: argparse.Namespace) -> int:
             console.print()
             console.print("[bold]Create user:[/bold]")
             console.print(f"  Email: [cyan]{email}[/cyan]")
-            if full_name:
-                console.print(f"  Name:  [white]{full_name}[/white]")
             admin_str = "[green]Yes[/green]" if args.admin else "[dim]No[/dim]"
             console.print(f"  Admin: {admin_str}")
             console.print()
@@ -681,7 +661,6 @@ async def cmd_add(args: argparse.Namespace) -> int:
                 args.database,
                 email,
                 hashed_password,
-                full_name,
                 args.admin
             )
             console.print()
@@ -800,8 +779,6 @@ async def cmd_reset_password(args: argparse.Namespace) -> int:
 
         console.print()
         print_success(f"Found user: [cyan]{email}[/cyan]")
-        if user.get("full_name"):
-            console.print(f"  Name: [white]{user['full_name']}[/white]")
         if user.get("is_admin"):
             console.print(f"  Role: [yellow]Administrator[/yellow]")
 
@@ -986,7 +963,7 @@ Examples:
     pp_manage_users add
 
     # Add a user with arguments
-    pp_manage_users add --email user@example.com --password secret123 --name "John Doe"
+    pp_manage_users add --email user@example.com --password secret123
 
     # Add an admin user
     pp_manage_users add --email admin@example.com --password secret123 --admin
@@ -1060,7 +1037,6 @@ Examples:
     add_parser = subparsers.add_parser("add", help="Add a new user")
     add_parser.add_argument("--email", help="User's email address")
     add_parser.add_argument("--password", help="User's password (will prompt if not provided)")
-    add_parser.add_argument("--name", help="User's full name")
     add_parser.add_argument("--admin", action="store_true", help="Make user an administrator")
     add_parser.set_defaults(func=cmd_add)
 

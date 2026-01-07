@@ -126,19 +126,17 @@ class APIKeyInfo(BaseModel):
 class UserCreate(BaseModel):
     """Request model for user registration.
 
-    Email and password are required. Full name is optional.
+    Email and password are required.
     """
 
     email: str = Field(..., description="Email address")
     password: str = Field(..., description="Password", min_length=8)
-    full_name: Optional[str] = Field(None, description="Full name")
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "email": "john@example.com",
-                "password": "securepassword123",
-                "full_name": "John Doe"
+                "password": "securepassword123"
             }
         }
     )
