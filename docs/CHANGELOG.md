@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-01-07
+
+### Changed
+
+#### Registration Simplification (putplace-server)
+- **Username Field Removed**: Email now serves as both email and username throughout the application
+  - Registration page simplified - no longer asks for separate username
+  - Users register with: Email, Password, Full Name (optional)
+  - Backend automatically uses email as username in database
+  - Login continues to use email and password
+  - No migration needed - backend was already using email as username internally
+
+### Benefits
+- Clearer user experience - one less field to fill out
+- Eliminates confusion between email and username
+- Consistent with modern web application patterns
+
 ## [0.2.2] - 2026-01-07
 
 ### Changed
