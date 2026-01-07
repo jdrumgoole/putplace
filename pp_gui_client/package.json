@@ -1,8 +1,8 @@
 {
   "name": "pp_gui_client",
   "productName": "PutPlace Client",
-  "version": "1.0.16",
-  "description": "PutPlace GUI - Desktop client for file metadata management (compatible with pp_assist v0.2.1+)",
+  "version": "1.0.17",
+  "description": "PutPlace GUI - Desktop client for file metadata management (compatible with putplace-server v0.10.0+, putplace-assist v0.2.2+)",
   "homepage": "https://github.com/jdrumgoole/putplace",
   "repository": {
     "type": "git",
