@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-01-07
+
+### Removed
+
+#### Full Name Field Elimination (putplace-server)
+- **BREAKING: Full Name Field Removed**: Completely eliminated the full_name/Name field from all user management
+  - Registration now requires only: Email, Password
+  - Database no longer stores full_name in users or pending_users collections
+  - UserCreate API model no longer accepts full_name parameter
+  - pp_manage_users CLI tool no longer displays or accepts Name/full_name
+  - All user operations simplified to use email as the sole identifier
+
+### Changed
+
+#### Database Schema
+- `create_user()` - Removed `full_name` parameter
+- `create_pending_user()` - Removed `full_name` parameter
+- User documents now contain: email, username (=email), hashed_password, is_active, is_admin, created_at
+
+#### API Changes
+- `/api/register` endpoint - UserCreate model no longer accepts `full_name`
+- Email confirmation workflow - No longer processes full_name
+- OAuth registration - Simplified to use email only
+
+#### CLI Tool (pp_manage_users)
+- `list` command - Name column removed from output
+- `pending` command - Name column removed from output
+- `add` command - `--name` argument removed
+- `approve` command - No longer displays full name
+- `reset-password` command - No longer displays full name
+
+#### Web UI
+- Registration form - Full Name input field removed
+- Cleaner, simpler registration experience
+
+### Benefits
+- Simplified user model: email is the universal identifier
+- Reduced database storage and memory footprint
+- Cleaner API surface with fewer optional fields
+- Consistent with email-as-identity pattern used throughout the application
+- Less confusion about which name field to use
+
+### Migration Notes
+- **No database migration required** - full_name was optional and not used in core functionality
+- Existing users with full_name data will retain it in the database (not deleted)
+- New users will not have full_name field created
+- API clients should remove full_name from registration payloads (will be ignored if sent)
+
 ## [0.9.1] - 2026-01-07
 
 ### Changed
