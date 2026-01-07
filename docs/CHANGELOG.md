@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-01-07
+
+### Fixed
+
+#### Missing /my_files Page Endpoint (putplace-server)
+- **Fixed login redirect issue**: Added missing `/my_files` page endpoint that was causing 404 errors after successful login
+  - Users created via `pp_manage_users` can now successfully log in and view their files
+  - Login page redirects to `/my_files` after authentication
+  - New endpoint displays user's uploaded files with statistics (file count, total size, host count)
+  - Page includes authentication check, file listing, and proper error handling
+  - Styled consistently with other PutPlace pages
+
+### Technical Details
+- Added `get_my_files_page()` function to `templates.py` (290 lines of HTML/CSS/JavaScript)
+- Registered `/my_files` route in `routers/pages.py`
+- Page fetches data from `/api/my_files` endpoint with JWT authentication
+- Displays file metadata including paths, hostnames, sizes, and SHA256 hashes
+
 ## [0.10.0] - 2026-01-07
 
 ### Removed
