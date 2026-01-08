@@ -64,10 +64,10 @@ def install_electron_client(c, arch="arm64"):
 
     # Determine the download URL pattern based on architecture
     if arch == "arm64":
-        dmg_pattern = "PutPlace Client-*-arm64.dmg"
+        dmg_pattern = "PutPlace.Client-*-arm64.dmg"
         dmg_name = "PutPlace-Client-arm64.dmg"
     else:
-        dmg_pattern = "PutPlace Client-*.dmg"
+        dmg_pattern = "PutPlace.Client-*.dmg"
         dmg_name = "PutPlace-Client-x64.dmg"
 
     print(f"\n📦 Installing PutPlace Electron Client ({arch})...\n")
@@ -91,11 +91,11 @@ def install_electron_client(c, arch="arm64"):
     version = latest_tag.replace("electron-v", "")
     print(f"   Latest version: {version}")
 
-    # Step 2: Construct download URL
+    # Step 2: Construct download URL (note: filenames use dots, not spaces)
     if arch == "arm64":
-        download_url = f"https://github.com/jdrumgoole/putplace/releases/download/{latest_tag}/PutPlace%20Client-{version}-arm64.dmg"
+        download_url = f"https://github.com/jdrumgoole/putplace/releases/download/{latest_tag}/PutPlace.Client-{version}-arm64.dmg"
     else:
-        download_url = f"https://github.com/jdrumgoole/putplace/releases/download/{latest_tag}/PutPlace%20Client-{version}.dmg"
+        download_url = f"https://github.com/jdrumgoole/putplace/releases/download/{latest_tag}/PutPlace.Client-{version}.dmg"
 
     download_path = os.path.expanduser(f"~/Downloads/{dmg_name}")
 
