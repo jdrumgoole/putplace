@@ -123,7 +123,7 @@ test.describe.serial('PutPlace E2E Full Workflow', () => {
     console.log('\nStep 3: Creating test user...');
     try {
       execCommand(
-        `uv run pp_manage_users --config-file ${PPSERVER_CONFIG} add --email "${TEST_USER_EMAIL}" --password "${TEST_USER_PASSWORD}" --name "${TEST_USERNAME}" --admin`,
+        `uv run pp_manage_users --config-file ${PPSERVER_CONFIG} add --email "${TEST_USER_EMAIL}" --password "${TEST_USER_PASSWORD}" --admin`,
         'Create test user'
       );
     } catch (error) {

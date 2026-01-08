@@ -706,6 +706,16 @@ ipcMain.handle('ppassist-save-config', async (_event, config: any, daemonUrl?: s
   }
 });
 
+// Check if config file exists
+ipcMain.handle('check-config-exists', async () => {
+  const configPath = path.join(os.homedir(), '.config', 'putplace', 'pp_assist.toml');
+  try {
+    return { exists: fs.existsSync(configPath), path: configPath };
+  } catch (error: any) {
+    return { exists: false, error: error.message };
+  }
+});
+
 // Get file info by filepath from daemon
 ipcMain.handle('ppassist-get-file-by-path', async (_event, filePath: string, daemonUrl?: string) => {
   const url = daemonUrl || DEFAULT_PPASSIST_URL;

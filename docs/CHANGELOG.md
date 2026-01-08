@@ -5,6 +5,66 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-01-08
+
+### Added
+
+#### First-Launch Configuration Wizard (pp_gui_client)
+- **Configuration Wizard on First Launch**: Automatic setup wizard guides new users through essential configuration
+  - Appears automatically when `~/.config/putplace/pp_assist.toml` doesn't exist
+  - Three-step wizard with progress indicator:
+    - **Step 1: Daemon Configuration** - Configure pp_assist daemon connection (host, port) with connection validation
+    - **Step 2: Remote Server** - Set PutPlace server URL with optional server name
+    - **Step 3: Authentication** - Configure server credentials or skip for later setup
+  - Validates connections at each step before proceeding
+  - Back/Next navigation buttons for easy step traversal
+  - Skip Setup button creates minimal default configuration
+  - Non-dismissible on first launch to ensure proper configuration
+
+### Features
+- **Connection Validation**:
+  - Step 1: Tests daemon connection via `/health` endpoint, displays daemon version on success
+  - Step 2: Validates URL format, optionally tests server `/health` endpoint (5s timeout)
+  - Step 3: Validates credentials via login endpoint or allows skip
+- **Configuration Management**:
+  - Saves complete configuration to `~/.config/putplace/pp_assist.toml`
+  - Uses existing pp_assist daemon `/config` POST endpoint (no new dependencies)
+  - Creates all required sections: server, remote_server, database, watcher, uploader, sha256
+  - Password visibility toggle for security
+  - Default values pre-populated for common setups
+- **User Experience**:
+  - Multi-step modal with visual progress indicator
+  - Active/completed step highlighting
+  - Loading spinners during validation
+  - Clear success/error messages at each step
+  - Consistent styling with existing UI patterns
+
+### Technical Details
+- Added IPC handler `check-config-exists` in main.ts to detect first launch
+- New wizard modal with 3-step UI in index.html (112 lines)
+- Wizard CSS styling with animations and transitions in styles.css (137 lines)
+- Complete wizard state management and validation logic in renderer.ts
+- TypeScript interfaces for type-safe IPC communication
+- Comprehensive Playwright tests:
+  - `wizard-first-launch.spec.ts` - Basic wizard appearance tests
+  - `wizard-complete-flow.spec.ts` - Complete flow with validation, navigation, and config saving
+
+### Benefits
+- Eliminates manual configuration file creation for new users
+- Reduces setup errors with connection validation
+- Provides clear feedback at each configuration step
+- Consistent with modern application onboarding patterns
+- Makes PutPlace Electron client more accessible to non-technical users
+
+### Changed
+
+#### Simplified Authentication UI (pp_gui_client)
+- **Removed pp_assist URL field from login/register forms**: Daemon URL no longer displayed on home page
+  - Default daemon URL is `http://localhost:8765`
+  - Saved daemon URL persists in localStorage but is not shown in the UI
+  - Cleaner, simpler login and registration experience
+  - Configuration should be done through the wizard or settings modal
+
 ## [0.10.1] - 2026-01-07
 
 ### Fixed

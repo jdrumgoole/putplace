@@ -163,6 +163,9 @@ interface ElectronAPI {
   onUploadProgress: (callback: (progress: UploadProgress) => void) => void;
   removeUploadProgressListener: () => void;
 
+  // Configuration
+  checkConfigExists: () => Promise<{exists: boolean; path?: string; error?: string}>;
+
   // PPassist Daemon API
   ppassistCheck: (daemonUrl?: string) => Promise<PPassistCheckResult>;
   ppassistStart: () => Promise<{success: boolean; message?: string; version?: string}>;
@@ -216,6 +219,12 @@ let statusRefreshInterval: ReturnType<typeof setInterval> | null = null;
 let daemonReconnectInterval: ReturnType<typeof setInterval> | null = null;
 let daemonStartAttempted = false;
 
+// Wizard state
+let wizardCurrentStep = 1;
+let wizardTotalSteps = 3;
+let wizardValidatedSteps: Set<number> = new Set();
+let wizardDaemonUrl = '';
+
 // Configuration
 const DAEMON_RECONNECT_INTERVAL_MS = 10000; // 10 seconds - configurable
 const STATUS_REFRESH_INTERVAL_MS = 2000; // 2 seconds
@@ -228,10 +237,13 @@ const mainContent = document.getElementById('main-content') as HTMLElement;
 const authBtn = document.getElementById('auth-btn') as HTMLButtonElement;
 const authMessage = document.getElementById('auth-message') as HTMLDivElement;
 
+// Default daemon URL (can be overridden by localStorage)
+const DEFAULT_DAEMON_URL = 'http://localhost:8765';
+let daemonUrl = DEFAULT_DAEMON_URL;
+
 // Login elements
 const loginUsername = document.getElementById('login-username') as HTMLInputElement;
 const loginPassword = document.getElementById('login-password') as HTMLInputElement;
-const loginServer = document.getElementById('login-server') as HTMLInputElement;
 const loginBtn = document.getElementById('login-btn') as HTMLButtonElement;
 const logoutBtn = document.getElementById('logout-btn') as HTMLButtonElement;
 const togglePasswordBtn = document.getElementById('toggle-password') as HTMLButtonElement;
@@ -248,7 +260,6 @@ const registerUsername = document.getElementById('register-username') as HTMLInp
 const registerEmail = document.getElementById('register-email') as HTMLInputElement;
 const registerPassword = document.getElementById('register-password') as HTMLInputElement;
 const registerFullname = document.getElementById('register-fullname') as HTMLInputElement;
-const registerServer = document.getElementById('register-server') as HTMLInputElement;
 const registerBtn = document.getElementById('register-btn') as HTMLButtonElement;
 const toggleRegisterPasswordBtn = document.getElementById('toggle-register-password') as HTMLButtonElement;
 
@@ -295,6 +306,28 @@ const toggleConfigPasswordBtn = document.getElementById('toggle-config-password'
 const configHostnameInput = document.getElementById('config-hostname-input') as HTMLInputElement;
 const configIpAddressInput = document.getElementById('config-ip-address-input') as HTMLInputElement;
 
+// Wizard modal elements
+const wizardModal = document.getElementById('wizard-modal') as HTMLDivElement;
+const wizardModalClose = document.getElementById('wizard-modal-close') as HTMLButtonElement;
+const wizardTitle = document.getElementById('wizard-title') as HTMLHeadingElement;
+const wizardBackBtn = document.getElementById('wizard-back-btn') as HTMLButtonElement;
+const wizardNextBtn = document.getElementById('wizard-next-btn') as HTMLButtonElement;
+const wizardFinishBtn = document.getElementById('wizard-finish-btn') as HTMLButtonElement;
+const wizardSkipBtn = document.getElementById('wizard-skip-btn') as HTMLButtonElement;
+
+// Step elements
+const wizardDaemonHost = document.getElementById('wizard-daemon-host') as HTMLInputElement;
+const wizardDaemonPort = document.getElementById('wizard-daemon-port') as HTMLInputElement;
+const wizardStep1Message = document.getElementById('wizard-step-1-message') as HTMLDivElement;
+const wizardServerUrl = document.getElementById('wizard-server-url') as HTMLInputElement;
+const wizardServerName = document.getElementById('wizard-server-name') as HTMLInputElement;
+const wizardStep2Message = document.getElementById('wizard-step-2-message') as HTMLDivElement;
+const wizardUsername = document.getElementById('wizard-username') as HTMLInputElement;
+const wizardPassword = document.getElementById('wizard-password') as HTMLInputElement;
+const wizardSkipAuth = document.getElementById('wizard-skip-auth') as HTMLInputElement;
+const wizardStep3Message = document.getElementById('wizard-step-3-message') as HTMLDivElement;
+const wizardTogglePassword = document.getElementById('wizard-toggle-password') as HTMLButtonElement;
+
 // Track active uploads by file path
 const activeUploads = new Map<string, HTMLElement>();
 
@@ -313,7 +346,7 @@ async function init() {
 
   if (savedServer) {
     serverUrl = savedServer;
-    loginServer.value = savedServer;
+    daemonUrl = savedServer;
   }
 
   // Restore remembered email if enabled
@@ -337,6 +370,13 @@ async function init() {
 
   // Check ppassist daemon connection
   await checkDaemonConnection();
+
+  // Check if configuration exists - show wizard if not
+  const configCheck = await electronAPI.checkConfigExists();
+  if (!configCheck.exists && !configCheck.error) {
+    log('First launch detected - showing configuration wizard', 'info');
+    await showConfigWizard();
+  }
 
   // Start periodic status refresh
   startStatusRefresh();
@@ -694,6 +734,226 @@ async function saveConfig() {
   }
 }
 
+// ===== Configuration Wizard =====
+
+async function showConfigWizard() {
+  wizardCurrentStep = 1;
+  wizardValidatedSteps.clear();
+  wizardModal.style.display = 'flex';
+  wizardModalClose.style.display = 'none'; // Non-dismissible on first launch
+  updateWizardStep(1);
+}
+
+function updateWizardStep(step: number) {
+  wizardCurrentStep = step;
+
+  // Update progress indicator
+  document.querySelectorAll('.wizard-step').forEach((el, index) => {
+    const stepNum = el.querySelector('.step-number');
+    if (!stepNum) return;
+
+    stepNum.classList.remove('active', 'completed');
+    if (index + 1 < step) stepNum.classList.add('completed');
+    else if (index + 1 === step) stepNum.classList.add('active');
+  });
+
+  // Show/hide step content
+  document.querySelectorAll('.wizard-step-content').forEach((el, index) => {
+    (el as HTMLElement).style.display = index + 1 === step ? 'block' : 'none';
+  });
+
+  // Update buttons
+  wizardBackBtn.style.display = step > 1 ? 'block' : 'none';
+  wizardNextBtn.style.display = step < wizardTotalSteps ? 'block' : 'none';
+  wizardFinishBtn.style.display = step === wizardTotalSteps ? 'block' : 'none';
+
+  const titles = [
+    'Step 1 of 3: Daemon Configuration',
+    'Step 2 of 3: Remote Server',
+    'Step 3 of 3: Authentication'
+  ];
+  wizardTitle.textContent = titles[step - 1];
+}
+
+function showWizardMessage(step: number, message: string, type: 'success' | 'error' | 'info' | 'loading') {
+  const messageEl = step === 1 ? wizardStep1Message :
+                    step === 2 ? wizardStep2Message : wizardStep3Message;
+  messageEl.className = `wizard-message ${type}`;
+  messageEl.textContent = message;
+}
+
+async function validateWizardStep(step: number): Promise<boolean> {
+  if (step === 1) {
+    const host = wizardDaemonHost.value.trim();
+    const port = parseInt(wizardDaemonPort.value);
+
+    if (!host || !port || port < 1 || port > 65535) {
+      showWizardMessage(1, 'Please enter a valid host and port', 'error');
+      return false;
+    }
+
+    wizardDaemonUrl = `http://${host}:${port}`;
+    showWizardMessage(1, 'Testing daemon connection...', 'loading');
+
+    try {
+      const result = await electronAPI.ppassistCheck(wizardDaemonUrl);
+      if (result.connected) {
+        showWizardMessage(1, `Connected successfully (v${result.version})`, 'success');
+        wizardValidatedSteps.add(1);
+        return true;
+      }
+      showWizardMessage(1, 'Could not connect. Please check host and port or start daemon with: pp_assist start', 'error');
+      return false;
+    } catch (error: any) {
+      showWizardMessage(1, `Connection failed: ${error.message || 'Unknown error'}`, 'error');
+      return false;
+    }
+  } else if (step === 2) {
+    const url = wizardServerUrl.value.trim();
+    if (!url) {
+      showWizardMessage(2, 'Please enter a server URL', 'error');
+      return false;
+    }
+
+    try {
+      new URL(url);
+    } catch {
+      showWizardMessage(2, 'Please enter a valid URL', 'error');
+      return false;
+    }
+
+    showWizardMessage(2, 'Testing server connection...', 'loading');
+
+    try {
+      const response = await fetch(`${url}/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(5000)
+      });
+      showWizardMessage(2, 'Server is reachable', 'success');
+      wizardValidatedSteps.add(2);
+      return true;
+    } catch {
+      showWizardMessage(2, 'Could not verify server. Proceeding anyway...', 'info');
+      wizardValidatedSteps.add(2);
+      return true;
+    }
+  } else if (step === 3) {
+    if (wizardSkipAuth.checked) {
+      showWizardMessage(3, 'Authentication will be configured later', 'info');
+      wizardValidatedSteps.add(3);
+      return true;
+    }
+
+    const username = wizardUsername.value.trim();
+    const password = wizardPassword.value.trim();
+
+    if (!username || !password) {
+      showWizardMessage(3, 'Please enter credentials or check "Skip authentication"', 'error');
+      return false;
+    }
+
+    showWizardMessage(3, 'Testing credentials...', 'loading');
+
+    try {
+      const result = await electronAPI.login(username, password, wizardDaemonUrl);
+      if (result.success) {
+        showWizardMessage(3, 'Credentials verified successfully', 'success');
+        wizardValidatedSteps.add(3);
+        return true;
+      }
+      showWizardMessage(3, `Login failed: ${result.error}. Check credentials or skip.`, 'error');
+      return false;
+    } catch (error: any) {
+      showWizardMessage(3, `Could not verify: ${error.message}`, 'error');
+      return false;
+    }
+  }
+  return false;
+}
+
+async function wizardNext() {
+  const valid = await validateWizardStep(wizardCurrentStep);
+  if (valid && wizardCurrentStep < wizardTotalSteps) {
+    updateWizardStep(wizardCurrentStep + 1);
+  }
+}
+
+function wizardBack() {
+  if (wizardCurrentStep > 1) {
+    updateWizardStep(wizardCurrentStep - 1);
+  }
+}
+
+async function wizardFinish() {
+  if (!await validateWizardStep(wizardCurrentStep)) return;
+
+  const config: any = {
+    server: {
+      host: wizardDaemonHost.value.trim(),
+      port: parseInt(wizardDaemonPort.value),
+      log_level: 'INFO'
+    },
+    remote_server: {
+      name: wizardServerName.value.trim() || wizardServerUrl.value.trim(),
+      url: wizardServerUrl.value.trim(),
+    },
+    database: { path: '~/.local/share/putplace/assist.db' },
+    watcher: { enabled: true, debounce_seconds: 2.0 },
+    uploader: { parallel_uploads: 4, retry_attempts: 3, retry_delay_seconds: 5.0, timeout_seconds: 600 },
+    sha256: { chunk_size: 65536, chunk_delay_ms: 1, batch_size: 100, batch_delay_seconds: 1.0 }
+  };
+
+  if (!wizardSkipAuth.checked) {
+    config.remote_server.username = wizardUsername.value.trim();
+    config.remote_server.password = wizardPassword.value.trim();
+  }
+
+  showWizardMessage(3, 'Saving configuration...', 'loading');
+
+  try {
+    const result = await electronAPI.ppassistSaveConfig(config, wizardDaemonUrl);
+    if (result.success) {
+      showWizardMessage(3, 'Configuration saved successfully!', 'success');
+      setTimeout(() => {
+        wizardModal.style.display = 'none';
+        checkDaemonConnection();
+      }, 1500);
+    } else {
+      showWizardMessage(3, `Failed to save: ${result.error}`, 'error');
+    }
+  } catch (error: any) {
+    showWizardMessage(3, `Error: ${error.message}`, 'error');
+  }
+}
+
+async function wizardSkip() {
+  if (!confirm('Skip setup? You will need to configure manually later.')) return;
+
+  const minimalConfig = {
+    server: { host: '127.0.0.1', port: 8765, log_level: 'INFO' },
+    remote_server: { name: 'localhost', url: 'http://localhost:8100' },
+    database: { path: '~/.local/share/putplace/assist.db' },
+    watcher: { enabled: true, debounce_seconds: 2.0 },
+    uploader: { parallel_uploads: 4, retry_attempts: 3, retry_delay_seconds: 5.0, timeout_seconds: 600 }
+  };
+
+  try {
+    await electronAPI.ppassistSaveConfig(minimalConfig);
+  } catch {}
+
+  wizardModal.style.display = 'none';
+}
+
+// Event listeners
+wizardBackBtn.addEventListener('click', wizardBack);
+wizardNextBtn.addEventListener('click', wizardNext);
+wizardFinishBtn.addEventListener('click', wizardFinish);
+wizardSkipBtn.addEventListener('click', wizardSkip);
+wizardModalClose.addEventListener('click', () => wizardModal.style.display = 'none');
+wizardTogglePassword.addEventListener('click', () => {
+  wizardPassword.type = wizardPassword.type === 'password' ? 'text' : 'password';
+});
+
 // Save settings
 function saveSettings() {
   localStorage.setItem('serverUrl', serverUrl);
@@ -735,15 +995,13 @@ function showRegisterForm() {
   registerForm.style.display = 'block';
   authMessage.className = 'message';
   authMessage.textContent = '';
-  // Sync server URL
-  registerServer.value = loginServer.value;
 }
 
 // Login handler
 async function handleLogin() {
   const username = loginUsername.value.trim();
   const password = loginPassword.value.trim();
-  const server = loginServer.value.trim();
+  const server = daemonUrl;
 
   if (!username || !password) {
     showAuthMessage('Please enter username and password', 'error');
@@ -808,7 +1066,7 @@ async function handleRegister() {
   const email = registerEmail.value.trim();
   const password = registerPassword.value.trim();
   const fullName = registerFullname.value.trim() || null;
-  const server = registerServer.value.trim();
+  const server = daemonUrl;
 
   if (!username || !email || !password) {
     showAuthMessage('Please fill in all required fields', 'error');
@@ -853,7 +1111,6 @@ async function handleRegister() {
         showAuthMessage('Registration successful! Please login.', 'success');
         showLoginForm();
         loginUsername.value = username;
-        loginServer.value = server;
       }
 
       registerBtn.disabled = false;

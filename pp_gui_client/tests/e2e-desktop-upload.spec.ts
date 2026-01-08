@@ -62,7 +62,7 @@ test.describe('Desktop Upload via Electron GUI', () => {
     try {
       console.log('\n👤 Creating test user...');
       await execPromise(
-        `uv run pp_manage_users add --email "${TEST_USER_EMAIL}" --password "${TEST_USER_PASSWORD}" --name "Desktop Test User" --admin`
+        `uv run pp_manage_users add --email "${TEST_USER_EMAIL}" --password "${TEST_USER_PASSWORD}" --admin`
       );
       console.log('✓ Test user created');
     } catch (err) {

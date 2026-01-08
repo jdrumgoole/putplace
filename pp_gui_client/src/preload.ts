@@ -64,6 +64,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('ppassist-get-config', daemonUrl),
   ppassistSaveConfig: (config: any, daemonUrl?: string) =>
     ipcRenderer.invoke('ppassist-save-config', config, daemonUrl),
+  checkConfigExists: () =>
+    ipcRenderer.invoke('check-config-exists'),
   ppassistGetFileByPath: (filePath: string, daemonUrl?: string) =>
     ipcRenderer.invoke('ppassist-get-file-by-path', filePath, daemonUrl),
 });
