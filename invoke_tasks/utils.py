@@ -112,17 +112,8 @@ def install_electron_client(c, arch="arm64"):
 
     print(f"   ✓ Downloaded to {download_path}")
 
-    # Step 4: Remove quarantine attribute
-    print("\n3️⃣  Removing quarantine attribute...")
-    result = c.run(f'xattr -cr "{download_path}"', warn=True)
-
-    if result.ok:
-        print("   ✓ Quarantine attribute removed")
-    else:
-        print("   ⚠️  Could not remove quarantine attribute (may not be needed)")
-
-    # Step 5: Mount the DMG
-    print("\n4️⃣  Mounting DMG...")
+    # Step 3: Mount the DMG (skip DMG quarantine removal, we'll do it on the app)
+    print("\n3️⃣  Mounting DMG...")
     result = c.run(f'hdiutil attach "{download_path}" -quiet', hide=True, warn=True)
 
     if not result.ok:
@@ -131,8 +122,8 @@ def install_electron_client(c, arch="arm64"):
 
     print("   ✓ DMG mounted")
 
-    # Step 6: Copy to Applications
-    print("\n5️⃣  Installing to /Applications...")
+    # Step 4: Copy to Applications
+    print("\n4️⃣  Installing to /Applications...")
 
     # Find the mounted volume
     result = c.run(
@@ -164,15 +155,20 @@ def install_electron_client(c, arch="arm64"):
         c.run(f'hdiutil detach "{volume_path}" 2>/dev/null', warn=True, hide=True)
         return
 
-    # Step 7: Unmount the DMG
-    print("\n6️⃣  Unmounting DMG...")
+    # Step 5: Unmount the DMG
+    print("\n5️⃣  Unmounting DMG...")
     c.run(f'hdiutil detach "{volume_path}" -quiet', warn=True, hide=True)
     print("   ✓ DMG unmounted")
 
-    # Step 8: Remove quarantine from installed app
-    print("\n7️⃣  Removing quarantine from installed app...")
-    c.run('xattr -cr "/Applications/PutPlace Client.app"', warn=True, hide=True)
-    print("   ✓ App is ready to use")
+    # Step 6: Remove quarantine from installed app (use system xattr, not Homebrew)
+    print("\n6️⃣  Removing quarantine from installed app...")
+    result = c.run('/usr/bin/xattr -cr "/Applications/PutPlace Client.app"', warn=True, hide=True)
+
+    if result.ok:
+        print("   ✓ Quarantine attribute removed - app is ready to use")
+    else:
+        print("   ⚠️  Could not remove quarantine attribute")
+        print("   You may need to right-click the app and select 'Open' on first launch")
 
     print("\n✅ Installation complete!")
     print("\nYou can now run PutPlace Client from:")
