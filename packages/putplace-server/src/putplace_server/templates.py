@@ -402,10 +402,9 @@ ppclient --help</pre>
                 const authButtons = document.getElementById('authButtons');
 
                 if (token && authButtons) {{
-                    // User is logged in - show My Files, API Keys and Logout buttons
+                    // User is logged in - show My Files and Logout buttons
                     authButtons.innerHTML = `
                         <a href="/my_files" class="auth-btn">My Files</a>
-                        <a href="/api_keys_page" class="auth-btn">My API Keys</a>
                         <button onclick="logout()" class="auth-btn" style="cursor: pointer;">Logout</button>
                     `;
                 }}
@@ -1013,7 +1012,6 @@ def get_my_files_page() -> str:
                 <h1>📁 My Files</h1>
                 <div class="header-buttons">
                     <a href="/" class="btn">Home</a>
-                    <a href="/api_keys_page" class="btn">API Keys</a>
                     <button onclick="logout()" class="btn">Logout</button>
                 </div>
             </div>
@@ -1064,7 +1062,7 @@ def get_my_files_page() -> str:
                                 <h3>No files yet</h3>
                                 <p>Upload some files to see them here!</p>
                                 <p style="font-size: 0.9rem; color: #6c757d;">
-                                    Use the PutPlace client or API to upload file metadata.
+                                    Download the <a href="https://github.com/jdrumgoole/putplace/releases" target="_blank" style="color: #667eea; text-decoration: none;">PutPlace Desktop Client</a> or use the API to upload file metadata.
                                 </p>
                             </div>
                         `;

@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.2] - 2026-01-08
+
+### Changed
+
+#### UI Improvements (putplace-server)
+- **Added GitHub releases link in "no files" message**: When users have no files, the message now includes a hyperlink to download the PutPlace Desktop Client from GitHub releases
+  - Link: https://github.com/jdrumgoole/putplace/releases
+  - Opens in new tab with proper styling
+  - Makes it easier for new users to find and download the Electron client
+
+- **Removed API Keys button from UI**: Removed "My API Keys" button from main page and My Files page
+  - API key management via UI is not currently in use
+  - Cleaner, simpler navigation
+  - API keys can still be created via `pp_manage_users` or API endpoints if needed
+
 ## [1.1.0] - 2026-01-08
 
 ### Added
