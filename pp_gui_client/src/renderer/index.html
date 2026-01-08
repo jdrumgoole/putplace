@@ -331,21 +331,11 @@
                 <button id="wizard-modal-close" class="modal-close">&times;</button>
             </div>
 
-            <!-- Progress Indicator -->
-            <div class="wizard-progress">
+            <!-- Progress Indicator (hidden for single-step wizard) -->
+            <div class="wizard-progress" style="display: none;">
                 <div class="wizard-step" data-step="1">
                     <div class="step-number active">1</div>
                     <div class="step-label">Daemon</div>
-                </div>
-                <div class="wizard-step-line"></div>
-                <div class="wizard-step" data-step="2">
-                    <div class="step-number">2</div>
-                    <div class="step-label">Server</div>
-                </div>
-                <div class="wizard-step-line"></div>
-                <div class="wizard-step" data-step="3">
-                    <div class="step-number">3</div>
-                    <div class="step-label">Auth</div>
                 </div>
             </div>
 
@@ -370,59 +360,8 @@
                     <div id="wizard-step-1-message" class="wizard-message"></div>
                 </div>
 
-                <!-- Step 2: Remote Server Configuration -->
-                <div id="wizard-step-2" class="wizard-step-content" style="display: none;">
-                    <h3>Configure Remote Server</h3>
-                    <p class="wizard-description">Enter the URL of your PutPlace server.</p>
-
-                    <div class="form-group">
-                        <label for="wizard-server-url">Server URL:</label>
-                        <input type="text" id="wizard-server-url" value="https://app.putplace.org" placeholder="https://app.putplace.org" />
-                        <small class="form-hint">Example: https://app.putplace.org or http://localhost:8100</small>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="wizard-server-name">Server Name (optional):</label>
-                        <input type="text" id="wizard-server-name" placeholder="My PutPlace Server" />
-                        <small class="form-hint">Friendly name for this server</small>
-                    </div>
-
-                    <div id="wizard-step-2-message" class="wizard-message"></div>
-                </div>
-
-                <!-- Step 3: Authentication -->
-                <div id="wizard-step-3" class="wizard-step-content" style="display: none;">
-                    <h3>Server Authentication</h3>
-                    <p class="wizard-description">Enter your credentials for the PutPlace server.</p>
-
-                    <div class="form-group">
-                        <label for="wizard-username">Email/Username:</label>
-                        <input type="email" id="wizard-username" placeholder="user@example.com" />
-                    </div>
-
-                    <div class="form-group">
-                        <label for="wizard-password">Password:</label>
-                        <div class="password-input-wrapper">
-                            <input type="password" id="wizard-password" placeholder="Enter password" />
-                            <button type="button" id="wizard-toggle-password" class="password-toggle">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-                                    <circle cx="12" cy="12" r="3"></circle>
-                                </svg>
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="wizard-skip-auth" />
-                            <span>Skip authentication (configure later)</span>
-                        </label>
-                        <small class="form-hint">You can add credentials later via Settings</small>
-                    </div>
-
-                    <div id="wizard-step-3-message" class="wizard-message"></div>
-                </div>
+                <!-- Steps 2 and 3 removed - GUI client only configures daemon connection -->
+                <!-- Server and authentication are configured in pp_assist.toml -->
             </div>
 
             <div class="modal-footer wizard-footer">

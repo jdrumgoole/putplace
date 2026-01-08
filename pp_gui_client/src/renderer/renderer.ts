@@ -165,6 +165,8 @@ interface ElectronAPI {
 
   // Configuration
   checkConfigExists: () => Promise<{exists: boolean; path?: string; error?: string}>;
+  saveGuiConfig: (config: any) => Promise<{success: boolean; path?: string; error?: string}>;
+  loadGuiConfig: () => Promise<{success: boolean; config?: any; error?: string}>;
 
   // PPassist Daemon API
   ppassistCheck: (daemonUrl?: string) => Promise<PPassistCheckResult>;
@@ -221,7 +223,7 @@ let daemonStartAttempted = false;
 
 // Wizard state
 let wizardCurrentStep = 1;
-let wizardTotalSteps = 3;
+let wizardTotalSteps = 1;  // Simplified to just daemon configuration
 let wizardValidatedSteps: Set<number> = new Set();
 let wizardDaemonUrl = '';
 
@@ -315,18 +317,10 @@ const wizardNextBtn = document.getElementById('wizard-next-btn') as HTMLButtonEl
 const wizardFinishBtn = document.getElementById('wizard-finish-btn') as HTMLButtonElement;
 const wizardSkipBtn = document.getElementById('wizard-skip-btn') as HTMLButtonElement;
 
-// Step elements
+// Step elements (only step 1 - daemon configuration)
 const wizardDaemonHost = document.getElementById('wizard-daemon-host') as HTMLInputElement;
 const wizardDaemonPort = document.getElementById('wizard-daemon-port') as HTMLInputElement;
 const wizardStep1Message = document.getElementById('wizard-step-1-message') as HTMLDivElement;
-const wizardServerUrl = document.getElementById('wizard-server-url') as HTMLInputElement;
-const wizardServerName = document.getElementById('wizard-server-name') as HTMLInputElement;
-const wizardStep2Message = document.getElementById('wizard-step-2-message') as HTMLDivElement;
-const wizardUsername = document.getElementById('wizard-username') as HTMLInputElement;
-const wizardPassword = document.getElementById('wizard-password') as HTMLInputElement;
-const wizardSkipAuth = document.getElementById('wizard-skip-auth') as HTMLInputElement;
-const wizardStep3Message = document.getElementById('wizard-step-3-message') as HTMLDivElement;
-const wizardTogglePassword = document.getElementById('wizard-toggle-password') as HTMLButtonElement;
 
 // Track active uploads by file path
 const activeUploads = new Map<string, HTMLElement>();
@@ -336,18 +330,23 @@ const uploadHistory: UploadHistoryItem[] = [];
 
 // Initialize
 async function init() {
+  // Load GUI config file (daemon connection) - this is the source of truth
+  const configResult = await electronAPI.loadGuiConfig();
+  if (configResult.success && configResult.config) {
+    daemonUrl = `http://${configResult.config.daemon.host}:${configResult.config.daemon.port}`;
+    log(`Loaded daemon URL from config: ${daemonUrl}`, 'info');
+  } else {
+    // Use default if config doesn't exist yet
+    daemonUrl = DEFAULT_DAEMON_URL;
+    log(`Using default daemon URL: ${daemonUrl}`, 'info');
+  }
+
   // Load saved settings from localStorage
   const savedToken = localStorage.getItem('accessToken');
   const savedUsername = localStorage.getItem('username');
-  const savedServer = localStorage.getItem('serverUrl');
   const savedPatterns = localStorage.getItem('excludePatterns');
   const savedEmail = localStorage.getItem('rememberedEmail');
   const rememberEmail = localStorage.getItem('rememberEmail') === 'true';
-
-  if (savedServer) {
-    serverUrl = savedServer;
-    daemonUrl = savedServer;
-  }
 
   // Restore remembered email if enabled
   if (rememberEmail && savedEmail) {
@@ -747,14 +746,13 @@ async function showConfigWizard() {
 function updateWizardStep(step: number) {
   wizardCurrentStep = step;
 
-  // Update progress indicator
+  // Update progress indicator (hide for single step)
   document.querySelectorAll('.wizard-step').forEach((el, index) => {
     const stepNum = el.querySelector('.step-number');
     if (!stepNum) return;
 
     stepNum.classList.remove('active', 'completed');
-    if (index + 1 < step) stepNum.classList.add('completed');
-    else if (index + 1 === step) stepNum.classList.add('active');
+    if (index + 1 === step) stepNum.classList.add('active');
   });
 
   // Show/hide step content
@@ -762,27 +760,23 @@ function updateWizardStep(step: number) {
     (el as HTMLElement).style.display = index + 1 === step ? 'block' : 'none';
   });
 
-  // Update buttons
-  wizardBackBtn.style.display = step > 1 ? 'block' : 'none';
-  wizardNextBtn.style.display = step < wizardTotalSteps ? 'block' : 'none';
-  wizardFinishBtn.style.display = step === wizardTotalSteps ? 'block' : 'none';
+  // Update buttons - simplified for single step
+  wizardBackBtn.style.display = 'none';  // No back button for single step
+  wizardNextBtn.style.display = 'none';  // No next button for single step
+  wizardFinishBtn.style.display = 'block';  // Always show finish button
 
-  const titles = [
-    'Step 1 of 3: Daemon Configuration',
-    'Step 2 of 3: Remote Server',
-    'Step 3 of 3: Authentication'
-  ];
-  wizardTitle.textContent = titles[step - 1];
+  wizardTitle.textContent = 'Configure Daemon Connection';
 }
 
 function showWizardMessage(step: number, message: string, type: 'success' | 'error' | 'info' | 'loading') {
-  const messageEl = step === 1 ? wizardStep1Message :
-                    step === 2 ? wizardStep2Message : wizardStep3Message;
+  // Only step 1 exists in simplified wizard
+  const messageEl = wizardStep1Message;
   messageEl.className = `wizard-message ${type}`;
   messageEl.textContent = message;
 }
 
 async function validateWizardStep(step: number): Promise<boolean> {
+  // Only validate step 1 (daemon connection) in simplified wizard
   if (step === 1) {
     const host = wizardDaemonHost.value.trim();
     const port = parseInt(wizardDaemonPort.value);
@@ -808,65 +802,6 @@ async function validateWizardStep(step: number): Promise<boolean> {
       showWizardMessage(1, `Connection failed: ${error.message || 'Unknown error'}`, 'error');
       return false;
     }
-  } else if (step === 2) {
-    const url = wizardServerUrl.value.trim();
-    if (!url) {
-      showWizardMessage(2, 'Please enter a server URL', 'error');
-      return false;
-    }
-
-    try {
-      new URL(url);
-    } catch {
-      showWizardMessage(2, 'Please enter a valid URL', 'error');
-      return false;
-    }
-
-    showWizardMessage(2, 'Testing server connection...', 'loading');
-
-    try {
-      const response = await fetch(`${url}/health`, {
-        method: 'GET',
-        signal: AbortSignal.timeout(5000)
-      });
-      showWizardMessage(2, 'Server is reachable', 'success');
-      wizardValidatedSteps.add(2);
-      return true;
-    } catch {
-      showWizardMessage(2, 'Could not verify server. Proceeding anyway...', 'info');
-      wizardValidatedSteps.add(2);
-      return true;
-    }
-  } else if (step === 3) {
-    if (wizardSkipAuth.checked) {
-      showWizardMessage(3, 'Authentication will be configured later', 'info');
-      wizardValidatedSteps.add(3);
-      return true;
-    }
-
-    const username = wizardUsername.value.trim();
-    const password = wizardPassword.value.trim();
-
-    if (!username || !password) {
-      showWizardMessage(3, 'Please enter credentials or check "Skip authentication"', 'error');
-      return false;
-    }
-
-    showWizardMessage(3, 'Testing credentials...', 'loading');
-
-    try {
-      const result = await electronAPI.login(username, password, wizardDaemonUrl);
-      if (result.success) {
-        showWizardMessage(3, 'Credentials verified successfully', 'success');
-        wizardValidatedSteps.add(3);
-        return true;
-      }
-      showWizardMessage(3, `Login failed: ${result.error}. Check credentials or skip.`, 'error');
-      return false;
-    } catch (error: any) {
-      showWizardMessage(3, `Could not verify: ${error.message}`, 'error');
-      return false;
-    }
   }
   return false;
 }
@@ -887,58 +822,48 @@ function wizardBack() {
 async function wizardFinish() {
   if (!await validateWizardStep(wizardCurrentStep)) return;
 
-  const config: any = {
-    server: {
+  // Save simple GUI config (daemon connection only)
+  const guiConfig = {
+    daemon: {
       host: wizardDaemonHost.value.trim(),
-      port: parseInt(wizardDaemonPort.value),
-      log_level: 'INFO'
-    },
-    remote_server: {
-      name: wizardServerName.value.trim() || wizardServerUrl.value.trim(),
-      url: wizardServerUrl.value.trim(),
-    },
-    database: { path: '~/.local/share/putplace/assist.db' },
-    watcher: { enabled: true, debounce_seconds: 2.0 },
-    uploader: { parallel_uploads: 4, retry_attempts: 3, retry_delay_seconds: 5.0, timeout_seconds: 600 },
-    sha256: { chunk_size: 65536, chunk_delay_ms: 1, batch_size: 100, batch_delay_seconds: 1.0 }
+      port: parseInt(wizardDaemonPort.value)
+    }
   };
 
-  if (!wizardSkipAuth.checked) {
-    config.remote_server.username = wizardUsername.value.trim();
-    config.remote_server.password = wizardPassword.value.trim();
-  }
-
-  showWizardMessage(3, 'Saving configuration...', 'loading');
+  showWizardMessage(1, 'Saving configuration...', 'loading');
 
   try {
-    const result = await electronAPI.ppassistSaveConfig(config, wizardDaemonUrl);
+    const result = await electronAPI.saveGuiConfig(guiConfig);
     if (result.success) {
-      showWizardMessage(3, 'Configuration saved successfully!', 'success');
+      showWizardMessage(1, `Configuration saved to ${result.path}`, 'success');
+      // Update global daemon URL
+      daemonUrl = wizardDaemonUrl;
       setTimeout(() => {
         wizardModal.style.display = 'none';
         checkDaemonConnection();
       }, 1500);
     } else {
-      showWizardMessage(3, `Failed to save: ${result.error}`, 'error');
+      showWizardMessage(1, `Failed to save: ${result.error}`, 'error');
     }
   } catch (error: any) {
-    showWizardMessage(3, `Error: ${error.message}`, 'error');
+    showWizardMessage(1, `Error: ${error.message}`, 'error');
   }
 }
 
 async function wizardSkip() {
   if (!confirm('Skip setup? You will need to configure manually later.')) return;
 
-  const minimalConfig = {
-    server: { host: '127.0.0.1', port: 8765, log_level: 'INFO' },
-    remote_server: { name: 'localhost', url: 'http://localhost:8100' },
-    database: { path: '~/.local/share/putplace/assist.db' },
-    watcher: { enabled: true, debounce_seconds: 2.0 },
-    uploader: { parallel_uploads: 4, retry_attempts: 3, retry_delay_seconds: 5.0, timeout_seconds: 600 }
+  // Save minimal GUI config with default daemon connection
+  const minimalGuiConfig = {
+    daemon: {
+      host: '127.0.0.1',
+      port: 8765
+    }
   };
 
   try {
-    await electronAPI.ppassistSaveConfig(minimalConfig);
+    await electronAPI.saveGuiConfig(minimalGuiConfig);
+    daemonUrl = 'http://127.0.0.1:8765';
   } catch {}
 
   wizardModal.style.display = 'none';
@@ -950,9 +875,6 @@ wizardNextBtn.addEventListener('click', wizardNext);
 wizardFinishBtn.addEventListener('click', wizardFinish);
 wizardSkipBtn.addEventListener('click', wizardSkip);
 wizardModalClose.addEventListener('click', () => wizardModal.style.display = 'none');
-wizardTogglePassword.addEventListener('click', () => {
-  wizardPassword.type = wizardPassword.type === 'password' ? 'text' : 'password';
-});
 
 // Save settings
 function saveSettings() {

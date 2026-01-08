@@ -706,13 +706,73 @@ ipcMain.handle('ppassist-save-config', async (_event, config: any, daemonUrl?: s
   }
 });
 
-// Check if config file exists
+// Check if GUI client config file exists (NOT pp_assist.toml)
 ipcMain.handle('check-config-exists', async () => {
-  const configPath = path.join(os.homedir(), '.config', 'putplace', 'pp_assist.toml');
+  const configPath = path.join(os.homedir(), '.config', 'putplace', 'pp_gui_client.toml');
   try {
     return { exists: fs.existsSync(configPath), path: configPath };
   } catch (error: any) {
     return { exists: false, error: error.message };
+  }
+});
+
+// Save GUI client config (daemon connection only)
+ipcMain.handle('save-gui-config', async (_event, config: { daemon: { host: string; port: number } }) => {
+  const configDir = path.join(os.homedir(), '.config', 'putplace');
+  const configPath = path.join(configDir, 'pp_gui_client.toml');
+
+  try {
+    // Ensure directory exists
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
+    }
+
+    // Create TOML content (simple, just daemon connection)
+    const tomlContent = `# PutPlace GUI Client Configuration
+# This file configures the connection to the pp_assist daemon
+
+[daemon]
+host = "${config.daemon.host}"
+port = ${config.daemon.port}
+`;
+
+    fs.writeFileSync(configPath, tomlContent, 'utf-8');
+    return { success: true, path: configPath };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+});
+
+// Load GUI client config
+ipcMain.handle('load-gui-config', async () => {
+  const configPath = path.join(os.homedir(), '.config', 'putplace', 'pp_gui_client.toml');
+
+  try {
+    if (!fs.existsSync(configPath)) {
+      return { success: false, error: 'Config file not found' };
+    }
+
+    const content = fs.readFileSync(configPath, 'utf-8');
+
+    // Simple TOML parsing for our basic config
+    const hostMatch = content.match(/host\s*=\s*"([^"]+)"/);
+    const portMatch = content.match(/port\s*=\s*(\d+)/);
+
+    if (hostMatch && portMatch) {
+      return {
+        success: true,
+        config: {
+          daemon: {
+            host: hostMatch[1],
+            port: parseInt(portMatch[1], 10),
+          },
+        },
+      };
+    } else {
+      return { success: false, error: 'Invalid config format' };
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message };
   }
 });
 

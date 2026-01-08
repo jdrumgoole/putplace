@@ -5,6 +5,40 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-01-08
+
+### Changed
+
+#### Configuration Architecture Improvements (pp_gui_client)
+- **Simplified Configuration Wizard**: Reduced wizard from 3 steps to 1 step (daemon connection only)
+  - GUI client now uses separate `pp_gui_client.toml` configuration file
+  - Wizard only configures daemon connection (host and port)
+  - Server URL and authentication are configured in `pp_assist.toml` by the daemon
+  - Clearer separation of concerns: GUI client → pp_assist daemon → remote server
+
+- **New Configuration File Structure**:
+  - `~/.config/putplace/pp_gui_client.toml` - GUI client daemon connection settings
+  - `~/.config/putplace/pp_assist.toml` - Daemon server and authentication settings
+  - Eliminates configuration confusion between GUI and daemon responsibilities
+
+- **Improved Login Architecture**:
+  - Login flow now correctly routes: Electron → pp_assist daemon → remote server
+  - Daemon handles authentication on behalf of the GUI client
+  - Fixes "Cannot connect to server" errors caused by configuration mismatch
+
+### Technical Details
+- Added IPC handlers: `save-gui-config`, `load-gui-config` in main.ts
+- GUI config file contains only `[daemon]` section with host and port
+- Simplified wizard removes server/authentication steps and related DOM elements
+- Updated init() to load daemon URL from `pp_gui_client.toml`
+- Single-step wizard with streamlined UI (hidden progress indicator)
+
+### Benefits
+- Clearer architecture with proper separation between GUI and daemon config
+- Eliminates confusion about which component is responsible for server connection
+- Simpler first-launch experience (one step instead of three)
+- Fixes login issues caused by mixing GUI and daemon configuration
+
 ## [1.1.1] - 2026-01-08
 
 ### Changed
