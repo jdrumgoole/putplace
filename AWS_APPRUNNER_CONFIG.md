@@ -243,7 +243,7 @@ aws apprunner list-services \
 
 1. **Use environment variables** for all configuration in App Runner
 2. **Never hardcode secrets** in the container image
-3. **Use AWS Secrets Manager** for sensitive values (database passwords, API keys)
+3. **Source sensitive values from your CI/CD secret store** (database passwords, API keys) and export them as env vars before running `invoke deploy-apprunner`
 4. **Test configuration changes** in a dev/staging environment first
 5. **Document your environment variables** for team members
 6. **Use the toggle script** for frequently changed settings like registration

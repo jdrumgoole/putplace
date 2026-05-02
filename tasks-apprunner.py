@@ -5,7 +5,6 @@ They have been separated from the main tasks.py for better organization.
 
 Usage:
     # Import these tasks in tasks.py or use directly
-    invoke configure-apprunner
     invoke deploy-apprunner
     invoke trigger-apprunner-deploy
 """
@@ -15,65 +14,22 @@ import os
 from invoke import task
 
 
-@task
-def configure_apprunner(c, region="eu-west-1", mongodb_url=None, non_interactive=False):
-    """Configure PutPlace for AWS App Runner deployment.
-
-    Creates AWS Secrets Manager secrets with MongoDB connection, admin user,
-    and API configuration for App Runner deployment.
-
-    Requirements:
-        - AWS CLI installed and configured
-        - MongoDB connection string (MongoDB Atlas recommended)
-        - boto3 library installed
-
-    Args:
-        region: AWS region for deployment (default: eu-west-1)
-        mongodb_url: MongoDB connection string (will prompt if not provided)
-        non_interactive: Skip prompts and use defaults (default: False)
-
-    Examples:
-        # Interactive mode (recommended)
-        invoke configure-apprunner
-
-        # Non-interactive with MongoDB Atlas
-        invoke configure-apprunner --mongodb-url="mongodb+srv://user:pass@cluster.mongodb.net/"
-
-        # Different region
-        invoke configure-apprunner --region=us-east-1
-    """
-    import shlex
-
-    cmd = [
-        "uv", "run", "python", "-m",
-        "putplace.scripts.putplace_configure",
-        "--create-aws-secrets",
-        "--aws-region", region
-    ]
-
-    if non_interactive:
-        cmd.append("--non-interactive")
-
-    if mongodb_url:
-        cmd.append("--mongodb-url")
-        cmd.append(mongodb_url)
-
-    print(f"Configuring PutPlace for App Runner deployment in {region}...")
-    print("This will create secrets in AWS Secrets Manager.\n")
-
-    result = c.run(shlex.join(cmd), warn=True, pty=True)
-
-    if result.ok:
-        print(f"\n✓ Configuration complete!")
-        print(f"\nNext steps:")
-        print(f"  1. Review the secrets in AWS Secrets Manager console")
-        print(f"  2. Deploy to App Runner: invoke deploy-apprunner --region={region}")
-    else:
-        print(f"\n✗ Configuration failed")
-        print("\nCommon issues:")
-        print("  - AWS credentials not configured")
-        print("  - boto3 not installed (pip install boto3)")
-        print("  - MongoDB connection string invalid")
+# Environment variables read from the local environment and forwarded to the
+# App Runner service as plain RuntimeEnvironmentVariables. Provide values via
+# your shell, .env loader, or CI/CD secrets prior to running deploy-apprunner.
+APPRUNNER_RUNTIME_ENV_VARS = (
+    "MONGODB_URL",
+    "MONGODB_DATABASE",
+    "MONGODB_COLLECTION",
+    "PUTPLACE_ADMIN_USERNAME",
+    "PUTPLACE_ADMIN_EMAIL",
+    "PUTPLACE_ADMIN_PASSWORD",
+    "AWS_DEFAULT_REGION",
+    "API_TITLE",
+    "API_VERSION",
+    "PYTHONUNBUFFERED",
+    "PYTHONDONTWRITEBYTECODE",
+)
 
 
 @task
@@ -164,11 +120,13 @@ def deploy_apprunner(
     """Deploy PutPlace to AWS App Runner.
 
     Creates or updates an App Runner service with manual deployment trigger.
-    Requires AWS Secrets Manager secrets to be created first.
+    Runtime configuration is sourced from local environment variables and
+    forwarded as plain RuntimeEnvironmentVariables.
 
     Requirements:
         - AWS CLI installed and configured
-        - Secrets created (run: invoke configure-apprunner first)
+        - Required env vars exported in the local shell (MONGODB_URL,
+          PUTPLACE_ADMIN_*, etc.)
         - GitHub repository access (will prompt for connection)
 
     Args:
@@ -293,30 +251,22 @@ def deploy_apprunner(
     # Create new service
     print("\nCreating App Runner service...")
 
-    # Build code configuration values with secrets
-    # First, get the actual secret ARNs with their random suffixes
-    secrets_arns = {}
-    for secret_name in ['putplace/mongodb', 'putplace/admin', 'putplace/aws-config']:
-        describe_cmd = f"aws secretsmanager describe-secret --secret-id {secret_name} --region {region}"
-        result = c.run(describe_cmd, hide=True, warn=True)
-        if result.ok:
-            secret_info = json.loads(result.stdout)
-            secrets_arns[secret_name] = secret_info['ARN']
+    # Source runtime configuration from the local environment.
+    runtime_env_variables = {"PYTHONPATH": "/app/packages"}
+    missing_required = []
+    for env_var in APPRUNNER_RUNTIME_ENV_VARS:
+        value = os.getenv(env_var)
+        if value is not None:
+            runtime_env_variables[env_var] = value
+        elif env_var in {"MONGODB_URL", "PUTPLACE_ADMIN_PASSWORD"}:
+            missing_required.append(env_var)
 
-    # Format: {"ENV_VAR_NAME": "arn:aws:secretsmanager:region:account:secret:name-SUFFIX:json_key::"}
-    runtime_env_secrets = {}
-    # MongoDB secrets
-    for key in ['MONGODB_URL', 'MONGODB_DATABASE', 'MONGODB_COLLECTION']:
-        runtime_env_secrets[key] = f"{secrets_arns['putplace/mongodb']}:{key}::"
-    # Admin secrets
-    for key in ['PUTPLACE_ADMIN_USERNAME', 'PUTPLACE_ADMIN_EMAIL', 'PUTPLACE_ADMIN_PASSWORD']:
-        runtime_env_secrets[key] = f"{secrets_arns['putplace/admin']}:{key}::"
-    # AWS/API secrets
-    for key in ['AWS_DEFAULT_REGION', 'API_TITLE', 'API_VERSION', 'PYTHONUNBUFFERED', 'PYTHONDONTWRITEBYTECODE']:
-        runtime_env_secrets[key] = f"{secrets_arns['putplace/aws-config']}:{key}::"
+    if missing_required:
+        print(f"\n✗ Missing required environment variables: {', '.join(missing_required)}")
+        print("Export them in your shell (or load from .env) before deploying.")
+        return 1
 
     # Build source configuration with API-based configuration
-    # Set PYTHONPATH as an environment variable to avoid shell quoting issues
     source_config = {
         "CodeRepository": {
             "RepositoryUrl": github_repo,
@@ -328,10 +278,7 @@ def deploy_apprunner(
                 "ConfigurationSource": "API",
                 "CodeConfigurationValues": {
                     "Runtime": "PYTHON_311",
-                    "RuntimeEnvironmentSecrets": runtime_env_secrets,
-                    "RuntimeEnvironmentVariables": {
-                        "PYTHONPATH": "/app/packages"
-                    },
+                    "RuntimeEnvironmentVariables": runtime_env_variables,
                     "BuildCommand": "python3.11 -m pip install --target=/app/packages .[s3]",
                     "StartCommand": "python3.11 -m uvicorn putplace.main:app --host 0.0.0.0 --port 8000 --workers 2",
                     "Port": "8000"
@@ -413,13 +360,10 @@ def deploy_apprunner(
                         print(f"\nTest endpoints:")
                         print(f"  Health: https://{service_url}/health")
                         print(f"  API Docs: https://{service_url}/docs")
-                        print(f"\nNext steps:")
-                        print(f"  1. Grant IAM role access to secrets:")
-                        print(f"     Action: secretsmanager:GetSecretValue")
-                        print(f"     Resource: arn:aws:secretsmanager:{region}:*:secret:putplace/*")
                         if not auto_deploy:
-                            print(f"\n  2. Manual deployment mode enabled.")
-                            print(f"     Trigger deployments with:")
+                            print(f"\nNext steps:")
+                            print(f"  Manual deployment mode enabled.")
+                            print(f"  Trigger deployments with:")
                             print(f"     invoke trigger-apprunner-deploy --service-name={service_name}")
                         break
                     elif status in ['CREATE_FAILED', 'DELETE_FAILED']:
@@ -586,118 +530,6 @@ def trigger_apprunner_deploy(c, service_name="putplace-api", region="eu-west-1")
             print(f"  aws apprunner describe-service --service-arn {service_arn} --region {region}")
     else:
         print(f"\n✗ Failed to trigger deployment")
-
-
-@task
-def list_apprunner_secrets(c, region="eu-west-1", show_values=False):
-    """List PutPlace secrets from AWS Secrets Manager.
-
-    Args:
-        region: AWS region (default: eu-west-1)
-        show_values: Show actual secret values (default: False - only shows keys)
-
-    Examples:
-        invoke list-apprunner-secrets
-        invoke list-apprunner-secrets --show-values
-        invoke list-apprunner-secrets --region=us-east-1
-    """
-    import json
-
-    secret_names = [
-        'putplace/mongodb',
-        'putplace/admin',
-        'putplace/aws-config'
-    ]
-
-    print(f"Listing PutPlace secrets in {region}...\n")
-
-    for secret_name in secret_names:
-        # Check if secret exists
-        describe_cmd = f"aws secretsmanager describe-secret --secret-id {secret_name} --region {region}"
-        result = c.run(describe_cmd, warn=True, hide=True)
-
-        if not result.ok:
-            print(f"✗ {secret_name}: Not found")
-            continue
-
-        # Get secret metadata
-        secret_info = json.loads(result.stdout)
-        created_date = secret_info.get('CreatedDate', 'Unknown')
-        last_changed = secret_info.get('LastChangedDate', 'Unknown')
-
-        print(f"✓ {secret_name}")
-        print(f"  Created: {created_date}")
-        print(f"  Last Changed: {last_changed}")
-
-        if show_values:
-            # Get secret value
-            get_cmd = f"aws secretsmanager get-secret-value --secret-id {secret_name} --region {region}"
-            value_result = c.run(get_cmd, warn=True, hide=True)
-
-            if value_result.ok:
-                secret_data = json.loads(value_result.stdout)
-                secret_string = json.loads(secret_data['SecretString'])
-
-                print(f"  Values:")
-                for key, value in secret_string.items():
-                    # Mask passwords
-                    if 'PASSWORD' in key.upper():
-                        display_value = '*' * len(value) if value else '(empty)'
-                    else:
-                        display_value = value
-                    print(f"    {key}: {display_value}")
-            else:
-                print(f"  Values: Unable to retrieve")
-        else:
-            # Get secret value to show keys only
-            get_cmd = f"aws secretsmanager get-secret-value --secret-id {secret_name} --region {region}"
-            value_result = c.run(get_cmd, warn=True, hide=True)
-
-            if value_result.ok:
-                secret_data = json.loads(value_result.stdout)
-                secret_string = json.loads(secret_data['SecretString'])
-                keys = list(secret_string.keys())
-                print(f"  Keys: {', '.join(keys)}")
-            else:
-                print(f"  Keys: Unable to retrieve")
-
-        print()
-
-    print("Tip: Use --show-values to see actual secret values (passwords will be masked)")
-
-
-@task
-def delete_apprunner_secrets(c, region="eu-west-1", force=False):
-    """Delete PutPlace secrets from AWS Secrets Manager.
-
-    Args:
-        region: AWS region (default: eu-west-1)
-        force: Force delete without recovery period (default: False)
-
-    Examples:
-        invoke delete-apprunner-secrets
-        invoke delete-apprunner-secrets --force
-    """
-    import shlex
-
-    cmd = [
-        "uv", "run", "python", "-m",
-        "putplace.scripts.putplace_configure",
-        "--delete-aws-secrets",
-        "--aws-region", region
-    ]
-
-    if force:
-        cmd.append("--force-delete")
-
-    print(f"Deleting PutPlace secrets from {region}...")
-    result = c.run(shlex.join(cmd), warn=True, pty=True)
-
-    if not result.ok:
-        print("\nTo delete secrets manually:")
-        print(f"  aws secretsmanager delete-secret --secret-id putplace/mongodb --region {region}")
-        print(f"  aws secretsmanager delete-secret --secret-id putplace/admin --region {region}")
-        print(f"  aws secretsmanager delete-secret --secret-id putplace/aws-config --region {region}")
 
 
 @task

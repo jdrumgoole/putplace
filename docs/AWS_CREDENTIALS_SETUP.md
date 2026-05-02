@@ -283,7 +283,7 @@ S3_BUCKET_NAME=putplace-prod-bucket
 ## Next Steps
 
 - 📖 Read the complete **[SECURITY.md](../SECURITY.md)** for comprehensive security guidance
-- 🔐 Learn about **AWS Secrets Manager** and **HashiCorp Vault** for advanced secret management
+- 🔐 Learn about **HashiCorp Vault** and similar tooling for advanced secret management
 - 📋 Review **IAM policy examples** for least-privilege access
 - 🔄 Set up **credential rotation** for long-lived keys
 

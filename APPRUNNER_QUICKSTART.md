@@ -1,11 +1,14 @@
 # AWS App Runner Quick Start Guide
 
-This guide shows how to deploy PutPlace to AWS App Runner using AWS Secrets Manager for secure configuration.
+This guide shows how to deploy PutPlace to AWS App Runner. Runtime
+configuration is provided through plain environment variables that are read
+from your local shell at deploy time and forwarded to App Runner as
+`RuntimeEnvironmentVariables`.
 
 ## Overview
 
 The deployment workflow:
-1. **Configure** - Create secrets in AWS Secrets Manager
+1. **Export config** - Set the required environment variables locally
 2. **Deploy** - Create App Runner service (manual deployment mode)
 3. **Trigger** - Manually deploy code changes
 
@@ -18,29 +21,32 @@ The deployment workflow:
 - GitHub repository with PutPlace code
 - Python 3.10+ with uv package manager
 
-## Step 1: Configure Secrets
+## Step 1: Export Runtime Configuration
 
-Create AWS Secrets Manager secrets with your MongoDB connection and admin credentials:
+`invoke deploy-apprunner` reads configuration from your local environment.
+Export the values you need before deploying. For example:
 
 ```bash
-# Interactive mode (recommended)
-invoke configure-apprunner
+export MONGODB_URL="mongodb+srv://user:pass@cluster.mongodb.net/"
+export MONGODB_DATABASE="putplace"
+export MONGODB_COLLECTION="file_metadata"
 
-# Non-interactive mode
-invoke configure-apprunner \
-  --mongodb-url="mongodb+srv://user:pass@cluster.mongodb.net/" \
-  --non-interactive
+export PUTPLACE_ADMIN_USERNAME="admin"
+export PUTPLACE_ADMIN_EMAIL="admin@example.com"
+export PUTPLACE_ADMIN_PASSWORD="<a-strong-password>"
 
-# Different AWS region
-invoke configure-apprunner --region=us-east-1
+export AWS_DEFAULT_REGION="eu-west-1"
+export API_TITLE="PutPlace File Metadata API"
+export API_VERSION="0.5.8"
+export PYTHONUNBUFFERED="1"
+export PYTHONDONTWRITEBYTECODE="1"
 ```
 
-This creates three secrets in AWS Secrets Manager:
-- `putplace/mongodb` - MongoDB connection settings
-- `putplace/admin` - Initial admin user credentials
-- `putplace/aws-config` - AWS region and API configuration
+`MONGODB_URL` and `PUTPLACE_ADMIN_PASSWORD` are required; the rest are
+optional and only forwarded to App Runner if they are set.
 
-**Save the admin password** displayed during configuration!
+**Save the admin password** in your password manager - it will be needed to
+log in to the deployed service.
 
 ## Step 2: Deploy to App Runner
 
@@ -69,52 +75,7 @@ invoke deploy-apprunner --region=us-east-1
 3. Click **Add connection** and authorize GitHub
 4. Then run `invoke deploy-apprunner` again
 
-## Step 3: Grant IAM Access to Secrets
-
-The App Runner service needs permission to read secrets. Add this IAM policy to the App Runner service role:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": ["secretsmanager:GetSecretValue"],
-      "Resource": "arn:aws:secretsmanager:eu-west-1:*:secret:putplace/*"
-    }
-  ]
-}
-```
-
-**To add the policy:**
-
-1. Go to [IAM Console](https://console.aws.amazon.com/iam/)
-2. Find the App Runner service role (e.g., `AppRunnerInstanceRole...`)
-3. Click **Add permissions** → **Create inline policy**
-4. Paste the JSON above
-5. Name it `PutPlaceSecretsAccess`
-6. Click **Create policy**
-
-Or via AWS CLI:
-
-```bash
-# Replace ROLE_NAME with your App Runner service role
-aws iam put-role-policy \
-  --role-name ROLE_NAME \
-  --policy-name PutPlaceSecretsAccess \
-  --policy-document '{
-    "Version": "2012-10-17",
-    "Statement": [
-      {
-        "Effect": "Allow",
-        "Action": ["secretsmanager:GetSecretValue"],
-        "Resource": "arn:aws:secretsmanager:eu-west-1:*:secret:putplace/*"
-      }
-    ]
-  }'
-```
-
-## Step 4: Trigger Deployment
+## Step 3: Trigger Deployment
 
 Since auto-deployment is disabled, manually trigger deployments:
 
@@ -134,7 +95,7 @@ aws apprunner start-deployment \
   --region eu-west-1
 ```
 
-## Step 5: Access Your API
+## Step 4: Access Your API
 
 Find your App Runner URL:
 
@@ -159,15 +120,18 @@ open https://xxxxx.eu-west-1.awsapprunner.com/docs
 
 ## Common Tasks
 
-### Update MongoDB Connection
+### Update MongoDB Connection or Other Config
 
 ```bash
-# Update secrets
-invoke configure-apprunner
+# Re-export the values with the new settings
+export MONGODB_URL="mongodb+srv://newuser:newpass@cluster.mongodb.net/"
 
-# Trigger new deployment to pick up changes
-invoke trigger-apprunner-deploy
+# Redeploy to push the new RuntimeEnvironmentVariables to App Runner
+invoke deploy-apprunner
 ```
+
+Alternatively, edit the runtime environment variables directly in the App
+Runner console under **Configuration → Source → Edit**.
 
 ### Enable Auto-Deployment
 
@@ -221,16 +185,6 @@ Or in AWS Console:
 aws apprunner delete-service \
   --service-arn arn:aws:apprunner:region:account:service/putplace-api/xxxxx \
   --region eu-west-1
-```
-
-### Clean Up Secrets
-
-```bash
-# Delete with 7-day recovery window
-invoke delete-apprunner-secrets
-
-# Permanent deletion (no recovery)
-invoke delete-apprunner-secrets --force
 ```
 
 ## Deployment Workflow
@@ -321,7 +275,7 @@ aws logs tail /aws/apprunner/putplace-api/service --follow
 **Common issues:**
 - **GitHub not connected**: Set up GitHub connection in AWS Console
 - **Build fails**: Check Python version, dependencies in pyproject.toml
-- **Secrets not accessible**: Verify IAM policy for Secrets Manager
+- **Missing env vars**: Re-export the required variables and rerun deploy
 
 ### Application Fails to Start
 
@@ -331,9 +285,9 @@ aws logs tail /aws/apprunner/putplace-api/application --follow
 ```
 
 **Common issues:**
-- **MongoDB connection failed**: Verify connection string in secrets
+- **MongoDB connection failed**: Verify `MONGODB_URL` value
 - **Admin user creation failed**: Check MongoDB permissions
-- **Missing secrets**: Run `invoke configure-apprunner` again
+- **Missing environment variables**: Re-export and rerun `invoke deploy-apprunner`
 
 ### Health Check Fails
 
@@ -362,12 +316,13 @@ AWS App Runner pricing (as of 2024):
 
 ## Security Best Practices
 
-1. **Use Secrets Manager** ✓ (Already configured)
+1. **Keep secrets out of source control** - export them in your shell or a
+   `.env` file that is git-ignored.
 2. **Enable HTTPS only** ✓ (App Runner default)
-3. **Rotate secrets regularly**:
+3. **Rotate credentials regularly** - update env vars and redeploy:
    ```bash
-   invoke configure-apprunner  # Updates existing secrets
-   invoke trigger-apprunner-deploy  # Deploy with new secrets
+   export PUTPLACE_ADMIN_PASSWORD="<new-password>"
+   invoke deploy-apprunner
    ```
 4. **Monitor access logs** in CloudWatch
 5. **Use private VPC** for MongoDB (DocumentDB)
@@ -450,7 +405,7 @@ invoke remove-custom-domain --domain=app.putplace.org
 - Configure auto-scaling: Adjust min/max instances
 - Set up CI/CD: Integrate with GitHub Actions
 - Add monitoring: CloudWatch dashboards and alarms
-- Enable S3 storage: Update secrets with S3 bucket name
+- Enable S3 storage: Set the relevant S3 env vars and redeploy
 
 ## Support
 
@@ -463,12 +418,6 @@ invoke remove-custom-domain --domain=app.putplace.org
 All available App Runner tasks:
 
 ```bash
-# Configuration
-invoke configure-apprunner              # Create secrets interactively
-invoke configure-apprunner --mongodb-url=...  # Non-interactive
-invoke delete-apprunner-secrets         # Delete secrets (7-day recovery)
-invoke delete-apprunner-secrets --force # Permanent deletion
-
 # Deployment
 invoke deploy-apprunner                 # Create service (manual mode)
 invoke deploy-apprunner --auto-deploy   # Enable auto-deployment
