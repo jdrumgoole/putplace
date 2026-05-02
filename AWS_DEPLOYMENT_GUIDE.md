@@ -615,15 +615,11 @@ API_VERSION=0.5.1
 
 # Security Best Practices
 
-1. **Use Secrets Manager for sensitive data:**
-
-```bash
-aws secretsmanager create-secret \
-  --name putplace/mongodb-url \
-  --secret-string "mongodb+srv://..."
-
-# Reference in App Runner environment variables
-```
+1. **Keep sensitive values out of source control:** export the MongoDB
+   connection string and other secrets in the shell that runs the deploy
+   command (or load them from your CI/CD secret store), then rely on the
+   deploy task to forward them to App Runner as runtime environment
+   variables.
 
 2. **Enable VPC for private connectivity:**
    - Use AWS PrivateLink for MongoDB Atlas

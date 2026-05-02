@@ -116,31 +116,7 @@ AWS_PROFILE=putplace-prod  # Use specific profile
 
 **How it works:** Store credentials in a secret management system, inject as environment variables at runtime.
 
-**Option A: AWS Secrets Manager**
-
-1. **Store secret in AWS Secrets Manager:**
-```bash
-aws secretsmanager create-secret \
-    --name putplace/aws-credentials \
-    --secret-string '{"access_key":"AKIAI...","secret_key":"wJalr..."}'
-```
-
-2. **Retrieve in startup script:**
-```bash
-#!/bin/bash
-# startup.sh
-SECRET=$(aws secretsmanager get-secret-value \
-    --secret-id putplace/aws-credentials \
-    --query SecretString --output text)
-
-export AWS_ACCESS_KEY_ID=$(echo $SECRET | jq -r .access_key)
-export AWS_SECRET_ACCESS_KEY=$(echo $SECRET | jq -r .secret_key)
-
-# Start application
-uvicorn putplace.main:app
-```
-
-**Option B: HashiCorp Vault**
+**Option A: HashiCorp Vault**
 
 1. **Store secret in Vault:**
 ```bash
@@ -158,7 +134,7 @@ export AWS_SECRET_ACCESS_KEY=$(vault kv get -field=aws_secret_access_key secret/
 uvicorn putplace.main:app
 ```
 
-**Option C: Kubernetes Secrets**
+**Option B: Kubernetes Secrets**
 
 1. **Create Kubernetes secret:**
 ```bash
@@ -503,46 +479,15 @@ aws ec2 associate-iam-instance-profile \
 
 ## Credential Rotation
 
-### Automated Rotation with AWS Secrets Manager
+Rotate IAM access keys periodically (every 30/60/90 days). The recommended
+approach is to issue a new access key, deploy it to the host running PutPlace
+(via your existing secret distribution mechanism — Vault, Kubernetes Secrets,
+your CI/CD secret store, etc.), verify the application still works, then
+deactivate and delete the old access key.
 
-1. **Store credentials in Secrets Manager**
-2. **Enable automatic rotation** (every 30/60/90 days)
-3. **Update application** to fetch from Secrets Manager on startup
-
-Example rotation Lambda function (Python):
-
-```python
-import boto3
-import json
-
-def lambda_handler(event, context):
-    iam = boto3.client('iam')
-    secrets = boto3.client('secretsmanager')
-
-    # Get current secret
-    secret_arn = event['SecretId']
-    token = event['ClientRequestToken']
-
-    # Create new access key
-    username = 'putplace-user'
-    new_key = iam.create_access_key(UserName=username)
-
-    # Store new credentials
-    new_secret = {
-        'access_key': new_key['AccessKey']['AccessKeyId'],
-        'secret_key': new_key['AccessKey']['SecretAccessKey']
-    }
-
-    secrets.put_secret_value(
-        SecretId=secret_arn,
-        SecretString=json.dumps(new_secret),
-        VersionStages=['AWSPENDING'],
-        ClientRequestToken=token
-    )
-
-    # Delete old access key (after verification)
-    # ... implementation details ...
-```
+For workloads running on AWS, prefer IAM roles over long-lived access keys —
+roles provide automatic short-lived credential rotation without any
+application changes.
 
 ---
 
@@ -603,5 +548,4 @@ Before deploying to production:
 - [AWS Security Best Practices](https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html)
 - [AWS Credentials Configuration](https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-files.html)
 - [IAM Roles for EC2](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/iam-roles-for-amazon-ec2.html)
-- [AWS Secrets Manager](https://docs.aws.amazon.com/secretsmanager/latest/userguide/intro.html)
 - [Principle of Least Privilege](https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html#grant-least-privilege)

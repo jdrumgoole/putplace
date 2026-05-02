@@ -265,41 +265,13 @@ health-check:
 | `PYTHONUNBUFFERED` | No | `1` | Python output buffering |
 | `AWS_DEFAULT_REGION` | No | `us-east-1` | AWS region for SES |
 
-### Using AWS Secrets Manager (Recommended for Production)
+### Supplying Sensitive Configuration
 
-Store sensitive credentials in Secrets Manager:
-
-1. Create secret:
-```bash
-aws secretsmanager create-secret \
-  --name putplace/mongodb \
-  --secret-string '{"MONGODB_URL":"mongodb+srv://user:pass@cluster.mongodb.net/putplace"}' \
-  --region us-east-1
-```
-
-2. Grant App Runner access:
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": ["secretsmanager:GetSecretValue"],
-      "Resource": "arn:aws:secretsmanager:us-east-1:*:secret:putplace/*"
-    }
-  ]
-}
-```
-
-3. Reference in environment:
-```yaml
-env:
-  - name: MONGODB_URL
-    value-from:
-      type: secret
-      name: putplace/mongodb
-      key: MONGODB_URL
-```
+Export the required values as environment variables in the shell that runs
+`invoke deploy-apprunner`. The task forwards them to App Runner as
+`RuntimeEnvironmentVariables`. For automated deployments, source the values
+from your CI/CD secret store (GitHub Actions secrets, GitLab CI variables,
+Vault, etc.) rather than checking them into source control.
 
 ## Monitoring and Logs
 
@@ -439,9 +411,10 @@ Increase instance resources:
    - Protect against common web exploits
    - Rate limiting
 
-3. **Use Secrets Manager**:
-   - Store MongoDB credentials securely
-   - Rotate credentials automatically
+3. **Keep credentials out of source control**:
+   - Source MongoDB credentials and admin secrets from your CI/CD secret
+     store or an external manager (Vault, etc.) and export them as env vars
+     before running `invoke deploy-apprunner`.
 
 4. **Enable HTTPS only**:
    - App Runner provides automatic SSL/TLS

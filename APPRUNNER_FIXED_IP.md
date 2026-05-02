@@ -480,4 +480,4 @@ aws ec2 delete-vpc \
 2. **Network ACLs**: Consider additional network ACLs for defense in depth
 3. **Monitoring**: Enable VPC Flow Logs to monitor traffic patterns
 4. **Regular audits**: Review IP whitelists and remove unused entries
-5. **Secrets management**: Use AWS Secrets Manager for MongoDB credentials
+5. **Secrets management**: Source MongoDB credentials from your CI/CD secret store or an external manager (Vault, etc.) - do not check them into source control
