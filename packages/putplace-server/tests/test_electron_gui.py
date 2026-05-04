@@ -162,16 +162,15 @@ def test_electron_app_install_launch_uninstall(
         check=True
     )
 
-    # Wait for app to launch
-    time.sleep(3)
-
-    # Step 3: Verify app is running
+    # Step 3: Verify app is running. Poll instead of a fixed sleep so the
+    # test does not flake under suite load (Electron launch on macOS can
+    # take well over 3 seconds when CPU/IO is contended).
     print(f"  Checking if app is running...")
-    ps_result = subprocess.run(
-        ['pgrep', '-f', app_name],
-        capture_output=True,
-        text=True
-    )
+    launch_deadline = time.time() + 30
+    ps_result = subprocess.run(['pgrep', '-f', app_name], capture_output=True, text=True)
+    while time.time() < launch_deadline and (ps_result.returncode != 0 or not ps_result.stdout.strip()):
+        time.sleep(0.5)
+        ps_result = subprocess.run(['pgrep', '-f', app_name], capture_output=True, text=True)
 
     assert ps_result.returncode == 0, f"App '{app_name}' should be running"
     assert ps_result.stdout.strip(), "Should have a process ID"
@@ -185,15 +184,13 @@ def test_electron_app_install_launch_uninstall(
         check=True
     )
 
-    # Wait for app to quit
-    time.sleep(2)
-
-    # Verify app is no longer running
-    ps_result_after = subprocess.run(
-        ['pgrep', '-f', app_name],
-        capture_output=True,
-        text=True
-    )
+    # Poll for the app to actually exit; quit can take longer than 2s
+    # under load.
+    quit_deadline = time.time() + 15
+    ps_result_after = subprocess.run(['pgrep', '-f', app_name], capture_output=True, text=True)
+    while time.time() < quit_deadline and ps_result_after.returncode == 0:
+        time.sleep(0.5)
+        ps_result_after = subprocess.run(['pgrep', '-f', app_name], capture_output=True, text=True)
 
     assert ps_result_after.returncode != 0, "App should not be running after quit"
 

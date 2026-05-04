@@ -5,6 +5,43 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## putplace-server [0.10.4] - 2026-05-04
+
+### Fixed
+- Eliminated flaky parallel-suite failures in duplicate-detection tests. The
+  session-scoped autouse cleanup fixture was dropping every `putplace_test_*`
+  database when its worker finished, deleting databases owned by sibling
+  workers still running tests and wiping their unique indexes mid-test.
+  Cleanup now scopes to this worker's own database only.
+- Replaced fixed `time.sleep` waits in `test_electron_app_install_launch_uninstall`
+  with bounded polling so the test no longer flakes when launch/quit takes
+  longer than the previous hard-coded 3s/2s under suite load.
+
+## putplace-assist [0.2.3] - 2026-05-04
+
+### Added
+- Detection of file modification between SHA256 calculation and upload in
+  the v3 uploader. When a file's size or mtime changes after its hash was
+  computed, the upload is aborted, a `FILE_MODIFIED` activity event is
+  emitted with old/new size and mtime, and the file is requeued for
+  re-checksum. Detection runs before any network call, so modifications
+  are caught even when the server is unreachable.
+
+### Fixed
+- `sha256_processor` no longer crashes on every file. The processor was
+  passing an unsupported `status` keyword argument to
+  `db.update_file_sha256`, which raised `TypeError` and silently failed
+  every SHA256 calculation, starving the upload pipeline.
+- `remove_from_checksum_queue`, `remove_from_upload_queue`, and
+  `remove_from_deletion_queue` are now called with the file's `filepath`
+  instead of its integer `queue_id`. The previous code passed an `int`
+  into a `WHERE filepath = ?` clause, so queue rows were never deleted
+  and the same entries were dequeued indefinitely.
+- Token and server failures inside `_process_upload` now mark the entry
+  with `next_retry_at` via `db.retry_queue_item` instead of sleeping the
+  worker. The worker can rotate through other queued files instead of
+  starving on the head of the queue.
+
 ## [1.2.0] - 2026-01-08
 
 ### Changed
