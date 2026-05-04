@@ -175,6 +175,21 @@ All development tasks are managed through `invoke` (see tasks.py):
 - Prevents database race conditions during parallel execution
 - ~40% faster than serial execution (16s vs 26s)
 - Test databases automatically cleaned up after test session
+- **Per-worker cleanup must scope to its own resources only.** Each worker is
+  its own pytest session and finishes independently. A session-scoped autouse
+  fixture in worker A that drops every `putplace_test_*` database will wipe
+  databases owned by workers B/C while they are still running tests, deleting
+  their unique indexes and producing flaky duplicate-detection failures. Drop
+  only `putplace_test_{worker_id}`, never the whole prefix.
+
+**Flaky tests are bugs — diagnose, don't dismiss:**
+- A test that passes alone but fails in the parallel suite is broken. Do not
+  retry, sleep, or skip it. Reproduce by running just the failure-correlated
+  set under `-n 4` in a loop until it fails, then add diagnostic prints
+  (collection identity, indexes, dependency wiring) to capture the actual
+  state at failure time. Fixture-scope and cleanup-scope bugs hide here often.
+- Before declaring the suite green, run `invoke test-all` at least 5 times in
+  a row. A single passing run does not prove the flake is gone.
 
 **Test Organization:**
 - `test_models.py` - Pydantic model validation tests

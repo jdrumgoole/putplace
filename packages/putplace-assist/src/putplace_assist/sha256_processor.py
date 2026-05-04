@@ -142,7 +142,7 @@ class Sha256Processor:
             if not file_path.exists():
                 # File deleted between scan and checksum - remove from queue and files table
                 logger.warning(f"File no longer exists, removing: {filepath}")
-                await db.remove_from_checksum_queue(queue_id)
+                await db.remove_from_checksum_queue(filepath)
                 await db.delete_file(filepath)
                 self._failed_today += 1
                 return False
@@ -152,7 +152,7 @@ class Sha256Processor:
             if not file_record:
                 # File not in files table (shouldn't happen, but handle gracefully)
                 logger.error(f"File not found in files table: {filepath}")
-                await db.remove_from_checksum_queue(queue_id)
+                await db.remove_from_checksum_queue(filepath)
                 self._failed_today += 1
                 return False
 
@@ -177,18 +177,18 @@ class Sha256Processor:
                     sha256=sha256_hash,
                     status="unchanged",  # Mark as unchanged since SHA256 matches
                 )
-                await db.remove_from_checksum_queue(queue_id)
+                await db.remove_from_checksum_queue(filepath)
                 self._processed_today += 1
                 return True
 
             # New or changed checksum - update files table and queue for upload
-            await db.update_file_sha256(filepath, sha256_hash, status="ready_for_upload")
+            await db.update_file_sha256(filepath, sha256_hash)
 
             # Enqueue to queue_pending_upload
             await db.enqueue_for_upload(filepath, sha256_hash)
 
             # Remove from queue_pending_checksum
-            await db.remove_from_checksum_queue(queue_id)
+            await db.remove_from_checksum_queue(filepath)
 
             self._processed_today += 1
 
@@ -209,7 +209,7 @@ class Sha256Processor:
         except FileNotFoundError:
             # File not found - remove from queue and files table
             logger.warning(f"File not found during SHA256 calculation: {filepath}")
-            await db.remove_from_checksum_queue(queue_id)
+            await db.remove_from_checksum_queue(filepath)
             await db.delete_file(filepath)
             self._failed_today += 1
             return False
@@ -233,7 +233,7 @@ class Sha256Processor:
             else:
                 # Max retries exhausted - remove from queue and files table
                 logger.error(f"Max retries exhausted for {filepath}, removing from database")
-                await db.remove_from_checksum_queue(queue_id)
+                await db.remove_from_checksum_queue(filepath)
                 await db.delete_file(filepath)
 
             return False
@@ -258,7 +258,7 @@ class Sha256Processor:
             else:
                 # Max retries exhausted - remove from queue and files table
                 logger.error(f"Max retries exhausted for {filepath}, removing from database")
-                await db.remove_from_checksum_queue(queue_id)
+                await db.remove_from_checksum_queue(filepath)
                 await db.delete_file(filepath)
 
             return False
@@ -283,7 +283,7 @@ class Sha256Processor:
             else:
                 # Max retries exhausted - remove from queue and files table
                 logger.error(f"Max retries exhausted for {filepath}, removing from database")
-                await db.remove_from_checksum_queue(queue_id)
+                await db.remove_from_checksum_queue(filepath)
                 await db.delete_file(filepath)
 
             return False

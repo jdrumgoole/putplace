@@ -182,7 +182,7 @@ class TestFileModificationDetection:
                 # Check activity log for FILE_MODIFIED event
                 response = await client.get(
                     f"{PPASSIST_URL}/activity",
-                    params={"limit": 100, "event_type": "FILE_MODIFIED"}
+                    params={"limit": 100, "event_type": "file_modified"}
                 )
                 assert response.status_code == 200
                 activity = response.json()
@@ -190,7 +190,7 @@ class TestFileModificationDetection:
                 print(f"\nChecking for FILE_MODIFIED events...")
                 file_modified_events = [
                     event for event in activity["events"]
-                    if event["event_type"] == "FILE_MODIFIED" and str(target_file) in event.get("filepath", "")
+                    if event["event_type"] == "file_modified" and str(target_file) in event.get("filepath", "")
                 ]
 
                 if file_modified_events:

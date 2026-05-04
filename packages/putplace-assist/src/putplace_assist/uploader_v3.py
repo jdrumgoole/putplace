@@ -270,12 +270,67 @@ class UploaderV3:
         self._current_file = filepath
 
         try:
+            # Check if file still exists
+            file_path = Path(filepath)
+            if not file_path.exists():
+                # File deleted - remove from queue and files table
+                logger.warning(f"File no longer exists, removing: {filepath}")
+                await db.remove_from_upload_queue(filepath)
+                await db.delete_file(filepath)
+                self._failed_today += 1
+                return False
+
+            # Get current file stats
+            stat_info = os.stat(file_path)
+            file_size = stat_info.st_size
+            current_mtime = stat_info.st_mtime
+
+            # Detect modification since SHA256 was calculated. We do this before
+            # touching the network so a modified file is requeued even when the
+            # server is unreachable.
+            file_record = await db.get_file(filepath)
+            if file_record is not None:
+                stored_size = file_record["file_size"]
+                stored_mtime = file_record["file_mtime"]
+                if file_size != stored_size or current_mtime != stored_mtime:
+                    logger.warning(
+                        f"File modified since SHA256: {filepath} "
+                        f"(size {stored_size}->{file_size}, mtime {stored_mtime}->{current_mtime})"
+                    )
+                    await db.upsert_file(
+                        filepath=filepath,
+                        file_size=file_size,
+                        file_mtime=current_mtime,
+                        file_mode=stat_info.st_mode,
+                        file_uid=stat_info.st_uid,
+                        file_gid=stat_info.st_gid,
+                        file_atime=stat_info.st_atime,
+                        file_ctime=stat_info.st_ctime,
+                        sha256=None,
+                        status="discovered",
+                    )
+                    await db.remove_from_upload_queue(filepath)
+                    await db.enqueue_for_checksum(filepath, reason="modified")
+                    await activity_manager.emit(
+                        EventType.FILE_MODIFIED,
+                        filepath=filepath,
+                        message=f"File modified, requeuing for re-checksum: {file_path.name}",
+                        details={
+                            "old_size": stored_size,
+                            "new_size": file_size,
+                            "old_mtime": stored_mtime,
+                            "new_mtime": current_mtime,
+                        },
+                    )
+                    return False
+
             # Get server configuration
             server_result = await db.get_default_server()
             if not server_result:
-                logger.error("No server configured, cannot upload")
-                # Don't retry - wait for server configuration
-                await asyncio.sleep(30)  # Wait before trying again
+                logger.debug("No server configured, deferring upload")
+                # Push to back of queue so other files get a turn at the
+                # modification check above.
+                await db.retry_queue_item("queue_pending_upload", filepath, delay_seconds=5)
                 return False
 
             server, encrypted_password = server_result
@@ -284,23 +339,10 @@ class UploaderV3:
             # Get access token
             token = await self._get_access_token(server.url, server.username, password, server.id)
             if not token:
-                # Authentication failed - wait before trying again
-                await asyncio.sleep(30)
+                # Authentication failed (server down, bad creds, network error).
+                # Defer this entry so the worker moves to other queued files.
+                await db.retry_queue_item("queue_pending_upload", filepath, delay_seconds=5)
                 return False
-
-            # Check if file still exists
-            file_path = Path(filepath)
-            if not file_path.exists():
-                # File deleted - remove from queue and files table
-                logger.warning(f"File no longer exists, removing: {filepath}")
-                await db.remove_from_upload_queue(queue_id)
-                await db.delete_file(filepath)
-                self._failed_today += 1
-                return False
-
-            # Get file stats
-            stat_info = os.stat(file_path)
-            file_size = stat_info.st_size
 
             # Upload using chunked upload protocol
             success = await self._upload_file_chunked(
@@ -316,7 +358,7 @@ class UploaderV3:
                 await db.mark_file_uploaded(filepath)
 
                 # Remove from queue_pending_upload
-                await db.remove_from_upload_queue(queue_id)
+                await db.remove_from_upload_queue(filepath)
 
                 self._uploaded_today += 1
 
@@ -346,7 +388,7 @@ class UploaderV3:
                 else:
                     # Max retries - remove from queue and files table
                     logger.error(f"Max retries exhausted for {filepath} (401 errors)")
-                    await db.remove_from_upload_queue(queue_id)
+                    await db.remove_from_upload_queue(filepath)
                     await db.delete_file(filepath)
                     self._failed_today += 1
 
@@ -356,7 +398,7 @@ class UploaderV3:
                 # Conflict - file already exists on server
                 logger.info(f"File already on server (409 Conflict): {filepath}")
                 await db.mark_file_uploaded(filepath)
-                await db.remove_from_upload_queue(queue_id)
+                await db.remove_from_upload_queue(filepath)
                 self._uploaded_today += 1
                 return True
 
@@ -371,7 +413,7 @@ class UploaderV3:
                 else:
                     # Max retries - remove from queue and files table
                     logger.error(f"Max retries exhausted for {filepath}")
-                    await db.remove_from_upload_queue(queue_id)
+                    await db.remove_from_upload_queue(filepath)
                     await db.delete_file(filepath)
 
                 return False
@@ -379,7 +421,7 @@ class UploaderV3:
             else:
                 # Other HTTP error - remove from queue
                 logger.error(f"HTTP error {e.response.status_code} uploading {filepath}: {e}")
-                await db.remove_from_upload_queue(queue_id)
+                await db.remove_from_upload_queue(filepath)
                 await db.delete_file(filepath)
                 self._failed_today += 1
                 return False
@@ -395,7 +437,7 @@ class UploaderV3:
             else:
                 # Max retries - remove from queue and files table
                 logger.error(f"Max retries exhausted for {filepath}")
-                await db.remove_from_upload_queue(queue_id)
+                await db.remove_from_upload_queue(filepath)
                 await db.delete_file(filepath)
 
             return False
@@ -411,7 +453,7 @@ class UploaderV3:
             else:
                 # Max retries - remove from queue and files table
                 logger.error(f"Max retries exhausted for {filepath}")
-                await db.remove_from_upload_queue(queue_id)
+                await db.remove_from_upload_queue(filepath)
                 await db.delete_file(filepath)
 
             return False
@@ -540,7 +582,7 @@ class UploaderV3:
 
                 if response.status_code == 200:
                     # Success - remove from queue
-                    await db.remove_from_deletion_queue(queue_id)
+                    await db.remove_from_deletion_queue(filepath)
                     logger.info(f"Deletion notified: {filepath}")
 
                     await activity_manager.emit(
@@ -555,7 +597,7 @@ class UploaderV3:
                 elif response.status_code == 404:
                     # File doesn't exist on server anyway - remove from queue
                     logger.info(f"File not found on server (deletion OK): {filepath}")
-                    await db.remove_from_deletion_queue(queue_id)
+                    await db.remove_from_deletion_queue(filepath)
                     return True
 
                 elif response.status_code == 401:
@@ -569,7 +611,7 @@ class UploaderV3:
                     else:
                         # Max retries - just remove from queue
                         logger.error(f"Max retries exhausted for deletion notification: {filepath}")
-                        await db.remove_from_deletion_queue(queue_id)
+                        await db.remove_from_deletion_queue(filepath)
 
                     return False
 
@@ -583,7 +625,7 @@ class UploaderV3:
                     else:
                         # Max retries - just remove from queue
                         logger.error(f"Max retries exhausted for deletion notification: {filepath}")
-                        await db.remove_from_deletion_queue(queue_id)
+                        await db.remove_from_deletion_queue(filepath)
 
                     return False
 
@@ -596,7 +638,7 @@ class UploaderV3:
             else:
                 # Max retries - just remove from queue
                 logger.error(f"Max retries exhausted for deletion notification: {filepath}")
-                await db.remove_from_deletion_queue(queue_id)
+                await db.remove_from_deletion_queue(filepath)
 
             return False
 

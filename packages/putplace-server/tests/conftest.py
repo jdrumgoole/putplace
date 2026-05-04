@@ -104,29 +104,27 @@ def run_configure(
 
 
 @pytest.fixture(scope="session", autouse=True)
-def cleanup_test_databases():
-    """Clean up all test databases at the end of the test session.
+def cleanup_test_databases(worker_id: str):
+    """Drop this worker's test database when its session ends.
 
-    This runs automatically after all tests complete to ensure
-    worker-specific databases don't accumulate.
+    Each pytest-xdist worker is its own process with its own session, so this
+    fires once per worker. It must drop ONLY this worker's database — the
+    earlier version dropped every `putplace_test_*` database, which under
+    LoadScopeScheduling routinely deleted databases still in use by sibling
+    workers, wiping their unique indexes mid-test and producing flaky
+    duplicate-detection failures.
     """
     yield
 
-    # Cleanup all test databases after tests complete
+    db_name = f"putplace_test_{worker_id}"
+
     async def _cleanup():
         client = AsyncMongoClient("mongodb://localhost:27017")
         try:
-            # Get all database names
-            db_names = await client.list_database_names()
-
-            # Drop all test databases
-            for db_name in db_names:
-                if db_name.startswith("putplace_test_"):
-                    await client.drop_database(db_name)
+            await client.drop_database(db_name)
         finally:
             await client.close()
 
-    # Run the async cleanup
     asyncio.run(_cleanup())
 
 
