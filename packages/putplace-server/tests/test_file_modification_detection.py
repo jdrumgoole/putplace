@@ -59,14 +59,20 @@ class TestFileModificationDetection:
             proc.kill()
             raise RuntimeError("ppassist daemon failed to start within 15 seconds")
 
-        yield proc
-
-        # Stop daemon
-        proc.terminate()
         try:
-            proc.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+            yield proc
+        finally:
+            # Stop daemon and close its pipes so file descriptors don't leak.
+            proc.terminate()
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait(timeout=5)
+            if proc.stdout is not None:
+                proc.stdout.close()
+            if proc.stderr is not None:
+                proc.stderr.close()
 
     def create_file_tree(self, base_dir: Path, num_files: int = 10, min_size: int = 3000, max_size: int = 150000):
         """Create a tree of files with varying sizes.

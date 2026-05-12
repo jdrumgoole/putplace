@@ -167,37 +167,33 @@ async def check_mongodb_connection(mongodb_url: str) -> tuple[bool, str]:
     try:
         from pymongo import AsyncMongoClient
         import certifi
-
-        # Determine if TLS/SSL should be used based on the connection string
-        # MongoDB Atlas (mongodb+srv://) and remote TLS connections need certificate validation
-        # Local connections (mongodb://localhost) typically don't use TLS
-        use_tls = 'mongodb+srv://' in mongodb_url or 'mongodb.net' in mongodb_url
-
-        if use_tls:
-            # For MongoDB Atlas and remote TLS connections, use certifi
-            client = AsyncMongoClient(
-                mongodb_url,
-                serverSelectionTimeoutMS=5000,
-                tlsCAFile=certifi.where()  # Use certifi's CA bundle for certificate validation
-            )
-        else:
-            # For local MongoDB, don't use TLS
-            client = AsyncMongoClient(
-                mongodb_url,
-                serverSelectionTimeoutMS=5000
-            )
-
-        # Try to get server info
-        await client.admin.command('ping')
-        await client.close()
-        return True, "MongoDB connection successful"
     except ImportError as e:
-        # Check which library is missing
         if 'certifi' in str(e):
             return False, "certifi library not installed (pip install certifi)"
         return False, "pymongo library not installed (PyMongo 4.10+ required)"
+
+    # Determine if TLS/SSL should be used based on the connection string
+    use_tls = 'mongodb+srv://' in mongodb_url or 'mongodb.net' in mongodb_url
+
+    if use_tls:
+        client = AsyncMongoClient(
+            mongodb_url,
+            serverSelectionTimeoutMS=5000,
+            tlsCAFile=certifi.where()
+        )
+    else:
+        client = AsyncMongoClient(
+            mongodb_url,
+            serverSelectionTimeoutMS=5000
+        )
+
+    try:
+        await client.admin.command('ping')
+        return True, "MongoDB connection successful"
     except Exception as e:
         return False, f"MongoDB connection failed: {str(e)}"
+    finally:
+        await client.aclose()
 
 
 async def check_s3_access(aws_region: Optional[str] = None) -> tuple[bool, str]:
@@ -261,49 +257,39 @@ async def create_admin_user(
         from putplace_server.user_auth import get_password_hash
         from datetime import datetime
         import certifi
+    except ImportError as e:
+        return False, f"Required libraries not installed: {e}"
 
-        # Use same TLS detection logic as check_mongodb_connection
-        use_tls = 'mongodb+srv://' in mongodb_url or 'mongodb.net' in mongodb_url
+    use_tls = 'mongodb+srv://' in mongodb_url or 'mongodb.net' in mongodb_url
 
-        if use_tls:
-            # For MongoDB Atlas and remote TLS connections
-            client = AsyncMongoClient(
-                mongodb_url,
-                tlsCAFile=certifi.where()
-            )
-        else:
-            # For local MongoDB without TLS
-            client = AsyncMongoClient(mongodb_url)
+    if use_tls:
+        client = AsyncMongoClient(mongodb_url, tlsCAFile=certifi.where())
+    else:
+        client = AsyncMongoClient(mongodb_url)
 
+    try:
         db = client.get_database("putplace")
         users_collection = db.users
 
-        # Check if user already exists by email
         existing_user = await users_collection.find_one({"email": email})
         if existing_user:
-            await client.close()
             return False, f"User with email '{email}' already exists"
 
-        # Create user document
         user_doc = {
             "email": email,
-            "username": email,  # Use email as username
+            "username": email,
             "hashed_password": get_password_hash(password),
             "full_name": "Administrator",
             "is_active": True,
             "is_admin": True,
             "created_at": datetime.utcnow()
         }
-
-        # Insert user
         await users_collection.insert_one(user_doc)
-        await client.close()
-
         return True, f"Admin user '{email}' created successfully"
-    except ImportError as e:
-        return False, f"Required libraries not installed: {e}"
     except Exception as e:
         return False, f"Failed to create admin user: {str(e)}"
+    finally:
+        await client.aclose()
 
 
 def write_toml_file(config: dict, toml_path: Path) -> tuple[bool, str]:

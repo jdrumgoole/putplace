@@ -13,6 +13,8 @@ See ``tasks/todo.md`` for the migration plan.
 
 from __future__ import annotations
 
+import asyncio
+import atexit
 import logging
 import os
 import secrets
@@ -88,9 +90,25 @@ def _build_config() -> RegStackConfig:
 _regstack: RegStack | None = None
 
 
+def _atexit_close_regstack() -> None:
+    # In production the FastAPI lifespan calls aclose(); under pytest the
+    # ASGITransport-based test client does not run lifespan events, so the
+    # Mongo client's background thread leaks an event loop. Close it on
+    # interpreter exit so ResourceWarnings stay at zero.
+    global _regstack
+    if _regstack is None:
+        return
+    try:
+        asyncio.run(_regstack.aclose())
+    except RuntimeError:
+        pass
+    _regstack = None
+
+
 def get_regstack() -> RegStack:
     """Return the singleton RegStack instance, building it on first use."""
     global _regstack
     if _regstack is None:
         _regstack = RegStack(config=_build_config())
+        atexit.register(_atexit_close_regstack)
     return _regstack

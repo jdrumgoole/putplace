@@ -5,9 +5,13 @@ to set up test environments programmatically.
 """
 
 import asyncio
+import os
 import tempfile
 from pathlib import Path
 from typing import AsyncGenerator, Generator
+
+os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-not-for-production")
+os.environ.setdefault("REGSTACK_JWT_SECRET", "test-regstack-jwt-secret-not-for-production")
 
 import pytest
 from httpx import AsyncClient
@@ -16,6 +20,18 @@ from pymongo import AsyncMongoClient
 from putplace_server.config import Settings
 from putplace_server.database import MongoDB
 from putplace_server.main import app
+from putplace_server.regstack_integration import get_regstack
+
+
+@pytest.fixture(scope="session", autouse=True)
+async def _close_regstack_singleton():
+    # The regstack instance is built at module-load (so its routers can be
+    # mounted at FastAPI app construction time). httpx ASGITransport in this
+    # conftest does not run lifespan events, so the lifespan's aclose() never
+    # fires under pytest. Close it inside the pytest-asyncio session loop so
+    # its background Mongo client doesn't leak an event loop on shutdown.
+    yield
+    await get_regstack().aclose()
 
 
 def run_configure(

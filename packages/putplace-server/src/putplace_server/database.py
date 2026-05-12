@@ -81,24 +81,29 @@ class MongoDB:
 
         except ServerSelectionTimeoutError as e:
             logger.error(f"MongoDB connection timeout: {e}")
-            self.client = None
-            self.collection = None
+            await self._discard_client()
             raise ConnectionFailure(f"Could not connect to MongoDB at {settings.mongodb_url}") from e
         except ConnectionFailure as e:
             logger.error(f"MongoDB connection failed: {e}")
-            self.client = None
-            self.collection = None
+            await self._discard_client()
             raise
         except OperationFailure as e:
             logger.error(f"MongoDB operation failed (check authentication): {e}")
-            self.client = None
-            self.collection = None
+            await self._discard_client()
             raise
         except Exception as e:
             logger.error(f"Unexpected error connecting to MongoDB: {e}")
-            self.client = None
-            self.collection = None
+            await self._discard_client()
             raise ConnectionFailure(f"Unexpected error connecting to MongoDB: {e}") from e
+
+    async def _discard_client(self) -> None:
+        if self.client is not None:
+            try:
+                await self.client.aclose()
+            except Exception:
+                pass
+        self.client = None
+        self.collection = None
 
     async def close(self) -> None:
         """Close MongoDB connection."""
