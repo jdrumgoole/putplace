@@ -5,14 +5,13 @@ version = "0.10.4"
 description = "PutPlace FastAPI server for file metadata storage"
 readme = "README.md"
 license = {text = "Apache-2.0"}
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
     "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -43,6 +42,7 @@ dependencies = [
     "boto3>=1.34.0",
     "aioboto3>=12.0.0",
     "invoke>=2.2.1",
+    "regstack[mongo]==0.5.0",
 ]
 
 [project.scripts]
@@ -89,7 +89,7 @@ asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = [
@@ -109,7 +109,7 @@ ignore = []
 "src/putplace_server/scripts/purge_data.py" = ["T201"]  # Allow print statements in purge script
 
 [tool.mypy]
-python_version = "3.10"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true

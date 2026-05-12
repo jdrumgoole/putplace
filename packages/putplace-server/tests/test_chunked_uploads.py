@@ -111,7 +111,7 @@ async def test_initiate_upload_unauthorized(client: AsyncClient, test_file_data)
     }
 
     response = await client.post("/api/uploads/initiate", json=request_data)
-    assert response.status_code == 403  # FastAPI returns 403 for missing credentials
+    assert response.status_code == 401
 
 
 @pytest.mark.asyncio

@@ -20,6 +20,7 @@ from .config import settings
 from . import database
 from . import dependencies
 from .auth import APIKeyAuth, get_current_api_key
+from .regstack_integration import get_regstack
 from .database import MongoDB
 from .models import (
     APIKeyCreate,
@@ -274,9 +275,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if database.mongodb.client is not None:
         await ensure_admin_exists(database.mongodb)
 
+    # Phase 1 of regstack migration: install regstack schema alongside
+    # putplace. Collections are scoped under `regstack_*` so they cannot
+    # collide with putplace's existing `users` / `pending_users`.
+    regstack = get_regstack()
+    try:
+        await regstack.install_schema()
+        logger.info("regstack schema installed (Phase 1 side-by-side)")
+    except Exception as e:
+        logger.error(f"Failed to install regstack schema: {e}")
+        raise
+
     yield
 
     # Shutdown
+    try:
+        await regstack.aclose()
+    except Exception as e:
+        logger.error(f"Error closing regstack backend: {e}")
     try:
         await database.mongodb.close()
         logger.info("Application shutdown: Database connection closed")
@@ -380,6 +396,17 @@ app.include_router(api_keys_router)
 app.include_router(uploads_router)
 app.include_router(deletion_router)
 app.include_router(admin_router)
+
+# Phase 1 of regstack migration: mount regstack's JSON + SSR routers and
+# static assets alongside putplace's existing routes. New paths are namespaced
+# (api_prefix=/api/v2/auth, ui_prefix=/account, static_prefix=/regstack-static),
+# so nothing existing breaks. The instance is built in get_regstack() and
+# shared with the lifespan handler.
+_regstack_app = get_regstack()
+app.include_router(_regstack_app.router, prefix=_regstack_app.config.api_prefix)
+if _regstack_app.config.enable_ui_router:
+    app.include_router(_regstack_app.ui_router, prefix=_regstack_app.config.ui_prefix)
+app.mount(_regstack_app.config.static_prefix, _regstack_app.static_files)
 
 
 # Chunked upload endpoints are now in uploads_router

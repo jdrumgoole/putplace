@@ -357,8 +357,8 @@ async def test_admin_dashboard_denied_for_non_admin(client: AsyncClient, test_us
 async def test_admin_dashboard_denied_without_auth(client: AsyncClient):
     """Test that unauthenticated users are denied access to admin dashboard."""
     response = await client.get("/admin/dashboard")
-    # HTTPBearer returns 403 when no credentials are provided
-    assert response.status_code == 403
+    # HTTPBearer returns 401 when no credentials are provided (FastAPI >= 0.120)
+    assert response.status_code == 401
 
 
 @pytest.mark.asyncio
