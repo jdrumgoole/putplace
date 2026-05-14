@@ -226,29 +226,17 @@ async def test_db(test_settings: Settings) -> AsyncGenerator[MongoDB, None]:
     db.client = AsyncMongoClient(test_settings.mongodb_url)
     test_db_instance = db.client[test_settings.mongodb_database]
     db.collection = test_db_instance[test_settings.mongodb_collection]
-    db.users_collection = test_db_instance["users_test"]
-    db.pending_users_collection = test_db_instance["pending_users_test"]
     db.upload_sessions_collection = test_db_instance["upload_sessions_test"]
     api_keys_collection = test_db_instance["api_keys"]
 
     # Drop collections first to ensure clean state
     await db.collection.drop()
-    await db.users_collection.drop()
-    await db.pending_users_collection.drop()
     await db.upload_sessions_collection.drop()
     await api_keys_collection.drop()
 
     # Create indexes for file metadata
     await db.collection.create_index("sha256")
     await db.collection.create_index([("hostname", 1), ("filepath", 1)])
-
-    # Create indexes for users collection
-    await db.users_collection.create_index("email", unique=True)
-
-    # Create indexes for pending users collection
-    await db.pending_users_collection.create_index("confirmation_token", unique=True)
-    await db.pending_users_collection.create_index("email", unique=True)
-    await db.pending_users_collection.create_index("expires_at")
 
     # Create indexes for upload sessions collection
     await db.upload_sessions_collection.create_index("upload_id", unique=True)
@@ -264,8 +252,6 @@ async def test_db(test_settings: Settings) -> AsyncGenerator[MongoDB, None]:
     # Cleanup
     try:
         await db.collection.drop()
-        await db.users_collection.drop()
-        await db.pending_users_collection.drop()
         await db.upload_sessions_collection.drop()
         await api_keys_collection.drop()
     except Exception:

@@ -1,5 +1,11 @@
 # PutPlace Server Configuration
-# Copy this file to ppserver.toml and customize for your environment
+# Copy this file to ppserver.toml and customize for your environment.
+#
+# User accounts, authentication, registration, password reset, OAuth, and
+# auth-email sending are owned by the regstack library — see the notes near
+# the bottom of this file, or the regstack docs:
+# https://regstack.readthedocs.io. Putplace itself only owns the MongoDB /
+# storage / API metadata sections below.
 
 [database]
 mongodb_url = "mongodb://localhost:27017"
@@ -24,34 +30,37 @@ path = "./storage/files"
 # s3_prefix = "files/"
 
 [aws]
-# AWS credentials (optional - will use AWS credential chain if not specified)
-# Recommended: Use IAM roles or AWS CLI config instead of hardcoding credentials
+# AWS credentials (optional — will use AWS credential chain if not specified)
+# Recommended: Use IAM roles or AWS CLI config instead of hardcoding credentials.
 # profile = "your-aws-profile"
 # access_key_id = "your-access-key"
 # secret_access_key = "your-secret-key"
 
-[oauth]
-# Google OAuth Configuration
-# To enable Google Sign-In:
-# 1. Go to https://console.cloud.google.com/
-# 2. Create a new project (or select existing)
-# 3. Enable "Google Sign-In API"
-# 4. Create OAuth 2.0 credentials (Web application)
-# 5. Add authorized JavaScript origins: http://localhost:8000
-# 6. Copy the Client ID below
-google_client_id = ""  # e.g., "123456789-abcdefghijk.apps.googleusercontent.com"
-# Note: google_client_secret is not needed for ID token verification
-
-[email]
-# Email Confirmation Settings (AWS SES)
-# Required for user registration email confirmation
-sender_email = "noreply@putplace.org"  # Must be verified in AWS SES
-base_url = "http://localhost:8000"     # Server base URL for confirmation links
-aws_region = "eu-west-1"               # AWS SES region
-
-[server]
-# Server Configuration
-registration_enabled = true  # Set to false to disable new user registration
+# =============================================================================
+# regstack (auth + accounts)
+# =============================================================================
+#
+# regstack reads its own settings from REGSTACK_* environment variables and/or
+# an adjacent regstack.toml file — not from this file. The settings below are
+# only documentation of which knobs exist; uncommenting them here has no effect.
+#
+# Required in production:
+#   REGSTACK_JWT_SECRET=<64-byte random>
+#     export REGSTACK_JWT_SECRET=$(python -c 'import secrets; print(secrets.token_urlsafe(64))')
+#
+# Optional:
+#   REGSTACK_EMAIL__BACKEND=ses
+#   REGSTACK_EMAIL__FROM_ADDRESS=noreply@example.com
+#   REGSTACK_EMAIL__SES_REGION=eu-west-1
+#   REGSTACK_OAUTH__GOOGLE_CLIENT_ID=<google-client-id>
+#   REGSTACK_OAUTH__GOOGLE_CLIENT_SECRET=<google-client-secret>
+#   REGSTACK_ALLOW_REGISTRATION=true
+#
+# Admin user (created by the putplace server on first startup if no users exist):
+#   PUTPLACE_ADMIN_EMAIL=admin@example.com
+#   PUTPLACE_ADMIN_PASSWORD=<8+ chars>
+# If neither is set, a random password is generated and written once to
+# /tmp/putplace_initial_creds.txt — save it and delete the file.
 
 # =============================================================================
 # Usage Notes
@@ -60,14 +69,13 @@ registration_enabled = true  # Set to false to disable new user registration
 # 1. Copy this file to ppserver.toml:
 #    cp ppserver.toml.example ppserver.toml
 #
-# 2. Edit ppserver.toml with your configuration
+# 2. Edit ppserver.toml with your configuration.
 #
 # 3. Or use the configuration wizard:
-#    putplace-configure
+#    pp_configure
 #    (or: invoke configure)
 #
-# 4. Never commit ppserver.toml to version control (already in .gitignore)
+# 4. Never commit ppserver.toml to version control (already in .gitignore).
 #
 # 5. Set restrictive file permissions:
 #    chmod 600 ppserver.toml
-#

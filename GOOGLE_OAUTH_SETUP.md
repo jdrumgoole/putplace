@@ -1,5 +1,19 @@
 # Google OAuth Setup for PutPlace
 
+> **Note**: As of pp_server 0.11, Google OAuth is handled end-to-end by the
+> embedded [regstack](https://regstack.readthedocs.io) library. Configure it
+> with:
+>
+> ```bash
+> REGSTACK_OAUTH__GOOGLE_CLIENT_ID=<your-client-id>
+> REGSTACK_OAUTH__GOOGLE_CLIENT_SECRET=<your-client-secret>
+> ```
+>
+> Then sign in at `/account/login`. The Google Console setup steps below
+> (creating the OAuth client, configuring redirect URIs, etc.) are still
+> accurate; only the runtime config keys have changed. The legacy
+> `google_client_id` setting in `ppserver.toml` is no longer read.
+
 This guide will walk you through setting up Google Sign-In for your PutPlace server and Electron client.
 
 ## Prerequisites

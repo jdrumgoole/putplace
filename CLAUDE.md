@@ -57,14 +57,19 @@ invoke serve
 
 ## Authentication & Initial Setup
 
+User accounts, registration, login, password reset, OAuth and email
+verification are owned by the embedded [regstack](https://regstack.readthedocs.io)
+library and live at `/api/v2/auth/*` (JSON) and `/account/*` (themed HTML).
+PutPlace itself only ships API keys for service-to-service auth.
+
 ### Automatic Admin User Creation
 
-PutPlace automatically creates an admin user on first startup using a **hybrid approach**:
+PutPlace creates an admin user on first startup using regstack's
+`bootstrap_admin()`:
 
 **Method 1: Environment Variables (Production)**
 ```bash
 # Add to .env file
-PUTPLACE_ADMIN_USERNAME=admin
 PUTPLACE_ADMIN_PASSWORD=your-secure-password
 PUTPLACE_ADMIN_EMAIL=admin@example.com
 ```
@@ -81,6 +86,18 @@ If no environment variables are set, PutPlace will:
 - Generated passwords are 21+ characters (cryptographically secure)
 - Password must be at least 8 characters when using environment variables
 - Delete the credentials file after saving the password
+
+### regstack environment variables
+
+| Var | Required | Purpose |
+|---|---|---|
+| `REGSTACK_JWT_SECRET` | Yes (prod) | JWT signing secret |
+| `REGSTACK_EMAIL__BACKEND` | No | `ses`, `smtp`, or `console` |
+| `REGSTACK_EMAIL__FROM_ADDRESS` | No | Auth-email from address |
+| `REGSTACK_EMAIL__SES_REGION` | No | AWS region for SES |
+| `REGSTACK_OAUTH__GOOGLE_CLIENT_ID` | No | Enables Google Sign-In |
+| `REGSTACK_OAUTH__GOOGLE_CLIENT_SECRET` | No | Paired secret |
+| `REGSTACK_ALLOW_REGISTRATION` | No | `false` to disable self-service registration |
 
 ### API Keys
 

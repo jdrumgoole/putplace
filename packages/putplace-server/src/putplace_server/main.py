@@ -36,7 +36,6 @@ from .models import (
     UploadCompleteResponse,
     UploadSessionInitiate,
     UploadSessionResponse,
-    User,
 )
 from .storage import get_storage_backend, StorageBackend
 from .templates import get_home_page

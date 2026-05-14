@@ -5,6 +5,64 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## putplace-server [0.11.0] - 2026-05-14
+
+### Changed (breaking)
+- User accounts, registration, login, email verification, password reset,
+  Google OAuth and admin bootstrap are now provided by the embedded
+  [regstack](https://regstack.readthedocs.io) library at `/api/v2/auth/*`
+  (JSON) and `/account/*` (SSR HTML). The old putplace auth endpoints
+  (`/api/login`, `/api/register`, `/api/confirm-email`, `/api/auth/google`,
+  `/api/oauth/config`, `/api/check-confirmation-status`) and the
+  putplace-owned `users` and `pending_users` MongoDB collections are gone.
+- Every existing JWT issued by pp_server ≤ 0.10 stops validating — regstack
+  uses an incompatible token shape (purpose/jti/iat required) and a
+  separate signing secret (`REGSTACK_JWT_SECRET`). Users must log in once.
+- The legacy putplace web pages `/login` and `/register` now 307-redirect
+  to `/account/login` and `/account/register`. The await-confirmation
+  polling page (`/api/check-confirmation-status`) is removed; the user
+  navigates after clicking the email link instead.
+- pp_assist 0.2.x is incompatible with pp_server 0.11. Coordinate the
+  release — old pp_assist daemons calling `/api/login` get a 404.
+- Removed env vars: `JWT_SECRET_KEY`, `JWT_ALGORITHM`,
+  `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`, `GOOGLE_CLIENT_ID`,
+  `GOOGLE_CLIENT_SECRET`, `SENDER_EMAIL`, `BASE_URL`,
+  `EMAIL_AWS_REGION`, `REGISTRATION_ENABLED`,
+  `PUTPLACE_ADMIN_USERNAME`. Replaced by `REGSTACK_*` equivalents (see
+  `ppserver.toml.example` and `docs/AUTHENTICATION.md`).
+- The `pp_manage_users` console script and the configure-wizard's
+  database-side admin-creation step are removed. Admin bootstrap now runs
+  inside the server's lifespan via `regstack.bootstrap_admin()`.
+
+### Added
+- `pp_migrate_users` console script (`invoke migrate-to-regstack`) ports
+  existing putplace user documents into regstack's collections, preserving
+  `_id` so API-key foreign keys keep resolving. Argon2 hashes are
+  portable; users do not need a forced password reset. Always run with
+  `--dry-run` against a copy of prod data first.
+- Branded auth-email templates (verification, password reset, email
+  change) in `regstack_email_templates/`, wired via
+  `regstack.add_template_dir()`.
+
+### Fixed
+- AsyncMongoClient leaks on every exception path in `MongoDB.connect()`
+  and in both `check_mongodb_connection` / `create_admin_user` in
+  `pp_configure`. Test suite is now 0-warning under `pytest -W default`
+  (was 140 warnings/run).
+- pytest-xdist worker isolation: regstack singleton now reads
+  `PYTEST_XDIST_WORKER` at singleton-build time, not at conftest
+  module-load. Previously every worker shared `putplace_test_master`
+  and the suite was ~60% flaky.
+
+## putplace-assist [0.3.0] - 2026-05-14
+
+### Changed (breaking)
+- Authentication and registration URLs repointed from `/api/login` and
+  `/api/register` to `/api/v2/auth/login` and `/api/v2/auth/register`.
+  Old pp_server (< 0.11) is no longer reachable through pp_assist.
+- The pp_assist public `/login` and `/register` endpoints keep their
+  `AuthResponse` contract; pp_client (canonical test client) is unaffected.
+
 ## putplace-server [0.10.4] - 2026-05-04
 
 ### Fixed

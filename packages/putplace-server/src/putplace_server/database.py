@@ -22,8 +22,6 @@ class MongoDB:
 
     client: Optional[AsyncMongoClient] = None
     collection: Optional[AsyncCollection] = None
-    users_collection: Optional[AsyncCollection] = None
-    pending_users_collection: Optional[AsyncCollection] = None
     upload_sessions_collection: Optional[AsyncCollection] = None
 
     async def connect(self) -> None:
@@ -47,8 +45,6 @@ class MongoDB:
 
             db = self.client[settings.mongodb_database]
             self.collection = db[settings.mongodb_collection]
-            self.users_collection = db["users"]
-            self.pending_users_collection = db["pending_users"]
             self.upload_sessions_collection = db["upload_sessions"]
 
             # Create indexes on sha256 for efficient lookups
@@ -62,16 +58,6 @@ class MongoDB:
             await api_keys_collection.create_index("key_hash", unique=True)
             await api_keys_collection.create_index([("is_active", 1)])
             logger.info("API keys indexes created successfully")
-
-            # Create indexes for users collection
-            await self.users_collection.create_index("email", unique=True)
-            logger.info("Users indexes created successfully")
-
-            # Create indexes for pending_users collection
-            await self.pending_users_collection.create_index("confirmation_token", unique=True)
-            await self.pending_users_collection.create_index("email", unique=True)
-            await self.pending_users_collection.create_index("expires_at")  # For cleanup queries
-            logger.info("Pending users indexes created successfully")
 
             # Create indexes for upload_sessions collection
             await self.upload_sessions_collection.create_index("upload_id", unique=True)
@@ -332,107 +318,10 @@ class MongoDB:
             logger.error(f"Database operation failed during get_files_by_sha256: {e}")
             raise
 
-    # User authentication methods
-
-    async def create_user(
-        self,
-        email: str,
-        hashed_password: str,
-        is_admin: bool = False
-    ) -> str:
-        """Create a new user.
-
-        Args:
-            email: User's email
-            hashed_password: Hashed password
-            is_admin: Whether the user has admin privileges (default: False)
-
-        Returns:
-            Inserted user document ID
-
-        Raises:
-            RuntimeError: If database not connected
-            DuplicateKeyError: If email already exists
-        """
-        if self.users_collection is None:
-            raise RuntimeError("Database not connected")
-
-        from datetime import datetime
-
-        user_data = {
-            "email": email,
-            "username": email,  # Use email as username
-            "hashed_password": hashed_password,
-            "is_active": True,
-            "is_admin": is_admin,
-            "created_at": datetime.utcnow(),
-        }
-
-        try:
-            result = await self.users_collection.insert_one(user_data)
-            return str(result.inserted_id)
-        except DuplicateKeyError as e:
-            if "email" in str(e):
-                raise DuplicateKeyError("Email already exists")
-            raise
-
-    async def get_user_by_email(self, email: str) -> Optional[dict]:
-        """Get user by email.
-
-        Args:
-            email: Email to search for
-
-        Returns:
-            User document or None if not found
-        """
-        if self.users_collection is None:
-            raise RuntimeError("Database not connected")
-
-        return await self.users_collection.find_one({"email": email})
-
-    # Admin dashboard methods
-
-    async def get_all_users(self) -> list[dict]:
-        """Get all registered users.
-
-        Returns:
-            List of user documents (without passwords)
-        """
-        if self.users_collection is None:
-            raise RuntimeError("Database not connected")
-
-        users = []
-        cursor = self.users_collection.find(
-            {},
-            {"hashed_password": 0}  # Exclude password hash
-        ).sort("created_at", -1)
-
-        async for user in cursor:
-            user["_id"] = str(user["_id"])
-            users.append(user)
-
-        return users
-
-    async def get_all_pending_users(self) -> list[dict]:
-        """Get all pending users awaiting email confirmation.
-
-        Returns:
-            List of pending user documents (without passwords)
-        """
-        if self.pending_users_collection is None:
-            raise RuntimeError("Database not connected")
-
-        pending_users = []
-        cursor = self.pending_users_collection.find(
-            {},
-            {"hashed_password": 0}  # Exclude password hash
-        ).sort("created_at", -1)
-
-        async for user in cursor:
-            user["_id"] = str(user["_id"])
-            pending_users.append(user)
-
-        return pending_users
+    # User accounts and pending registrations are owned by regstack;
+    # see putplace_server.regstack_integration. The legacy putplace
+    # create_user / get_user_by_email / pending_users methods that used
+    # to live here have been removed alongside the auth endpoints.
 
     async def get_user_file_counts(self) -> dict[str, int]:
         """Get file upload counts per user.
@@ -456,124 +345,22 @@ class MongoDB:
         return counts
 
     async def get_dashboard_stats(self) -> dict:
-        """Get statistics for admin dashboard.
+        """Return file-related counts for the admin dashboard.
 
-        Returns:
-            Dictionary with dashboard statistics
+        User and pending-registration counts are sourced from regstack
+        directly in ``routers/admin.py``.
         """
-        if self.users_collection is None or self.collection is None:
+        if self.collection is None:
             raise RuntimeError("Database not connected")
 
-        total_users = await self.users_collection.count_documents({})
-        active_users = await self.users_collection.count_documents({"is_active": True})
-        admin_users = await self.users_collection.count_documents({"is_admin": True})
         total_files = await self.collection.count_documents({})
-        files_with_content = await self.collection.count_documents({"has_file_content": True})
-
-        pending_count = 0
-        if self.pending_users_collection is not None:
-            pending_count = await self.pending_users_collection.count_documents({})
-
+        files_with_content = await self.collection.count_documents(
+            {"has_file_content": True}
+        )
         return {
-            "total_users": total_users,
-            "active_users": active_users,
-            "admin_users": admin_users,
-            "pending_users": pending_count,
             "total_files": total_files,
             "files_with_content": files_with_content,
         }
-
-    # Pending user methods
-
-    async def create_pending_user(
-        self,
-        email: str,
-        hashed_password: str,
-        confirmation_token: str,
-        expires_at
-    ) -> str:
-        """Create a pending user awaiting email confirmation.
-
-        Args:
-            email: User's email
-            hashed_password: Hashed password
-            confirmation_token: Email confirmation token
-            expires_at: Expiration datetime
-
-        Returns:
-            Inserted pending user document ID
-
-        Raises:
-            DuplicateKeyError: If email already exists
-        """
-        if self.pending_users_collection is None:
-            raise RuntimeError("Database not connected")
-
-        from datetime import datetime
-
-        pending_user_data = {
-            "email": email,
-            "hashed_password": hashed_password,
-            "confirmation_token": confirmation_token,
-            "created_at": datetime.utcnow(),
-            "expires_at": expires_at,
-        }
-
-        try:
-            result = await self.pending_users_collection.insert_one(pending_user_data)
-            return str(result.inserted_id)
-        except DuplicateKeyError as e:
-            if "email" in str(e):
-                raise DuplicateKeyError("Email already registered (pending or active)")
-            elif "confirmation_token" in str(e):
-                # This should be extremely rare
-                raise DuplicateKeyError("Token collision - please try again")
-            raise
-
-    async def get_pending_user_by_token(self, confirmation_token: str) -> Optional[dict]:
-        """Get pending user by confirmation token.
-
-        Args:
-            confirmation_token: Confirmation token
-
-        Returns:
-            Pending user document or None if not found
-        """
-        if self.pending_users_collection is None:
-            raise RuntimeError("Database not connected")
-
-        return await self.pending_users_collection.find_one({"confirmation_token": confirmation_token})
-
-    async def delete_pending_user(self, confirmation_token: str) -> bool:
-        """Delete a pending user by confirmation token.
-
-        Args:
-            confirmation_token: Confirmation token
-
-        Returns:
-            True if deleted, False if not found
-        """
-        if self.pending_users_collection is None:
-            raise RuntimeError("Database not connected")
-
-        result = await self.pending_users_collection.delete_one({"confirmation_token": confirmation_token})
-        return result.deleted_count > 0
-
-    async def cleanup_expired_pending_users(self) -> int:
-        """Delete all expired pending users.
-
-        Returns:
-            Number of deleted pending users
-        """
-        if self.pending_users_collection is None:
-            raise RuntimeError("Database not connected")
-
-        from datetime import datetime
-
-        result = await self.pending_users_collection.delete_many({
-            "expires_at": {"$lt": datetime.utcnow()}
-        })
-        return result.deleted_count
 
     # Chunked upload session methods
 

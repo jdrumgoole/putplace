@@ -30,17 +30,24 @@ services:
       # - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
       # - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
 
-      # Optional: Google OAuth
-      # - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      # regstack — auth, registration, password reset, sessions.
+      # Generate a stable signing secret per environment:
+      #   export REGSTACK_JWT_SECRET=$(python -c 'import secrets; print(secrets.token_urlsafe(64))')
+      - REGSTACK_JWT_SECRET=${REGSTACK_JWT_SECRET:-change-me-in-production}
+      # Optional Google OAuth (regstack handles the flow end-to-end):
+      # - REGSTACK_OAUTH__GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      # - REGSTACK_OAUTH__GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      # Email sender for verification + password-reset mails:
+      # - REGSTACK_EMAIL__BACKEND=ses
+      # - REGSTACK_EMAIL__FROM_ADDRESS=noreply@example.com
+      # - REGSTACK_EMAIL__SES_REGION=eu-west-1
 
-      # Admin user (created on first startup)
-      - PUTPLACE_ADMIN_USERNAME=admin
+      # Admin user (created by the server on first startup)
       - PUTPLACE_ADMIN_PASSWORD=admin123
-      - PUTPLACE_ADMIN_EMAIL=admin@putplace.local
+      - PUTPLACE_ADMIN_EMAIL=admin@putplace.example.com
 
       # API settings
       - API_TITLE=PutPlace API
-      - API_VERSION=0.5.1
     volumes:
       - putplace-storage:/app/storage
     depends_on:

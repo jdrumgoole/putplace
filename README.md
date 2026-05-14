@@ -355,85 +355,59 @@ Once the server is running:
 - `GET /api/clones/{sha256}` - Get all file clones (requires JWT)
 - `GET /api/my_files` - Get user's files (requires JWT)
 
-**Authentication:**
-- `POST /api/register` - Register new user (sends email confirmation)
-- `GET /api/confirm-email?token=...` - Confirm email address
-- `POST /api/login` - Login and get JWT token
-- `POST /api/auth/google` - Google Sign-In authentication
-- `GET /api/oauth/config` - Get OAuth configuration
-- `POST /api_keys` - Create API key (requires JWT)
-- `GET /api_keys` - List API keys (requires JWT)
+**Authentication (regstack):**
 
-**Email Confirmation:**
+User accounts, registration, email verification, password reset, JWT
+sessions, and Google OAuth are all served by the embedded
+[regstack](https://regstack.readthedocs.io) library:
 
-PutPlace uses email confirmation for user registration via AWS SES:
+- `POST /api/v2/auth/register` — Register a new user (triggers verification email)
+- `POST /api/v2/auth/verify` — Confirm email by token
+- `POST /api/v2/auth/login` — Exchange credentials for a JWT
+- `POST /api/v2/auth/forgot-password` / `POST /api/v2/auth/reset-password`
+- `POST /api/v2/auth/change-password` / `POST /api/v2/auth/change-email`
+- `GET /api/v2/auth/me` / `DELETE /api/v2/auth/account`
+- `GET /account/login`, `/account/register`, `/account/forgot`, ... — themed HTML pages
 
-1. **Registration**: Users register with username, email, and password
-2. **Email Sent**: Confirmation email sent with secure 24-hour link
-3. **Confirmation**: User clicks link to activate account
-4. **Cleanup**: Unconfirmed registrations auto-deleted after 24 hours
+**API keys (putplace-owned):**
+- `POST /api_keys` — Create API key (requires JWT)
+- `GET /api_keys` — List API keys (requires JWT)
 
-Configure email settings in `ppserver.toml`:
-```toml
-[email]
-sender_email = "noreply@putplace.org"  # SES verified sender
-base_url = "http://localhost:8000"     # Server base URL for confirmation links
-aws_region = "eu-west-1"               # AWS SES region
+**Email verification and password reset** are handled by regstack out of the
+box. Putplace ships branded email templates in
+`packages/putplace-server/src/putplace_server/regstack_email_templates/`
+that override regstack's defaults via `regstack.add_template_dir()`.
 
-[server]
-registration_enabled = true  # Set to false to disable new user registration
-```
-
-Or via environment variables:
-```bash
-PUTPLACE_SENDER_EMAIL=noreply@putplace.org
-PUTPLACE_BASE_URL=https://putplace.example.com
-PUTPLACE_EMAIL_AWS_REGION=eu-west-1
-PUTPLACE_REGISTRATION_ENABLED=true  # false to disable registration
-```
-
-**Disabling Registration:**
-
-To disable new user registration (e.g., in production), you can:
-- Set `registration_enabled = false` in `ppserver.toml` under `[server]` section
-- Set environment variable `PUTPLACE_REGISTRATION_ENABLED=false`
-- No redeployment needed - just edit the config file and restart the server
-
-**For AWS App Runner:**
-
-Use the provided Python script to toggle registration without redeployment:
+Email sending is configured via `REGSTACK_EMAIL__*` environment variables
+(or a `regstack.toml`):
 
 ```bash
-# Set your service ARN (one time)
-export APPRUNNER_SERVICE_ARN="arn:aws:apprunner:region:account:service/putplace/xxx"
-
-# Disable registration
-invoke toggle-registration --action=disable
-
-# Re-enable registration later
-invoke toggle-registration --action=enable
-
-# Or use the script directly
-uv run python -m putplace.scripts.toggle_registration disable
-uv run python -m putplace.scripts.toggle_registration enable
+REGSTACK_EMAIL__BACKEND=ses
+REGSTACK_EMAIL__FROM_ADDRESS=noreply@example.com
+REGSTACK_EMAIL__SES_REGION=eu-west-1
 ```
+
+**Disabling registration:** set `REGSTACK_ALLOW_REGISTRATION=false`
+in the server's environment, then restart (or restart-on-config-change in
+AWS App Runner). No redeployment needed.
 
 The script will:
-- Update the `PUTPLACE_REGISTRATION_ENABLED` environment variable
-- Trigger an automatic redeployment (2-3 minutes)
-- Preserve all other environment variables
-
 **Note**: AWS SES must be out of sandbox mode to send to any email address.
 
 **Google Sign-In Setup:**
 
-To enable Google Sign-In in the Electron client and web interface, see [GOOGLE_OAUTH_SETUP.md](GOOGLE_OAUTH_SETUP.md) for detailed configuration instructions.
+regstack handles the full Google OAuth flow (authorization code + PKCE).
+Configure it via:
 
-Quick summary:
-1. Create OAuth credentials in [Google Cloud Console](https://console.cloud.google.com/)
-2. Add Client ID to `ppserver.toml` or set `GOOGLE_CLIENT_ID` environment variable
-3. Restart the server
-4. Google Sign-In button will appear automatically in the Electron client
+```bash
+REGSTACK_OAUTH__GOOGLE_CLIENT_ID=<your-client-id>
+REGSTACK_OAUTH__GOOGLE_CLIENT_SECRET=<your-client-secret>
+```
+
+Then visit `/account/login` — the Google sign-in button appears
+automatically when both env vars are set. See the
+[regstack docs](https://regstack.readthedocs.io/en/latest/security.html#oauth)
+for the threat model and configuration details.
 
 See [API Reference](https://putplace.readthedocs.io/en/latest/api-reference.html) for complete endpoint documentation.
 
