@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## putplace-server [0.11.1] - 2026-05-15
+
+### Removed
+- All AWS App Runner deploy artifacts: `apprunner.yaml`, `tasks-apprunner.py`,
+  `deploy/app_runner_deploy.py`, `aws_credentials_output/`, the four
+  `APPRUNNER_*.md` / `AWS_APPRUNNER_*.md` deploy guides at the repo root and
+  under `docs/`, the multi-option `AWS_DEPLOYMENT_GUIDE.md`, and the
+  App Runner-specific `toggle_registration` script + invoke task. PutPlace
+  is deployed exclusively to DigitalOcean now (see `DIGITALOCEAN_DEPLOYMENT.md`
+  and `invoke deploy`).
+
+- `Dockerfile` and `docker-compose.yml` removed. PutPlace runs straight on
+  a DigitalOcean droplet via `pip install putplace-server` (see
+  `invoke deploy`); we don't run a container in production and the local
+  Docker workflow had nothing maintaining it. The previous Dockerfile
+  had been stale since the workspace split — wrong import path, missing
+  `[s3]` extra at the workspace root.
+
 ## putplace-server [0.11.0] - 2026-05-14
 
 ### Changed (breaking)
