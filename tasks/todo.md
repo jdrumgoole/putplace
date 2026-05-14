@@ -378,75 +378,45 @@ Working branch: `regstack-migration` (worktree at `../putplace-regstack-migratio
   regstack's). Will be retired at Phase 4 when putplace's JWT code is
   deleted.
 
-## Review
+### Phase 2 results
 
-### Phase 0 results (research, no code yet)
+**Shipped:**
+- `packages/putplace-server/src/putplace_server/scripts/migrate_to_regstack.py`
+  — new console script. Reads every putplace user doc and writes a
+  regstack-shaped doc into the target collection, preserving `_id` so
+  existing `api_keys.user_id` FKs keep resolving. Argparse, paginated
+  cursor (sorted by `_id`, batch of 100), idempotent (skips users whose
+  `_id` already exists in target), `--dry-run` flag, `--verbose` flag.
+- `pp_migrate_users` console-script entry in `pyproject.toml`.
+- `invoke migrate-to-regstack [--dry-run] [--verbose] [--mongodb-url …] [--mongodb-database …]`
+  invoke task in the top-level `tasks.py`.
+- 14 new tests in `test_migrate_to_regstack.py`:
+  - 8 unit tests for the shape mappers (`_to_regstack_user`,
+    `_to_oauth_identity`) — password users, OAuth users (empty
+    `hashed_password` → `None`), missing fields, `is_admin →
+    is_superuser`, naive-datetime UTC normalization, OAuth identity
+    extraction, no-identity for password / local-provider users.
+  - 5 integration tests against a per-worker live Mongo: id-preservation,
+    OAuth split into identity row, dry-run writes nothing, idempotent
+    re-run, api_keys.user_id round-trip.
+  - 1 cross-library test: an Argon2 hash produced by putplace's
+    `argon2-cffi` verifies under regstack's `pwdlib`-based `PasswordHasher`.
+    This is the load-bearing assumption of the whole migration — without
+    it every user would need a forced password reset.
 
-**Mongo coexistence.** regstack's collection names are all config-overridable
-(`user_collection`, `pending_collection`, `blacklist_collection`,
-`login_attempt_collection`, `mfa_code_collection`,
-`oauth_identity_collection`, `oauth_state_collection`). Defaults:
+**Verification:**
+- `invoke test-all` × 5 consecutive parallel runs: 267 passed (253 + 14),
+  0 warnings, no flakes.
 
-| regstack default | PutPlace today | Action |
-|---|---|---|
-| `users` | `users` | **Collides.** For Phase 1, point regstack at `regstack_users` (or similar) so both stacks run on the same DB. Phase 2 migrates and renames. |
-| `pending_registrations` | `pending_users` | No collision — drop putplace's collection at Phase 4. |
-| `token_blacklist` | — | New, regstack only. |
-| `login_attempts` | — | New, regstack only. |
-| `mfa_codes` | — | New, opt-in (SMS MFA disabled by default). |
-| `oauth_identities` | — | New — replaces putplace's `auth_provider` / `oauth_id` columns on the user doc. |
-| `oauth_states` | — | New, regstack only. |
-| — | `api_keys` | Stays in PutPlace. |
-| — | `file_metadata` | Stays in PutPlace. |
-
-**`is_admin` strategy.** regstack's `BaseUser` ships `is_superuser: bool` and
-provides `is_admin` as an alias property (`@property def is_admin: return
-self.is_superuser`). The docstring literally says "default field set covers
-what both winebox and putplace need today." **No extension required.**
-`PUTPLACE_ADMIN_*` env vars map to creating a regstack user with
-`is_superuser=True` (regstack ships a `create-admin` CLI and an analogous
-config flag).
-
-The doc-mentioned `RegStack.extend_user_model` hook is not actually
-implemented (only referenced in the BaseUser docstring) — but `BaseUser`
-sets `extra="allow"`, so any PutPlace-only field could ride along untyped.
-We don't need this for the migration: `auth_provider` + `oauth_id` are
-obsolete (regstack tracks them in `oauth_identities`), and `picture` is a
-non-critical UI avatar — fetch from the oauth_identity row on demand, or
-drop until later.
-
-**Email sender.** The only caller of `email_service.py` in PutPlace is
-`routers/users.py` for confirmation emails. There is no non-auth mail. The
-standalone `send_ses_email.py` script is unrelated. regstack ships
-console / SMTP / SES backends. **regstack takes over email entirely;
-delete `email_service.py` at Phase 4.**
-
-**JWT secret.** Decision deferred to deploy time. Default plan: rotate
-(set fresh `REGSTACK_JWT_SECRET`), accept one round of forced re-login.
-If we instead carry forward `JWT_SECRET_KEY` into `REGSTACK_JWT_SECRET`,
-existing tokens stay valid but the algorithm and claim layout must match
-— needs verification against regstack's JWT format. **Cheaper to rotate.**
-
-**Google OAuth client.** Reuse current `GOOGLE_CLIENT_ID`; regstack's
-Google flow uses PKCE + ID-token verification (matches putplace's
-approach). Existing OAuth users have `oauth_id` on their user doc — those
-become rows in regstack's `oauth_identities` collection at Phase 2.
-
-**`/api/login` consumers.** Three places call it directly:
-- `pp_assist/src/putplace_assist/uploader.py` (line 424)
-- `pp_assist/src/putplace_assist/uploader_v3.py` (line 205)
-- `pp_assist/src/putplace_assist/main.py` (line 237) — proxied from pp_assist's own `/login` endpoint
-
-`pp_client` calls `pp_assist`'s `/login`, not the server directly. So the
-public-facing daemon contract (`pp_assist /login`) can stay stable while
-its three internal call sites get repointed — `pp_client` users don't
-need to upgrade in lockstep. **Add a one-release shim at the server's
-`/api/login` that proxies to regstack** so any straggler clients still
-work during rollout.
-
-**Updates to original plan:**
-1. Phase 1: configure regstack with `user_collection="regstack_users"` and other scoped names — do not let it write to PutPlace's `users` collection until Phase 2.
-2. Phase 2 step "preserve `_id`" is critical because `api_keys.user_id` points at it. The migration script copies docs verbatim into `regstack_users`, then renames the collections (`users` → `users_legacy`, `regstack_users` → `users`) atomically.
-3. Drop the `is_admin` extension question — it's already there.
-4. Drop `email_service.py` cleanly at Phase 4 — no non-auth callers.
-
+**Not done in Phase 2 (deliberate):**
+- The `regstack_users → users` collection rename is **deferred to Phase 3**.
+  Renaming now would break putplace's auth endpoints which still read from
+  `users`. Phase 3 cuts over the endpoints and renames the collections
+  in one coordinated change.
+- Pending users are not migrated. Putplace stored raw confirmation
+  tokens; regstack stores sha256-hashed tokens. Without plaintext we
+  cannot regenerate the hash. The TTL index drops expired pending users
+  on its own; any in-flight registrations re-register after cutover.
+  (Plan §"Hard incompatibilities" #3 — accepted risk.)
+- Schema rename / Phase 2 step 5 ("reconfigure regstack to use unprefixed
+  names") rolls into Phase 3.

@@ -17,6 +17,25 @@ from invoke_tasks.utils import (
 
 
 @task
+def migrate_to_regstack(c, dry_run=False, verbose=False, mongodb_url=None, mongodb_database=None):
+    """Migrate putplace users into regstack collections (Phase 2 of migration).
+
+    See packages/putplace-server/src/putplace_server/scripts/migrate_to_regstack.py
+    for full docs. Always pass --dry-run first against a copy of prod data.
+    """
+    cmd_parts = ["uv run python -m putplace_server.scripts.migrate_to_regstack"]
+    if dry_run:
+        cmd_parts.append("--dry-run")
+    if verbose:
+        cmd_parts.append("--verbose")
+    if mongodb_url:
+        cmd_parts.append(f"--mongodb-url '{mongodb_url}'")
+    if mongodb_database:
+        cmd_parts.append(f"--mongodb-database '{mongodb_database}'")
+    c.run(" ".join(cmd_parts), pty=True)
+
+
+@task
 def setup_venv(c):
     """Create virtual environment with uv."""
     c.run("uv venv")
