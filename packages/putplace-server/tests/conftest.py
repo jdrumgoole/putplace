@@ -10,12 +10,20 @@ import tempfile
 from pathlib import Path
 from typing import AsyncGenerator, Generator
 
+# The regstack singleton is built at module-load time inside putplace_server.main,
+# which means it reads settings.mongodb_database *before* any pytest fixture runs.
+# To make regstack write to this worker's isolated database (putplace_test_gwN),
+# we must set MONGODB_DATABASE before importing anything from putplace_server.
+_worker_id = os.environ.get("PYTEST_XDIST_WORKER", "master")
+os.environ.setdefault("MONGODB_DATABASE", f"putplace_test_{_worker_id}")
 os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-not-for-production")
 os.environ.setdefault("REGSTACK_JWT_SECRET", "test-regstack-jwt-secret-not-for-production")
 
 import pytest
 from httpx import AsyncClient
 from pymongo import AsyncMongoClient
+
+from regstack.models.user import BaseUser
 
 from putplace_server.config import Settings
 from putplace_server.database import MongoDB
@@ -24,12 +32,14 @@ from putplace_server.regstack_integration import get_regstack
 
 
 @pytest.fixture(scope="session", autouse=True)
-async def _close_regstack_singleton():
+async def _regstack_session_lifecycle():
     # The regstack instance is built at module-load (so its routers can be
     # mounted at FastAPI app construction time). httpx ASGITransport in this
-    # conftest does not run lifespan events, so the lifespan's aclose() never
-    # fires under pytest. Close it inside the pytest-asyncio session loop so
-    # its background Mongo client doesn't leak an event loop on shutdown.
+    # conftest does not run lifespan events, so the lifespan's install_schema()
+    # and aclose() never fire under pytest. Drive them by hand here so
+    # indexes exist (regstack.users.create() relies on the unique-email index)
+    # and the Mongo client closes cleanly at session end.
+    await get_regstack().install_schema()
     yield
     await get_regstack().aclose()
 
@@ -316,23 +326,20 @@ async def test_api_key(test_db: MongoDB) -> str:
 
 @pytest.fixture
 async def test_user_token(test_db: MongoDB) -> str:
-    """Create a test user and return their JWT token."""
-    from putplace_server.user_auth import get_password_hash, create_access_token
-    from datetime import timedelta
-
-    # Create test user
-    user_id = await test_db.create_user(
-        email="testuser@example.com",
-        hashed_password=get_password_hash("testpassword123")
-    )
-
-    # Generate JWT token for the user (using email as subject)
-    access_token = create_access_token(
-        data={"sub": "testuser@example.com"},
-        expires_delta=timedelta(minutes=30)
-    )
-
-    return access_token
+    """Seed a regstack user and return a regstack-signed JWT for them."""
+    rs = get_regstack()
+    existing = await rs.users.get_by_email("testuser@example.com")
+    if existing is None:
+        user = BaseUser(
+            email="testuser@example.com",
+            hashed_password=rs.password_hasher.hash("testpassword123"),
+            is_active=True,
+            is_verified=True,
+            is_superuser=False,
+        )
+        existing = await rs.users.create(user)
+    token, _ = rs.jwt.encode(subject=existing.id)
+    return token
 
 
 @pytest.fixture
@@ -355,24 +362,11 @@ def sample_file_metadata() -> dict:
 
 @pytest.fixture
 async def test_admin_user_token(test_db: MongoDB) -> str:
-    """Create an admin test user and return their JWT token."""
-    from putplace_server.user_auth import get_password_hash, create_access_token
-    from datetime import timedelta
-
-    # Create admin user
-    await test_db.create_user(
-        email="admin@example.com",
-        hashed_password=get_password_hash("adminpassword123"),
-        is_admin=True
-    )
-
-    # Generate JWT token for the admin user
-    access_token = create_access_token(
-        data={"sub": "admin@example.com"},
-        expires_delta=timedelta(minutes=30)
-    )
-
-    return access_token
+    """Seed a regstack superuser and return a regstack-signed JWT for them."""
+    rs = get_regstack()
+    user = await rs.bootstrap_admin(email="admin@example.com", password="adminpassword123")
+    token, _ = rs.jwt.encode(subject=user.id)
+    return token
 
 
 @pytest.fixture

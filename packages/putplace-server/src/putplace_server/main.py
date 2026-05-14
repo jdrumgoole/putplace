@@ -20,7 +20,7 @@ from .config import settings
 from . import database
 from . import dependencies
 from .auth import APIKeyAuth, get_current_api_key
-from .regstack_integration import get_regstack
+from .regstack_integration import get_regstack, reset_regstack
 from .database import MongoDB
 from .models import (
     APIKeyCreate,
@@ -32,128 +32,81 @@ from .models import (
     FileMetadata,
     FileMetadataResponse,
     FileMetadataUploadResponse,
-    GoogleOAuthLogin,
-    Token,
     UploadCompleteRequest,
     UploadCompleteResponse,
     UploadSessionInitiate,
     UploadSessionResponse,
     User,
-    UserCreate,
-    UserLogin,
 )
 from .storage import get_storage_backend, StorageBackend
-from .templates import (
-    get_home_page,
-    get_login_page,
-    get_register_page,
-    get_awaiting_confirmation_page,
-)
+from .templates import get_home_page
 
 logger = logging.getLogger(__name__)
 
 
-async def ensure_admin_exists(db: MongoDB) -> None:
-    """Ensure an admin user exists using multiple fallback methods.
+async def ensure_admin_exists() -> None:
+    """Create or promote a regstack superuser on first startup.
 
-    This function implements a hybrid approach:
-    1. If users exist, do nothing
-    2. If PUTPLACE_ADMIN_EMAIL and PUTPLACE_ADMIN_PASSWORD are set, use them
-    3. Otherwise, generate a random password and display it once
-
-    Args:
-        db: MongoDB database instance
+    Hybrid strategy:
+    1. If any user already exists in regstack, do nothing.
+    2. If PUTPLACE_ADMIN_EMAIL and PUTPLACE_ADMIN_PASSWORD are set, use them.
+    3. Otherwise generate a random password and log/write it once.
     """
     from datetime import datetime
 
-    try:
-        # Check if any users exist
-        user_count = await db.users_collection.count_documents({})
-        if user_count > 0:
-            logger.debug("Users already exist, skipping admin creation")
-            return  # Users exist, nothing to do
+    rs = get_regstack()
 
-        # Method 1: Try environment variables (best for production/containers)
-        admin_email = os.getenv("PUTPLACE_ADMIN_EMAIL", "admin@localhost")
+    try:
+        existing_count = await rs.users.count()
+        if existing_count > 0:
+            logger.debug("Users already exist, skipping admin bootstrap")
+            return
+
+        admin_email = os.getenv("PUTPLACE_ADMIN_EMAIL", "admin@putplace.example.com")
         admin_pass = os.getenv("PUTPLACE_ADMIN_PASSWORD")
 
         if admin_pass:
-            # Validate password strength
             if len(admin_pass) < 8:
                 logger.error(
                     "PUTPLACE_ADMIN_PASSWORD must be at least 8 characters. "
                     "Admin user not created."
                 )
                 return
-
-            # Create admin from environment variables
-            from .user_auth import get_password_hash
-
-            hashed_password = get_password_hash(admin_pass)
-            user_doc = {
-                "email": admin_email,
-                "username": admin_email,  # Use email as username
-                "hashed_password": hashed_password,
-                "full_name": "Administrator",
-                "is_active": True,
-                "is_admin": True,
-                "created_at": datetime.utcnow(),
-            }
-
-            await db.users_collection.insert_one(user_doc)
+            await rs.bootstrap_admin(email=admin_email, password=admin_pass)
             logger.info(f"✅ Created admin user from environment: {admin_email}")
             return
 
-        # Method 2: Generate random password (fallback for development)
         import secrets
-        random_password = secrets.token_urlsafe(16)  # 16 bytes = ~21 chars
+        random_password = secrets.token_urlsafe(16)  # ~21 chars
+        await rs.bootstrap_admin(email="admin@putplace.example.com", password=random_password)
 
-        from .user_auth import get_password_hash
-
-        hashed_password = get_password_hash(random_password)
-        user_doc = {
-            "email": "admin@localhost",
-            "username": "admin@localhost",  # Use email as username
-            "hashed_password": hashed_password,
-            "full_name": "Administrator",
-            "is_active": True,
-            "is_admin": True,
-            "created_at": datetime.utcnow(),
-        }
-
-        await db.users_collection.insert_one(user_doc)
-
-        # Display credentials prominently in logs
         logger.warning("=" * 80)
         logger.warning("🔐 INITIAL ADMIN CREDENTIALS GENERATED")
         logger.warning("=" * 80)
-        logger.warning(f"   Email: admin@localhost")
+        logger.warning("   Email: admin@putplace.example.com")
         logger.warning(f"   Password: {random_password}")
         logger.warning("")
         logger.warning("⚠️  SAVE THESE CREDENTIALS NOW - They won't be shown again!")
         logger.warning("")
         logger.warning("For production, set environment variables instead:")
-        logger.warning("   PUTPLACE_ADMIN_EMAIL=admin@example.com")
+        logger.warning("   PUTPLACE_ADMIN_EMAIL=admin@putplace.example.com")
         logger.warning("   PUTPLACE_ADMIN_PASSWORD=your-secure-password")
         logger.warning("=" * 80)
 
-        # Also write to a temporary file
         from pathlib import Path
         import tempfile
 
-        creds_dir = Path(tempfile.gettempdir())
-        creds_file = creds_dir / "putplace_initial_creds.txt"
-
+        creds_file = Path(tempfile.gettempdir()) / "putplace_initial_creds.txt"
         try:
             creds_file.write_text(
                 f"PutPlace Initial Admin Credentials\n"
                 f"{'=' * 40}\n"
-                f"Email: admin@localhost\n"
+                f"Email: admin@putplace.example.com\n"
                 f"Password: {random_password}\n"
                 f"Created: {datetime.utcnow()}\n\n"
                 f"⚠️  DELETE THIS FILE after saving credentials!\n"
             )
-            creds_file.chmod(0o600)  # Owner read/write only
+            creds_file.chmod(0o600)
             logger.warning(f"📄 Credentials also written to: {creds_file}")
             logger.warning("")
         except Exception as e:
@@ -161,7 +114,6 @@ async def ensure_admin_exists(db: MongoDB) -> None:
 
     except Exception as e:
         logger.error(f"Failed to ensure admin user exists: {e}")
-        # Don't raise - allow app to start even if admin creation fails
 
 
 @asynccontextmanager
@@ -271,26 +223,27 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.error(f"Failed to initialize storage backend: {e}")
         raise
 
-    # Ensure admin user exists (only creates if no users exist)
-    if database.mongodb.client is not None:
-        await ensure_admin_exists(database.mongodb)
-
-    # Phase 1 of regstack migration: install regstack schema alongside
-    # putplace. Collections are scoped under `regstack_*` so they cannot
-    # collide with putplace's existing `users` / `pending_users`.
+    # Install regstack schema, then bootstrap the admin user via regstack.
+    # Order matters: bootstrap_admin needs the unique-email index in place.
     regstack = get_regstack()
     try:
         await regstack.install_schema()
-        logger.info("regstack schema installed (Phase 1 side-by-side)")
+        logger.info("regstack schema installed")
     except Exception as e:
         logger.error(f"Failed to install regstack schema: {e}")
         raise
 
+    await ensure_admin_exists()
+
     yield
 
     # Shutdown
+    # Drop the singleton entirely so a subsequent lifespan (e.g. in tests that
+    # reuse this app object) gets a freshly-bound Mongo client. PyMongo binds
+    # the AsyncMongoClient to the event loop on first I/O, and an aclose()-d
+    # client cannot be reopened.
     try:
-        await regstack.aclose()
+        await reset_regstack()
     except Exception as e:
         logger.error(f"Error closing regstack backend: {e}")
     try:
@@ -381,17 +334,16 @@ from .dependencies import (
 from .routers import (
     pages_router,
     files_router,
-    users_router,
     api_keys_router,
     deletion_router,
     admin_router,
 )
 from .routers.uploads import router as uploads_router
 
-# Register routers
+# Register routers (auth routes live entirely under regstack at /api/v2/auth/*
+# and /account/*; those are mounted below.)
 app.include_router(pages_router)
 app.include_router(files_router)
-app.include_router(users_router)
 app.include_router(api_keys_router)
 app.include_router(uploads_router)
 app.include_router(deletion_router)

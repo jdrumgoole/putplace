@@ -77,17 +77,26 @@ class TestAdminUserCreation:
 
         assert iscoroutinefunction(create_admin_user)
 
-        # Test that calling with invalid URL returns proper error
+        # Admin creation moved to the server's lifespan (see ensure_admin_exists
+        # in putplace_server.main). create_admin_user is now a thin record-keeper
+        # — it accepts the credentials and returns success without touching the
+        # database. URL validity is irrelevant; only email + password presence is.
         success, message = await create_admin_user(
             mongodb_url="mongodb://nonexistent:27017",
             email="test@test.com",
-            password="pass"
+            password="securepass",
         )
-
-        # Should fail gracefully
         assert isinstance(success, bool)
         assert isinstance(message, str)
-        assert success is False  # Should fail with invalid URL
+        assert success is True
+
+        # Empty credentials still fail.
+        bad_success, _ = await create_admin_user(
+            mongodb_url="mongodb://nonexistent:27017",
+            email="",
+            password="",
+        )
+        assert bad_success is False
 
 
 class TestConfigFileGeneration:

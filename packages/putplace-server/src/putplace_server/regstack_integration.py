@@ -18,6 +18,7 @@ import atexit
 import logging
 import os
 import secrets
+from pathlib import Path
 
 from pydantic import AnyHttpUrl, SecretStr
 from regstack import RegStack, RegStackConfig
@@ -25,10 +26,30 @@ from regstack.config.schema import EmailConfig, OAuthConfig
 
 from .config import settings
 
+_BRANDED_TEMPLATES_DIR = Path(__file__).parent / "regstack_email_templates"
+
 logger = logging.getLogger(__name__)
 
 
 _PHASE1_COLLECTION_PREFIX = "regstack_"
+
+
+def _resolve_mongodb_database() -> str:
+    """Return the per-worker test database name when running under pytest-xdist.
+
+    The conftest preamble sets ``MONGODB_DATABASE`` based on
+    ``PYTEST_XDIST_WORKER``, but xdist exports that env var *after*
+    ``conftest.py`` is imported in each worker subprocess, so the preamble
+    always sees ``master`` and every worker ends up sharing one database.
+    Resolving the worker id here — at the time the RegStack singleton is
+    actually built (inside a test fixture) — picks up the real worker id.
+    Production is unaffected because ``PYTEST_XDIST_WORKER`` is unset there.
+    """
+    db = settings.mongodb_database
+    worker = os.getenv("PYTEST_XDIST_WORKER")
+    if worker and db.startswith("putplace_test_"):
+        return f"putplace_test_{worker}"
+    return db
 
 
 def _build_config() -> RegStackConfig:
@@ -67,7 +88,7 @@ def _build_config() -> RegStackConfig:
         app_name="PutPlace",
         base_url=AnyHttpUrl(settings.base_url),
         database_url=SecretStr(settings.mongodb_url),
-        mongodb_database=settings.mongodb_database,
+        mongodb_database=_resolve_mongodb_database(),
         user_collection=f"{_PHASE1_COLLECTION_PREFIX}users",
         pending_collection=f"{_PHASE1_COLLECTION_PREFIX}pending_registrations",
         blacklist_collection=f"{_PHASE1_COLLECTION_PREFIX}token_blacklist",
@@ -88,13 +109,28 @@ def _build_config() -> RegStackConfig:
 
 
 _regstack: RegStack | None = None
+_atexit_registered = False
+
+
+def _backend_is_closed(rs: RegStack) -> bool:
+    """Heuristic: regstack's mongo backend exposes the AsyncMongoClient via
+    backend.client. PyMongo marks topology as closed after aclose() is called.
+    Other backends don't have this attribute; treat them as never-closed.
+    """
+    client = getattr(rs.backend, "client", None)
+    if client is None:
+        return False
+    try:
+        topology = client._topology  # type: ignore[attr-defined]
+    except AttributeError:
+        return False
+    return getattr(topology, "_closed", False)
 
 
 def _atexit_close_regstack() -> None:
-    # In production the FastAPI lifespan calls aclose(); under pytest the
-    # ASGITransport-based test client does not run lifespan events, so the
-    # Mongo client's background thread leaks an event loop. Close it on
-    # interpreter exit so ResourceWarnings stay at zero.
+    # Production lifespan calls aclose(); under pytest the ASGITransport-based
+    # client does not run lifespan events. Close on interpreter exit so the
+    # Mongo client's background thread does not leak.
     global _regstack
     if _regstack is None:
         return
@@ -105,10 +141,43 @@ def _atexit_close_regstack() -> None:
     _regstack = None
 
 
-def get_regstack() -> RegStack:
-    """Return the singleton RegStack instance, building it on first use."""
+async def reset_regstack() -> None:
+    """Close the singleton so the next ``get_regstack()`` rebuilds.
+
+    Called from the FastAPI lifespan teardown so any subsequent caller (notably
+    tests that re-invoke the lifespan) gets a fresh, open client. Production
+    only calls this once at shutdown — after which the process exits — so the
+    rebuild path is exercised by tests.
+    """
     global _regstack
     if _regstack is None:
+        return
+    try:
+        await _regstack.aclose()
+    except Exception:
+        pass
+    _regstack = None
+    # Rebuild eagerly and reinstall the schema so any subsequent test that
+    # touches regstack finds healthy indexes (the close()d topology can't be
+    # reopened, and a fresh client without install_schema() has no unique-email
+    # index — that's how the dropped-collection flake gets in).
+    rs = get_regstack()
+    try:
+        await rs.install_schema()
+    except Exception:
+        pass
+
+
+def get_regstack() -> RegStack:
+    """Return the singleton RegStack instance, rebuilding if it was closed."""
+    global _regstack, _atexit_registered
+    if _regstack is not None and _backend_is_closed(_regstack):
+        _regstack = None
+    if _regstack is None:
         _regstack = RegStack(config=_build_config())
-        atexit.register(_atexit_close_regstack)
+        if _BRANDED_TEMPLATES_DIR.exists():
+            _regstack.add_template_dir(_BRANDED_TEMPLATES_DIR)
+        if not _atexit_registered:
+            atexit.register(_atexit_close_regstack)
+            _atexit_registered = True
     return _regstack

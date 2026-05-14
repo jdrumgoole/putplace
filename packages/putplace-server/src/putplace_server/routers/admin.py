@@ -7,8 +7,11 @@ from fastapi.responses import HTMLResponse
 
 from ..database import MongoDB
 from ..dependencies import get_current_admin_user, get_db
+from ..regstack_integration import get_regstack
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+_USER_PAGE_SIZE = 100
 
 
 @router.get("/dashboard", response_class=HTMLResponse)
@@ -18,17 +21,49 @@ async def admin_dashboard(
 ):
     """Admin dashboard showing user and file statistics.
 
-    Requires admin privileges.
+    Users and pending registrations are sourced from regstack; file metadata
+    stays in putplace. Requires admin privileges.
     """
-    # Get dashboard statistics
-    stats = await db.get_dashboard_stats()
+    rs = get_regstack()
 
-    # Get all users with file counts
-    users = await db.get_all_users()
+    file_stats = await db.get_dashboard_stats()
     file_counts = await db.get_user_file_counts()
 
-    # Get pending users
-    pending_users = await db.get_all_pending_users()
+    total_users = await rs.users.count()
+    active_users = await rs.users.count(is_active=True)
+    admin_users = await rs.users.count(is_superuser=True)
+    pending_users_count = await rs.pending.count_unexpired()
+
+    stats = {
+        **file_stats,
+        "total_users": total_users,
+        "active_users": active_users,
+        "admin_users": admin_users,
+        "pending_users": pending_users_count,
+    }
+
+    users: list[dict] = []
+    skip = 0
+    while True:
+        page = await rs.users.list_paged(skip=skip, limit=_USER_PAGE_SIZE)
+        if not page:
+            break
+        for u in page:
+            users.append(
+                {
+                    "_id": u.id,
+                    "email": u.email,
+                    "full_name": u.full_name,
+                    "is_admin": u.is_superuser,
+                    "is_active": u.is_active,
+                    "created_at": u.created_at,
+                }
+            )
+        if len(page) < _USER_PAGE_SIZE:
+            break
+        skip += _USER_PAGE_SIZE
+
+    pending_users: list[dict] = []
 
     # Build HTML
     html = f"""

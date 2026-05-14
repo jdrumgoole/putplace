@@ -1,0 +1,10 @@
+Hi{% if full_name %} {{ full_name }}{% endif %},
+
+Thanks for signing up to {{ app_name }}. Confirm your email address to activate your account:
+
+{{ url }}
+
+If you didn't create an account, you can safely ignore this email — the link will expire automatically.
+
+—
+{{ app_name }}

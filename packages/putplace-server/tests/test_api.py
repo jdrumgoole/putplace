@@ -369,18 +369,25 @@ async def test_admin_dashboard_shows_user_stats(
     test_db
 ):
     """Test that admin dashboard shows correct user and file statistics."""
-    from putplace_server.user_auth import get_password_hash
+    from regstack.models.user import BaseUser
 
-    # Create additional regular user
-    user_id = await test_db.create_user(
-        email="regular@example.com",
-        hashed_password=get_password_hash("password123"),
-        is_admin=False
-    )
+    from putplace_server.regstack_integration import get_regstack
 
-    # Upload a file for that user
+    rs = get_regstack()
+    existing = await rs.users.get_by_email("regular@example.com")
+    if existing is None:
+        existing = await rs.users.create(
+            BaseUser(
+                email="regular@example.com",
+                hashed_password=rs.password_hasher.hash("password123"),
+                is_active=True,
+                is_verified=True,
+                is_superuser=False,
+            )
+        )
+
     data = sample_file_metadata.copy()
-    data["uploaded_by_user_id"] = user_id
+    data["uploaded_by_user_id"] = existing.id
     await test_db.insert_file_metadata(data)
 
     response = await client.get(

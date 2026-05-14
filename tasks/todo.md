@@ -420,3 +420,179 @@ Working branch: `regstack-migration` (worktree at `../putplace-regstack-migratio
   (Plan §"Hard incompatibilities" #3 — accepted risk.)
 - Schema rename / Phase 2 step 5 ("reconfigure regstack to use unprefixed
   names") rolls into Phase 3.
+
+### Phase 3 results
+
+**Shipped (6 sub-phases):**
+
+- **3a — `get_current_user` rewired to regstack JWT.** `dependencies.py`
+  now resolves `get_regstack()` at request time (so the singleton can be
+  rebuilt mid-session) and calls `regstack.deps._authenticate(creds)`,
+  returning a dict shaped like the old putplace user doc so callers in
+  `routers/files.py`, `routers/uploads.py`, `routers/api_keys.py` need no
+  changes. Test fixtures `test_user_token` and `test_admin_user_token`
+  now mint regstack JWTs via `rs.jwt.encode(user.id)`.
+- **3b — `ensure_admin_exists` via regstack.** Replaced the old
+  putplace-collection bootstrap with `rs.bootstrap_admin(email, password)`.
+  Default fallback email is `admin@putplace.example.com` (pydantic
+  `EmailStr` rejects `.local`/`.invalid`/`.test` TLDs).  New tests in
+  `test_admin_bootstrap.py` (5 cases) replace the deleted
+  `test_admin_creation.py`.
+- **3c — pp_assist repointed.** Three call sites switched from
+  `/api/login` → `/api/v2/auth/login`: `uploader.py:424`,
+  `uploader_v3.py:205`, `main.py:237`. The `/api/register` proxy in
+  `pp_assist/main.py` repointed to `/api/v2/auth/register` and its
+  payload trimmed (`username` field dropped; regstack rejects unknown
+  fields). pp_assist's own public `/login` and `/register` endpoints
+  keep their `AuthResponse` contract so `pp_client` is unaffected.
+- **3d — Web auth pages redirect.** `routers/pages.py` `/login` and
+  `/register` now 307-redirect to `/account/login` and
+  `/account/register` (regstack's UI). `/awaiting-confirmation` and
+  `/api/check-confirmation-status` deleted entirely (decision C).
+- **3e — Legacy putplace auth surface deleted.** 8 files removed:
+  `user_auth.py`, `email_service.py`, `email_tokens.py`,
+  `routers/users.py`, `scripts/pp_manage_users.py`, plus 4 test files
+  (`test_auth.py`, `test_email_confirmation.py`,
+  `test_registration_control.py`, `test_admin_creation.py`).
+  `templates.py` lost `get_login_page` / `get_register_page` /
+  `get_awaiting_confirmation_page` (~430 lines). `routers/users.py`
+  removed from `routers/__init__.py` and `main.py`. `pp_manage_users`
+  removed from `pyproject.toml` scripts. `scripts/putplace_configure.py`
+  `create_admin_user` reduced to a record-keeper (admin creation now
+  happens on first server startup via `ensure_admin_exists`).
+- **3f — Versions bumped.** `pp_server` 0.10.4 → 0.11.0 and `pp_assist`
+  0.2.3 → 0.3.0 (both breaking changes per decision D's hard-cut on
+  `/api/login`).
+
+**Plus task #11 — branded email templates.** Created
+`packages/putplace-server/src/putplace_server/regstack_email_templates/`
+with PutPlace-branded `verification.{html,txt}`, `password_reset.{html,txt}`,
+`email_change.{html,txt}` (purple-gradient header, matches the original
+HTML styling). Registered via `regstack.add_template_dir()` in
+`get_regstack()`.
+
+**Flake fix (load-bearing).** During verification, 5 parallel test runs
+revealed a non-deterministic failure rate of ~60% across three different
+tests. Root cause: conftest's preamble reads `PYTEST_XDIST_WORKER` to
+set `MONGODB_DATABASE` per worker, but pytest-xdist exports that env var
+*after* conftest module-load runs. Every worker therefore saw
+`PYTEST_XDIST_WORKER` as unset and resolved to `"master"`, so all four
+workers wrote to the same `putplace_test_master` regstack database —
+races, cross-test contamination, intermittent counts/auth failures.
+Fixed by resolving the worker id inside `_resolve_mongodb_database()` at
+the time the regstack singleton is built (which happens later, inside a
+test fixture, by which time `PYTEST_XDIST_WORKER` is populated).
+Production is unaffected because the env var is unset there. Also
+hardened `reset_regstack()` to immediately rebuild + reinstall schema
+so test_lifespan tests can replay the lifespan without leaving the
+singleton in a closed state.
+
+**Other test-infrastructure fixes:**
+- `pyproject.toml` `asyncio_default_test_loop_scope = "session"` (was
+  function). PyMongo's `AsyncMongoClient` binds to one event loop;
+  per-test loops broke the singleton.
+- Test conftest sets `MONGODB_DATABASE`, `JWT_SECRET_KEY`,
+  `REGSTACK_JWT_SECRET` defaults before any putplace import so settings
+  resolve correctly.
+- Session-autouse `_regstack_session_lifecycle` fixture
+  drives `install_schema()` + `aclose()` (since
+  `ASGITransport(app=app)` does not invoke the FastAPI lifespan).
+- `test_admin_bootstrap.py` `_empty_regstack_users` fixture drops the
+  user collection + calls `install_schema` before each test for hermetic
+  state.
+
+**Verification:**
+- `uv run python -m invoke test-all` × 5 consecutive parallel runs:
+  223 passed, 0 failed, no flakes. (Down from 267 due to deleted
+  legacy auth tests; net +5 regstack-bootstrap tests, net –49 deleted.)
+- regstack's auth surface live at `/api/v2/auth/*` and `/account/*`.
+  Putplace's `/login` and `/register` redirect there.
+- Admin user created via regstack on first startup (env-var or random-pw
+  fallback, same UX).
+
+**Decisions deferred to Phase 4 cleanup:**
+- `models.py` still contains `UserCreate`, `UserLogin`, `User`,
+  `GoogleOAuthLogin`, `Token`, `PendingUser`, etc. — unused after Phase
+  3 but kept until Phase 4 sweep.
+- `database.py` still has `users_collection`, `pending_users_collection`,
+  `create_user`, `get_user_by_email`, etc. — unused public-API-wise
+  but still used by `test_db` fixture and `test_database.py` tests.
+  Phase 4 can prune.
+- `JWT_SECRET_KEY`, `JWT_ALGORITHM`, `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`,
+  `GOOGLE_CLIENT_*`, `SENDER_EMAIL`, `REGISTRATION_ENABLED`,
+  `PUTPLACE_ADMIN_*` env vars and matching settings fields are now
+  dead. Phase 4 removes them and `ppserver.toml.example` / docs / deploy
+  configs are updated to advertise `REGSTACK_*` instead.
+
+## Review
+
+### Phase 0 results (research, no code yet)
+
+**Mongo coexistence.** regstack's collection names are all config-overridable
+(`user_collection`, `pending_collection`, `blacklist_collection`,
+`login_attempt_collection`, `mfa_code_collection`,
+`oauth_identity_collection`, `oauth_state_collection`). Defaults:
+
+| regstack default | PutPlace today | Action |
+|---|---|---|
+| `users` | `users` | **Collides.** For Phase 1, point regstack at `regstack_users` (or similar) so both stacks run on the same DB. Phase 2 migrates and renames. |
+| `pending_registrations` | `pending_users` | No collision — drop putplace's collection at Phase 4. |
+| `token_blacklist` | — | New, regstack only. |
+| `login_attempts` | — | New, regstack only. |
+| `mfa_codes` | — | New, opt-in (SMS MFA disabled by default). |
+| `oauth_identities` | — | New — replaces putplace's `auth_provider` / `oauth_id` columns on the user doc. |
+| `oauth_states` | — | New, regstack only. |
+| — | `api_keys` | Stays in PutPlace. |
+| — | `file_metadata` | Stays in PutPlace. |
+
+**`is_admin` strategy.** regstack's `BaseUser` ships `is_superuser: bool` and
+provides `is_admin` as an alias property (`@property def is_admin: return
+self.is_superuser`). The docstring literally says "default field set covers
+what both winebox and putplace need today." **No extension required.**
+`PUTPLACE_ADMIN_*` env vars map to creating a regstack user with
+`is_superuser=True` (regstack ships a `create-admin` CLI and an analogous
+config flag).
+
+The doc-mentioned `RegStack.extend_user_model` hook is not actually
+implemented (only referenced in the BaseUser docstring) — but `BaseUser`
+sets `extra="allow"`, so any PutPlace-only field could ride along untyped.
+We don't need this for the migration: `auth_provider` + `oauth_id` are
+obsolete (regstack tracks them in `oauth_identities`), and `picture` is a
+non-critical UI avatar — fetch from the oauth_identity row on demand, or
+drop until later.
+
+**Email sender.** The only caller of `email_service.py` in PutPlace is
+`routers/users.py` for confirmation emails. There is no non-auth mail. The
+standalone `send_ses_email.py` script is unrelated. regstack ships
+console / SMTP / SES backends. **regstack takes over email entirely;
+delete `email_service.py` at Phase 4.**
+
+**JWT secret.** Decision deferred to deploy time. Default plan: rotate
+(set fresh `REGSTACK_JWT_SECRET`), accept one round of forced re-login.
+If we instead carry forward `JWT_SECRET_KEY` into `REGSTACK_JWT_SECRET`,
+existing tokens stay valid but the algorithm and claim layout must match
+— needs verification against regstack's JWT format. **Cheaper to rotate.**
+
+**Google OAuth client.** Reuse current `GOOGLE_CLIENT_ID`; regstack's
+Google flow uses PKCE + ID-token verification (matches putplace's
+approach). Existing OAuth users have `oauth_id` on their user doc — those
+become rows in regstack's `oauth_identities` collection at Phase 2.
+
+**`/api/login` consumers.** Three places call it directly:
+- `pp_assist/src/putplace_assist/uploader.py` (line 424)
+- `pp_assist/src/putplace_assist/uploader_v3.py` (line 205)
+- `pp_assist/src/putplace_assist/main.py` (line 237) — proxied from pp_assist's own `/login` endpoint
+
+`pp_client` calls `pp_assist`'s `/login`, not the server directly. So the
+public-facing daemon contract (`pp_assist /login`) can stay stable while
+its three internal call sites get repointed — `pp_client` users don't
+need to upgrade in lockstep. **Add a one-release shim at the server's
+`/api/login` that proxies to regstack** so any straggler clients still
+work during rollout.
+
+**Updates to original plan:**
+1. Phase 1: configure regstack with `user_collection="regstack_users"` and other scoped names — do not let it write to PutPlace's `users` collection until Phase 2.
+2. Phase 2 step "preserve `_id`" is critical because `api_keys.user_id` points at it. The migration script copies docs verbatim into `regstack_users`, then renames the collections (`users` → `users_legacy`, `regstack_users` → `users`) atomically.
+3. Drop the `is_admin` extension question — it's already there.
+4. Drop `email_service.py` cleanly at Phase 4 — no non-auth callers.
+

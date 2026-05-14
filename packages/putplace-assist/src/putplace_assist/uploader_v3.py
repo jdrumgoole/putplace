@@ -202,7 +202,7 @@ class UploaderV3:
         if server_url in self._access_tokens:
             return self._access_tokens[server_url]
 
-        login_url = f"{server_url.rstrip('/')}/api/login"
+        login_url = f"{server_url.rstrip('/')}/api/v2/auth/login"
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:

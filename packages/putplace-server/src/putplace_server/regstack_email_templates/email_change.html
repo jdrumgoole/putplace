@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ app_name }} — confirm new email</title>
+</head>
+<body style="margin:0;padding:24px;background:#f8f9fa;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#333;line-height:1.5;">
+  <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.08);">
+    <div style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);padding:32px 24px;text-align:center;">
+      <h1 style="margin:0;color:#ffffff;font-size:24px;letter-spacing:0.5px;">{{ app_name }}</h1>
+    </div>
+    <div style="padding:32px 28px;">
+      <p style="margin:0 0 16px 0;font-size:16px;">Hi{% if full_name %} {{ full_name }}{% endif %},</p>
+      <p style="margin:0 0 24px 0;font-size:16px;">Someone — hopefully you — asked to change the email address on your <strong>{{ app_name }}</strong> account to this one. Click the button below to confirm. The link is valid for {{ ttl_minutes }} minutes.</p>
+      <p style="margin:0 0 24px 0;text-align:center;">
+        <a href="{{ url }}" style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#ffffff;text-decoration:none;border-radius:6px;font-weight:600;">Confirm new email</a>
+      </p>
+      <p style="margin:0 0 8px 0;font-size:14px;color:#555;">If the button doesn't work, paste this URL into your browser:</p>
+      <p style="margin:0 0 24px 0;word-break:break-all;"><a href="{{ url }}" style="color:#667eea;">{{ url }}</a></p>
+      <p style="margin:0;color:#888;font-size:12px;">If you didn't request this change, ignore this email — your address won't change.</p>
+    </div>
+  </div>
+</body>
+</html>

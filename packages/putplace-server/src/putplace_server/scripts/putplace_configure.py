@@ -249,47 +249,20 @@ async def check_ses_access(aws_region: Optional[str] = None) -> tuple[bool, str]
 async def create_admin_user(
     mongodb_url: str,
     email: str,
-    password: str
+    password: str,
 ) -> tuple[bool, str]:
-    """Create an admin user in the database."""
-    try:
-        from pymongo import AsyncMongoClient
-        from putplace_server.user_auth import get_password_hash
-        from datetime import datetime
-        import certifi
-    except ImportError as e:
-        return False, f"Required libraries not installed: {e}"
+    """Record the admin credentials so the server bootstraps them on first start.
 
-    use_tls = 'mongodb+srv://' in mongodb_url or 'mongodb.net' in mongodb_url
-
-    if use_tls:
-        client = AsyncMongoClient(mongodb_url, tlsCAFile=certifi.where())
-    else:
-        client = AsyncMongoClient(mongodb_url)
-
-    try:
-        db = client.get_database("putplace")
-        users_collection = db.users
-
-        existing_user = await users_collection.find_one({"email": email})
-        if existing_user:
-            return False, f"User with email '{email}' already exists"
-
-        user_doc = {
-            "email": email,
-            "username": email,
-            "hashed_password": get_password_hash(password),
-            "full_name": "Administrator",
-            "is_active": True,
-            "is_admin": True,
-            "created_at": datetime.utcnow()
-        }
-        await users_collection.insert_one(user_doc)
-        return True, f"Admin user '{email}' created successfully"
-    except Exception as e:
-        return False, f"Failed to create admin user: {str(e)}"
-    finally:
-        await client.aclose()
+    Admin-user creation moved into the server's ``ensure_admin_exists`` lifespan
+    step (which uses regstack). The configure wizard's job is to capture the
+    intended email and password; the server creates the user the first time it
+    starts with no users in the database. This function returns success without
+    writing to MongoDB; callers still surface the email so the user knows what
+    they configured.
+    """
+    if not email or not password:
+        return False, "Admin email and password are required"
+    return True, f"Admin '{email}' will be created on first server startup"
 
 
 def write_toml_file(config: dict, toml_path: Path) -> tuple[bool, str]:

@@ -11,11 +11,12 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from . import database
 from .database import MongoDB
+from .regstack_integration import get_regstack
 from .storage import StorageBackend
-from .user_auth import decode_access_token
 
-# JWT bearer token scheme
-security = HTTPBearer()
+# auto_error=False so tests covering "no Authorization header" reach our 401
+# branch and never fall through to FastAPI's default 403.
+_bearer = HTTPBearer(auto_error=False)
 
 # Global storage backend instance (set by main.py during lifespan)
 storage_backend: StorageBackend | None = None
@@ -34,73 +35,34 @@ def get_storage() -> StorageBackend:
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: MongoDB = Depends(get_db)
+    creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
 ) -> dict:
-    """Get current user from JWT token.
+    """Authenticate the request via regstack and return a putplace-shaped user dict.
 
-    Args:
-        credentials: HTTP Authorization credentials with JWT token
-        db: Database instance
-
-    Returns:
-        User document from database
-
-    Raises:
-        HTTPException: If token is invalid or user not found
+    The singleton is resolved at request time (not module-load) so that
+    teardown-and-rebuild flows in tests pick up a fresh client. The dict shape
+    matches what the file/upload/api-key routers already expect: ``_id``,
+    ``email``, ``is_active``, ``is_admin``, ``full_name``.
     """
-    # Extract token
-    token = credentials.credentials
-
-    # Decode token to get email
-    email = decode_access_token(token)
-
-    if email is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    # Get user from database
-    user = await db.get_user_by_email(email)
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    if not user.get("is_active", True):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Inactive user account"
-        )
-
-    return user
+    rs = get_regstack()
+    base_user = await rs.deps._authenticate(creds)
+    return {
+        "_id": base_user.id,
+        "email": base_user.email,
+        "is_active": base_user.is_active,
+        "is_admin": base_user.is_superuser,
+        "full_name": base_user.full_name,
+    }
 
 
 async def get_current_admin_user(
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
 ) -> dict:
-    """Get current user and verify they have admin privileges.
-
-    Args:
-        current_user: Current authenticated user from get_current_user
-
-    Returns:
-        User document if user is an admin
-
-    Raises:
-        HTTPException: If user is not an admin
-    """
     if not current_user.get("is_admin", False):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin privileges required"
+            detail="Admin privileges required",
         )
-
     return current_user
 
 

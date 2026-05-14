@@ -234,7 +234,7 @@ async def login(request: LoginRequest):
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
-                f"{default_server.url.rstrip('/')}/api/login",
+                f"{default_server.url.rstrip('/')}/api/v2/auth/login",
                 json={"email": request.email, "password": request.password},
                 headers={"Content-Type": "application/json"},
             )
@@ -296,7 +296,6 @@ async def register(request: RegisterRequest):
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             payload = {
-                "username": request.username,
                 "email": request.email,
                 "password": request.password,
             }
@@ -304,12 +303,12 @@ async def register(request: RegisterRequest):
                 payload["full_name"] = request.full_name
 
             response = await client.post(
-                f"{default_server.url.rstrip('/')}/api/register",
+                f"{default_server.url.rstrip('/')}/api/v2/auth/register",
                 json=payload,
                 headers={"Content-Type": "application/json"},
             )
 
-            if response.status_code == 201:
+            if response.status_code in (200, 201, 202):
                 data = response.json()
                 user_id = data.get("id")
 
