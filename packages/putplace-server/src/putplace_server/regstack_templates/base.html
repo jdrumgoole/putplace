@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en" data-rs-page="{{ page }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ app_name }}{% endblock %}</title>
+<link rel="stylesheet" href="{{ static_prefix }}/css/core.css">
+<link rel="stylesheet" href="{{ static_prefix }}/css/theme.css">
+{% if theme_css_url %}
+<link rel="stylesheet" href="{{ theme_css_url }}">
+{% endif %}
+{% block extra_head %}{% endblock %}
+</head>
+<body
+  data-rs-api="{{ api_prefix }}"
+  data-rs-ui="{{ ui_prefix }}"
+  data-rs-page="{{ page }}"
+>
+<header class="rs-header">
+  {% block brand %}
+  {# Brand link points at putplace's app home ("/") rather than regstack's
+     /account/me, so clicking the logo from any auth page brings the user
+     back into the actual product. #}
+  <a class="rs-brand" href="/">
+    {% if brand_logo_url %}<img class="rs-brand-logo" src="{{ brand_logo_url }}" alt="">{% endif %}
+    <span class="rs-brand-name">{{ app_name }}</span>
+  </a>
+  {% if brand_tagline %}
+  <span class="rs-brand-tagline">{{ brand_tagline }}</span>
+  {% endif %}
+  {% endblock %}
+  <nav class="rs-nav">
+    <a href="/" class="rs-nav-link">Home</a>
+    <a href="/my_files" class="rs-nav-link">My files</a>
+    <a href="{{ ui_prefix }}/me" class="rs-nav-link">Account</a>
+  </nav>
+</header>
+
+<main class="rs-main">
+  <div class="rs-card">
+    {% block content %}{% endblock %}
+    <p class="rs-message" data-rs-message hidden></p>
+  </div>
+</main>
+
+<footer class="rs-footer">
+  {% block footer %}
+  <span>Powered by <a href="https://github.com/jdrumgoole/regstack">regstack</a></span>
+  {% endblock %}
+</footer>
+
+<script src="{{ static_prefix }}/js/regstack.js" defer></script>
+</body>
+</html>

@@ -22,7 +22,7 @@ from regstack import RegStack, RegStackConfig
 
 from .config import settings
 
-_BRANDED_TEMPLATES_DIR = Path(__file__).parent / "regstack_email_templates"
+_BRANDED_TEMPLATES_DIR = Path(__file__).parent / "regstack_templates"
 
 logger = logging.getLogger(__name__)
 

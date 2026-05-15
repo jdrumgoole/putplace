@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## putplace-server [0.11.3] - 2026-05-15
+
+### Fixed
+- regstack's `/account/*` pages now show a nav bar back into putplace
+  (Home / My files / Account). After logging in via the regstack-themed
+  pages users landed on `/account/me` with no way back to the actual
+  product — the brand link there points at regstack's own me page, not
+  putplace's home. We override `base.html` via
+  `regstack.add_template_dir()` to repoint the brand to `/` and add an
+  explicit nav.
+
+### Changed
+- Renamed `regstack_email_templates/` to `regstack_templates/` (now also
+  holds the `base.html` UI override; the dir is no longer email-only).
+
 ## putplace-server [0.11.2] - 2026-05-15
 
 ### Fixed
