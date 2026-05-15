@@ -398,7 +398,7 @@ ppclient --help</pre>
         <script>
             // Check if user is logged in and update buttons
             (function() {{
-                const token = localStorage.getItem('access_token');
+                const token = localStorage.getItem('regstack.access_token');
                 const authButtons = document.getElementById('authButtons');
 
                 if (token && authButtons) {{
@@ -411,7 +411,7 @@ ppclient --help</pre>
             }})();
 
             function logout() {{
-                localStorage.removeItem('access_token');
+                localStorage.removeItem('regstack.access_token');
                 window.location.reload();
             }}
         </script>
@@ -593,7 +593,7 @@ def get_my_files_page() -> str:
 
         <script>
             async function loadFiles() {
-                const token = localStorage.getItem('access_token');
+                const token = localStorage.getItem('regstack.access_token');
 
                 if (!token) {
                     window.location.href = '/login';
@@ -608,7 +608,7 @@ def get_my_files_page() -> str:
                     });
 
                     if (response.status === 401) {
-                        localStorage.removeItem('access_token');
+                        localStorage.removeItem('regstack.access_token');
                         window.location.href = '/login';
                         return;
                     }
@@ -692,7 +692,7 @@ def get_my_files_page() -> str:
             }
 
             function logout() {
-                localStorage.removeItem('access_token');
+                localStorage.removeItem('regstack.access_token');
                 window.location.href = '/login';
             }
 

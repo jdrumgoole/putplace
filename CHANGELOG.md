@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## putplace-server [0.11.4] - 2026-05-15
+
+### Fixed
+- The home page and `/my_files` page read the JWT from
+  `localStorage.getItem('access_token')` (the legacy 0.10 key) — regstack
+  stores it under `regstack.access_token`. Result: even after a
+  successful login, the home page rendered as "logged out" and clicking
+  "My files" redirected to `/login` → `/account/login` → `/account/me`,
+  giving the impression every nav link landed on the account page. Five
+  touchpoints in `templates.py` updated to the regstack key.
+
 ## putplace-server [0.11.3] - 2026-05-15
 
 ### Fixed
