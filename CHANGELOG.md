@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## putplace-server [0.11.5] - 2026-05-15
+
+### Fixed
+- Override `auth/login.html` so a successful sign-in lands on the
+  putplace home (`/`) instead of regstack's `/account/me`. regstack.js
+  hardcodes the post-login redirect target, so the workaround drops
+  `data-rs-form="login"` from the form (preventing regstack.js from
+  wiring its handler) and ships a small inline script that runs the
+  same `POST /api/v2/auth/login` call, stores the token under the
+  same `regstack.access_token` key, and routes the browser to `/`.
+  MFA fallback and the "already logged in → skip the page" behaviour
+  are preserved. An upstream regstack change adding a configurable
+  post-login redirect would let us drop this override.
+
 ## putplace-server [0.11.4] - 2026-05-15
 
 ### Fixed

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Sign in — {{ app_name }}{% endblock %}
+{% block content %}
+<h1 class="rs-title">Sign in</h1>
+
+{% if enable_oauth and oauth_providers %}
+<div class="rs-oauth-block" data-rs-oauth-block>
+  {% for provider in oauth_providers %}
+  <a class="rs-btn rs-btn-oauth rs-btn-oauth-{{ provider }}"
+     href="{{ api_prefix }}/oauth/{{ provider }}/start"
+     data-rs-oauth-link="{{ provider }}">
+    Sign in with {{ provider | capitalize }}
+  </a>
+  {% endfor %}
+  <p class="rs-or"><span>or</span></p>
+</div>
+{% endif %}
+
+{# This override drops ``data-rs-form="login"`` from the form, so regstack.js
+   never wires its own submit handler. Putplace's inline script below does
+   the API call itself and sends the browser to "/" after a successful sign-in
+   rather than to /account/me, which is regstack's default. See
+   regstack PR for the upstream fix that will let us drop this override. #}
+<form class="rs-form" id="pp-login-form" autocomplete="on">
+  <label class="rs-field">
+    <span class="rs-label">Email</span>
+    <input type="email" name="email" required autocomplete="email" autofocus>
+  </label>
+  <label class="rs-field">
+    <span class="rs-label">Password</span>
+    <input type="password" name="password" required minlength="8" autocomplete="current-password">
+  </label>
+  <button type="submit" class="rs-btn rs-btn-primary">Sign in</button>
+</form>
+<p class="rs-meta">
+  {% if allow_registration %}
+  No account? <a href="{{ ui_prefix }}/register">Create one</a>.
+  {% endif %}
+  {% if enable_password_reset %}
+  <br><a href="{{ ui_prefix }}/forgot">Forgot password?</a>
+  {% endif %}
+</p>
+<p class="rs-message" id="pp-login-message" hidden></p>
+
+<script>
+(function () {
+  // Already signed in? Skip the form and go to the app.
+  if (window.localStorage.getItem('regstack.access_token')) {
+    window.location.href = '/';
+    return;
+  }
+
+  var form = document.getElementById('pp-login-form');
+  var messageEl = document.getElementById('pp-login-message');
+  var apiPrefix = {{ api_prefix | tojson }};
+  var uiPrefix = {{ ui_prefix | tojson }};
+
+  function showError(text) {
+    messageEl.textContent = text;
+    messageEl.hidden = false;
+    messageEl.dataset.rsTone = 'error';
+  }
+
+  form.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    messageEl.hidden = true;
+    var submitButton = form.querySelector("button[type='submit']");
+    if (submitButton) submitButton.disabled = true;
+    try {
+      var payload = {
+        email: form.querySelector("input[name='email']").value,
+        password: form.querySelector("input[name='password']").value,
+      };
+      var res = await fetch(apiPrefix + '/login', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      var body = null;
+      try { body = await res.json(); } catch (e) { /* tolerate */ }
+      if (!res.ok) {
+        var detail = body && body.detail;
+        showError(typeof detail === 'string' ? detail : 'Sign-in failed.');
+        if (submitButton) submitButton.disabled = false;
+        return;
+      }
+      if (body && body.status === 'mfa_required') {
+        window.sessionStorage.setItem('regstack.mfa_pending_token', body.mfa_pending_token);
+        window.location.href = uiPrefix + '/mfa-confirm';
+        return;
+      }
+      window.localStorage.setItem('regstack.access_token', body.access_token);
+      window.location.href = '/';
+    } catch (err) {
+      showError((err && err.message) || 'Network error.');
+      if (submitButton) submitButton.disabled = false;
+    }
+  });
+})();
+</script>
+{% endblock %}
