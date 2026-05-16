@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## putplace-server [0.11.6] - 2026-05-16
+
+### Changed
+- Bump regstack pin 0.5.0 → 0.6.0. The only breaking change in 0.6.0
+  is wizard-side (the `regstack oauth setup` and `regstack theme design`
+  CLIs are now behind a `[wizard]` extra); putplace embeds the library
+  and never invokes those wizards, so the upgrade is a straight drop-in.
+  Also picks up 0.5.x patches: GitHub Actions SHA-pinned + per-job
+  `permissions:` blocks, defensive `.gitignore` additions, and the
+  internal hardening work between 0.5.0 and 0.6.0.
+
 ## putplace-server [0.11.5] - 2026-05-15
 
 ### Fixed
