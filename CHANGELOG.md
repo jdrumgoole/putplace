@@ -5,6 +5,33 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## putplace-server [0.11.7] - 2026-05-17
+
+### Changed
+- Bump regstack pin 0.6.0 → 0.7.0. Two of the workarounds in
+  pp_server 0.11.x landed upstream in 0.7.0 and have been removed
+  here:
+  - **`routers/pages.py` redirects.** regstack 0.7.0 ships
+    `RegStackConfig.email_link_prefix` (PR #51, landed there from
+    putplace's parallel fix), and when the bundled UI router is
+    enabled it auto-resolves to `ui_prefix`. The verification /
+    password-reset / email-change emails now generate
+    `<base_url>/account/verify?token=…` straight from regstack, so
+    the three local `/verify`, `/reset-password`,
+    `/confirm-email-change` redirect handlers we added in 0.11.2 are
+    deleted.
+  - **`email.from_name="PutPlace"` pin in `regstack_integration`.**
+    regstack 0.7.0 defaults `EmailConfig.from_name` to `app_name`
+    when unset (PR #52). We already pin `app_name="PutPlace"`, so
+    the From: header rebrands automatically without a separate
+    config override.
+
+  Other 0.7.0 changes that don't affect us: `UserPublic` JSON key
+  rename `_id → id` (putplace consumes `BaseUser` directly through
+  `rs.deps._authenticate`, never `UserPublic`); `TokenTransport`
+  narrowed to `Literal["bearer"]` and `cookie_domain` removed (we
+  never set either).
+
 ## putplace-server [0.11.6] - 2026-05-16
 
 ### Changed

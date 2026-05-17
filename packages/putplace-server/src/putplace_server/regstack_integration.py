@@ -70,12 +70,6 @@ def _build_config() -> RegStackConfig:
         )
 
     base = RegStackConfig.load()
-    # Pin email.from_name to "PutPlace" unless the operator overrode it via
-    # REGSTACK_EMAIL__FROM_NAME — keeps the From: header consistent with the
-    # bundled branded templates without forcing every deploy to set it.
-    email_cfg = base.email
-    if not os.getenv("REGSTACK_EMAIL__FROM_NAME") and email_cfg.from_name == "RegStack":
-        email_cfg = email_cfg.model_copy(update={"from_name": "PutPlace"})
     return base.model_copy(
         update={
             "app_name": base.app_name if os.getenv("REGSTACK_APP_NAME") else "PutPlace",
@@ -93,7 +87,6 @@ def _build_config() -> RegStackConfig:
             "ui_prefix": "/account",
             "enable_ui_router": True,
             "enable_password_reset": True,
-            "email": email_cfg,
         }
     )
 
